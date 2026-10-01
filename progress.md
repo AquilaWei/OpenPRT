@@ -213,6 +213,23 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   加 15 秒輪詢（`getVehicles` + `getPredictions`），`TripSource` 需要加 predictions；`Vehicle` 已有 `distanceAlongPatternFeet`，
   可對照 `PatternStop.distanceAlongPatternFeet` 判斷「已過站」
 
+## 即時公車位置與 ETA（F10 決定）
+
+- `DepartureDetailsViewModel` 改成和附近列表同樣的模式：`open()` / `close()` 只改選擇，實際請求在 suspend 的
+  `autoRefresh()`，`MainActivity` 用 `repeatOnLifecycle(STARTED)` 呼叫，**背景時不輪詢**、回前景立刻更新。
+  選擇用 identity 比較的 `Selection` 包起來，關掉再打開同一班車也會立刻重新開始；寫入狀態前檢查選擇沒變，舊請求不會蓋掉新狀態
+- 每 15 秒：`getVehicles(vid)` + `getPredictions(上車站)` 兩次呼叫（詳情開著時每分鐘 8 次，加上列表 2 次）。
+  路線只載入一次；**Failed / NotFound 的路線會在下次更新自動重試**（不再需要返回再點）
+- 狀態 `LiveBus(position, arrival, lastUpdated, error)`：`Arrival` 為 Loading / Expected(minutes, delayed) / Departed。
+  分鐘數 = `prdtm - clock` 無條件捨去、不小於 0，和列表一致
+- 「已離站」：車輛的 `distanceAlongPatternFeet` 大於上車站在 pattern 上的距離（`RouteShape.boardingDistanceFeet`），
+  或 predictions 裡沒有這台車在這站的預測（含 No data found）。不是黏著狀態，每次更新重新判斷。
+  環狀路線經過上車站兩次時只看第一次
+- 車輛不再回報時 `position` 為 null（地圖不畫公車），到站狀態仍由 predictions 決定
+- 部分失敗時各欄位各自沿用舊值，`error` 取第一個失敗；`lastUpdated` 只在兩個呼叫都成功時更新
+- 地圖：公車是綠色大圓點（`bus-layer`，在上車站之上、使用者藍點之下），沒有畫方向箭頭；鏡頭不跟隨公車
+- 時間顯示用 `FormatStyle.MEDIUM`（含秒），因為更新間隔小於一分鐘
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -234,7 +251,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   面板可往上拉開並捲動；收合時地圖中心（你的位置）沒有被面板遮住；切到背景再回來會立刻更新
 - [ ] F9 點一班車：地圖縮放到整條路線，折線沿實際道路，上車站是橘色大圓點；面板列出沿線站牌並捲到「Board here」；
   按返回箭頭或手機返回鍵回到列表，地圖回到你的位置
-- [ ] F10 公車標記移動與實際車輛一致
+- [ ] F10 詳情中的綠色公車圓點與實際車輛位置一致、每 15 秒移動；「Arrives at your stop in x min」與站牌看板一致；
+  公車開過上車站後顯示「This bus has left your stop.」；切到背景再回來立刻更新
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小
 - [ ] F15 完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
 - [ ] F17 從 Release 下載 APK 安裝並啟動
@@ -289,3 +307,9 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   返回列表不重新定位。新增 30 個測試（全部 167 個），verify 通過；也用真實 pattern 回應暫時測試過轉換（未進 git）
   - 需要實機驗收（見清單 F9、F8）。debug APK 會帶入 local.properties 的 key，可以直接裝到手機測
   - 下一步：F10 即時公車位置與 ETA（見 F9 段落的 F10 注意）
+- 2026-10-01：**F10 完成**（版號 0.1.9，tag `v0.1.9` 只在本機）。班次詳情每 15 秒更新公車位置與到上車站的分鐘數，
+  地圖顯示公車標記，公車過站或預測消失時顯示已離站，失敗時保留舊資料並顯示時間；路線載入失敗自動重試。
+  新增 25 個測試（全部 192 個），verify 通過
+  - 需要實機驗收（見清單 F10、F9、F8）
+  - 下一步：F11 目的地選擇（地理編碼 + 長按地圖）。需要決定地理編碼來源：Android `Geocoder`（免費但結果品質不一）
+    或 Nominatim / Photon（OSM，需遵守使用政策），建議先用 Photon 或 Nominatim 並限制在匹茲堡邊界框
