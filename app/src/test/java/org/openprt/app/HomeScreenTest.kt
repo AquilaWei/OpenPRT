@@ -2,6 +2,10 @@ package org.openprt.app
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -16,7 +20,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.openprt.app.data.gtfs.GtfsImportError
+import org.openprt.app.departures.DepartureItem
+import org.openprt.app.departures.DeparturesStatus
 import org.openprt.app.departures.DeparturesUiState
+import org.openprt.app.details.DepartureDetailsUiState
+import org.openprt.app.details.RouteStatus
 import org.openprt.app.geo.LatLng
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
@@ -38,7 +46,10 @@ class HomeScreenTest {
                 LocationUiState.Loading,
                 MapUiState(),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -53,7 +64,10 @@ class HomeScreenTest {
                 LocationUiState.Loading,
                 MapUiState(),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -68,7 +82,10 @@ class HomeScreenTest {
                 LocationUiState.Loading,
                 MapUiState(),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -84,7 +101,10 @@ class HomeScreenTest {
                 LocationUiState.Located(LatLng(40.4443, -79.9532)),
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = { relocations++ },
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -101,7 +121,10 @@ class HomeScreenTest {
                 LocationUiState.PermissionDenied(),
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -118,7 +141,10 @@ class HomeScreenTest {
                 LocationUiState.Failed(LocationError.Timeout),
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -135,7 +161,10 @@ class HomeScreenTest {
                 LocationUiState.Located(LatLng(40.4443, -79.9532)),
                 MapUiState(stopsStatus = StopsStatus.Loading),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -152,7 +181,10 @@ class HomeScreenTest {
                     stopsStatus = StopsStatus.Failed(GtfsImportError.Network(IOException()))
                 ),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
@@ -169,11 +201,77 @@ class HomeScreenTest {
                 LocationUiState.Located(LatLng(40.4443, -79.9532)),
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
+                detailsState = null,
                 onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
                 mapContent = stubMap
             )
         }
 
         composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_departureClicked_showsItsDetails() {
+        composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
+
+        composeRule.onNodeWithText("61C").performClick()
+
+        composeRule.onNodeWithText(
+            "Board at Forbes Ave at Morewood · 2 min walk"
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_backFromDetails_showsNearbyListAgain() {
+        composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
+        composeRule.onNodeWithText("61C").performClick()
+
+        composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
+
+        composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_openAndCloseDetails_doesNotRequestLocationAgain() {
+        // Relocating is the screen's only way to ask for a new fix (see MainActivity).
+        var relocations = 0
+        composeRule.setContent { NavigableHomeScreen(onRelocate = { relocations++ }) }
+        composeRule.onNodeWithText("61C").performClick()
+
+        composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
+
+        assertEquals(0, relocations)
+    }
+
+    /** HomeScreen with details state held the way MainActivity's ViewModel holds it. */
+    @Composable
+    private fun NavigableHomeScreen(onRelocate: () -> Unit) {
+        var details by remember { mutableStateOf<DepartureDetailsUiState?>(null) }
+        HomeScreen(
+            LocationUiState.Located(LatLng(40.4443, -79.9532)),
+            MapUiState(stopsStatus = StopsStatus.Ready),
+            DeparturesUiState(listOf(DEPARTURE), DeparturesStatus.Ready),
+            detailsState = details,
+            onRelocate = onRelocate,
+            onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
+            onCloseDetails = { details = null },
+            mapContent = stubMap
+        )
+    }
+
+    private companion object {
+        val DEPARTURE = DepartureItem(
+            route = "61C",
+            direction = "OUTBOUND",
+            destination = "McKeesport",
+            stopName = "Forbes Ave at Morewood",
+            walkMinutes = 2,
+            minutesUntilDeparture = 5,
+            delayed = false,
+            stopId = "7117",
+            vehicleId = "5601"
+        )
     }
 }

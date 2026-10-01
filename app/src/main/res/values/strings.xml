@@ -19,4 +19,10 @@
     <string name="departures_failed">Couldn\'t update departures.</string>
     <string name="departures_failed_missing_key">Live departures need a TrueTime API key (PRT_API_KEY in local.properties).</string>
     <string name="departures_last_updated">%1$s Showing departures from %2$s.</string>
+    <string name="details_back">Back to nearby departures</string>
+    <string name="details_board_at">Board at %1$s · %2$d min walk</string>
+    <string name="details_board_here">Board here</string>
+    <string name="details_route_loading">Loading route…</string>
+    <string name="details_route_not_found">This bus is no longer reporting its route; it may have finished its trip.</string>
+    <string name="details_route_failed">Couldn\'t load the route. Go back and tap the bus to try again.</string>
 </resources>

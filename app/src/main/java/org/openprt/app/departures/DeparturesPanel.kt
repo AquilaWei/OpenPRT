@@ -1,5 +1,6 @@
 package org.openprt.app.departures
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -27,10 +28,12 @@ import org.openprt.app.data.truetime.TrueTimeError
 /**
  * The list of departures near the user, shown in the home screen's bottom sheet. A failed
  * refresh keeps the previous list and says how old it is; times are shown in [zone].
+ * Tapping a row reports it through [onDepartureClick].
  */
 @Composable
 fun DeparturesPanel(
     state: DeparturesUiState,
+    onDepartureClick: (DepartureItem) -> Unit,
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault()
 ) {
@@ -45,7 +48,7 @@ fun DeparturesPanel(
             FailureText(status.error, state.lastUpdated, zone)
         }
         when {
-            state.departures.isNotEmpty() -> DepartureList(state.departures)
+            state.departures.isNotEmpty() -> DepartureList(state.departures, onDepartureClick)
 
             status == DeparturesStatus.Loading -> PanelText(
                 stringResource(R.string.departures_loading)
@@ -60,19 +63,23 @@ fun DeparturesPanel(
 }
 
 @Composable
-private fun DepartureList(departures: List<DepartureItem>) {
+private fun DepartureList(
+    departures: List<DepartureItem>,
+    onDepartureClick: (DepartureItem) -> Unit
+) {
     // Bounded so the list scrolls inside the sheet instead of growing past the screen.
     LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
         items(departures) { departure ->
-            DepartureRow(departure)
+            DepartureRow(departure, onClick = { onDepartureClick(departure) })
             HorizontalDivider()
         }
     }
 }
 
 @Composable
-private fun DepartureRow(departure: DepartureItem) {
+private fun DepartureRow(departure: DepartureItem, onClick: () -> Unit) {
     ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
             Text(
                 text = departure.route,
@@ -133,8 +140,9 @@ private fun FailureText(error: TrueTimeError, lastUpdated: Instant?, zone: ZoneI
     PanelText(text, color = MaterialTheme.colorScheme.error)
 }
 
+/** A line of explanatory text in a bottom-sheet panel. */
 @Composable
-private fun PanelText(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+internal fun PanelText(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
     Text(
         text = text,
         color = color,

@@ -232,7 +232,9 @@ class NearbyDeparturesViewModelTest {
                         "Forbes Ave at Morewood Ave",
                         2,
                         5,
-                        false
+                        false,
+                        "7117",
+                        "5601"
                     ),
                     DepartureItem(
                         "P1",
@@ -241,7 +243,9 @@ class NearbyDeparturesViewModelTest {
                         "Forbes Ave at Morewood Ave",
                         2,
                         12,
-                        true
+                        true,
+                        "7117",
+                        "5601"
                     )
                 ),
                 status = DeparturesStatus.Ready,
@@ -311,7 +315,9 @@ class NearbyDeparturesViewModelTest {
                         "Forbes Ave at Morewood Ave",
                         2,
                         10,
-                        false
+                        false,
+                        "7117",
+                        "5601"
                     )
                 ),
                 status = DeparturesStatus.Failed(TrueTimeError.Network(NETWORK_DOWN)),

@@ -20,6 +20,8 @@ import java.time.Clock
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.fromBuildConfig
 import org.openprt.app.departures.NearbyDeparturesViewModel
+import org.openprt.app.details.DepartureDetailsViewModel
+import org.openprt.app.details.asTripSource
 import org.openprt.app.location.FusedLocationProvider
 import org.openprt.app.location.LOCATION_PERMISSIONS
 import org.openprt.app.location.LocationUiState
@@ -32,15 +34,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Lazy: after rotation the ViewModels already exist and need no new client.
+        val trueTime by lazy { TrueTimeClient.fromBuildConfig() }
         val viewModelFactory = viewModelFactory {
             initializer { LocationViewModel(FusedLocationProvider(applicationContext)) }
             initializer {
                 MapViewModel((application as OpenPrtApplication).nearbyStopRepository)
             }
-            initializer {
-                val trueTime = TrueTimeClient.fromBuildConfig()
-                NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC())
-            }
+            initializer { NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC()) }
+            initializer { DepartureDetailsViewModel(trueTime.asTripSource()) }
         }
         setContent {
             val locationViewModel: LocationViewModel = viewModel(factory = viewModelFactory)
@@ -50,6 +52,8 @@ class MainActivity : ComponentActivity() {
                 viewModel(factory = viewModelFactory)
             val mapState by mapViewModel.state.collectAsStateWithLifecycle()
             val departuresState by departuresViewModel.state.collectAsStateWithLifecycle()
+            val detailsViewModel: DepartureDetailsViewModel = viewModel(factory = viewModelFactory)
+            val detailsState by detailsViewModel.state.collectAsStateWithLifecycle()
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { grants -> locationViewModel.onPermissionResult(grants.values.any { it }) }
@@ -98,7 +102,10 @@ class MainActivity : ComponentActivity() {
                     locationState = locationState,
                     mapState = mapState,
                     departuresState = departuresState,
-                    onRelocate = locationViewModel::relocate
+                    detailsState = detailsState,
+                    onRelocate = locationViewModel::relocate,
+                    onDepartureClick = detailsViewModel::open,
+                    onCloseDetails = detailsViewModel::close
                 )
             }
         }

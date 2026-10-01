@@ -9,6 +9,20 @@ sealed interface TrueTimeResult<out T> {
     data class Failure(val error: TrueTimeError) : TrueTimeResult<Nothing>
 }
 
+/**
+ * BusTime reports "nothing matches" (no buses due, vehicle no longer tracked) as an error; for
+ * callers that read it as an empty list this turns that error into an empty success.
+ */
+fun <T> TrueTimeResult<List<T>>.orEmptyWhenNoData(): TrueTimeResult<List<T>> {
+    val error = (this as? TrueTimeResult.Failure)?.error as? TrueTimeError.Api ?: return this
+    val noData =
+        error.messages.isNotEmpty() &&
+            error.messages.all { it.startsWith(NO_DATA_MESSAGE, ignoreCase = true) }
+    return if (noData) TrueTimeResult.Success(emptyList()) else this
+}
+
+private const val NO_DATA_MESSAGE = "No data found"
+
 /** Why a TrueTime call produced no data. */
 sealed interface TrueTimeError {
     /** No PRT_API_KEY was configured at build time, so no request was sent. */

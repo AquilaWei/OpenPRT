@@ -15,6 +15,7 @@ import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.TrueTimeError
 import org.openprt.app.data.truetime.TrueTimeResult
+import org.openprt.app.data.truetime.orEmptyWhenNoData
 
 /** Where departures come from; an interface so the ViewModel can be tested with a fake. */
 fun interface PredictionSource {
@@ -39,7 +40,11 @@ data class DepartureItem(
     val walkMinutes: Long,
     /** Rounded down, matching how PRT signs count down. */
     val minutesUntilDeparture: Long,
-    val delayed: Boolean
+    val delayed: Boolean,
+    /** TrueTime ID of the stop the bus is boarded at. */
+    val stopId: String,
+    /** The bus itself; its pattern (route shape) is looked up from it. */
+    val vehicleId: String
 )
 
 /** Whether [DeparturesUiState.departures] reflects the latest request. */
@@ -127,17 +132,6 @@ class NearbyDeparturesViewModel(
     }
 }
 
-/** BusTime reports "no buses due at these stops" as an error; for a list it just means empty. */
-private fun TrueTimeResult<List<Prediction>>.orEmptyWhenNoData(): TrueTimeResult<List<Prediction>> {
-    val error = (this as? TrueTimeResult.Failure)?.error as? TrueTimeError.Api ?: return this
-    val noData =
-        error.messages.isNotEmpty() &&
-            error.messages.all { it.startsWith(NO_DATA_MESSAGE, ignoreCase = true) }
-    return if (noData) TrueTimeResult.Success(emptyList()) else this
-}
-
-private const val NO_DATA_MESSAGE = "No data found"
-
 private fun RankedDeparture.toItem() = DepartureItem(
     route = prediction.route,
     direction = prediction.routeDirection,
@@ -145,5 +139,7 @@ private fun RankedDeparture.toItem() = DepartureItem(
     stopName = prediction.stopName,
     walkMinutes = (walkTime.seconds + 59) / 60,
     minutesUntilDeparture = timeUntilDeparture.toMinutes(),
-    delayed = prediction.delayed
+    delayed = prediction.delayed,
+    stopId = prediction.stopId,
+    vehicleId = prediction.vehicleId
 )

@@ -1,5 +1,6 @@
 package org.openprt.app
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,8 +22,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.DeparturesPanel
 import org.openprt.app.departures.DeparturesUiState
+import org.openprt.app.details.DepartureDetailsPanel
+import org.openprt.app.details.DepartureDetailsUiState
+import org.openprt.app.details.RouteStatus
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
@@ -40,6 +45,9 @@ private val SHEET_PEEK_HEIGHT = 240.dp
  * downtown fallback), with status messages on top, a button to re-center, and the nearby
  * departures in a bottom sheet that can be dragged up.
  *
+ * While [detailsState] is set, the sheet shows that departure instead and the map shows its
+ * route in place of the nearby stops; the back button and system back call [onCloseDetails].
+ *
  * [mapContent] draws the map inside the container; tests replace it because the real MapLibre
  * map needs native code that Robolectric cannot load.
  */
@@ -49,24 +57,36 @@ fun HomeScreen(
     locationState: LocationUiState,
     mapState: MapUiState,
     departuresState: DeparturesUiState,
+    detailsState: DepartureDetailsUiState?,
     onRelocate: () -> Unit,
+    onDepartureClick: (DepartureItem) -> Unit,
+    onCloseDetails: () -> Unit,
     modifier: Modifier = Modifier,
     mapContent: @Composable (Modifier) -> Unit = { mapModifier ->
         StopMap(
             center = locationState.location,
             userLocation = (locationState as? LocationUiState.Located)?.location,
-            stops = mapState.stopMarkers,
+            // The route's own stops replace the nearby ones so the boarding stop stands out.
+            stops = if (detailsState == null) mapState.stopMarkers else emptyList(),
+            route = (detailsState?.route as? RouteStatus.Ready)?.shape,
             modifier = mapModifier
         )
     }
 ) {
+    BackHandler(enabled = detailsState != null, onBack = onCloseDetails)
     BottomSheetScaffold(
         modifier = modifier,
         sheetPeekHeight = SHEET_PEEK_HEIGHT,
         topBar = {
             CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) })
         },
-        sheetContent = { DeparturesPanel(departuresState) }
+        sheetContent = {
+            if (detailsState == null) {
+                DeparturesPanel(departuresState, onDepartureClick)
+            } else {
+                DepartureDetailsPanel(detailsState, onBack = onCloseDetails)
+            }
+        }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Box(modifier = Modifier.fillMaxSize().testTag(MAP_CONTAINER_TAG)) {
@@ -148,7 +168,10 @@ private fun HomeScreenPreview() {
         locationState = LocationUiState.PermissionDenied(),
         mapState = MapUiState(stopsStatus = StopsStatus.Ready),
         departuresState = DeparturesUiState(),
+        detailsState = null,
         onRelocate = {},
+        onDepartureClick = {},
+        onCloseDetails = {},
         mapContent = { Surface(it, color = MaterialTheme.colorScheme.surfaceVariant) {} }
     )
 }

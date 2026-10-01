@@ -3,10 +3,12 @@ package org.openprt.app.departures
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,7 +22,10 @@ class DeparturesPanelTest {
     @Test
     fun departuresPanel_twoDepartures_showsRouteNumbers() {
         composeRule.setContent {
-            DeparturesPanel(DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED))
+            DeparturesPanel(
+                DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
         }
 
         composeRule.onNodeWithText("61C").assertIsDisplayed()
@@ -30,7 +35,10 @@ class DeparturesPanelTest {
     @Test
     fun departuresPanel_twoDepartures_showsMinutesUntilEachBus() {
         composeRule.setContent {
-            DeparturesPanel(DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED))
+            DeparturesPanel(
+                DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
         }
 
         composeRule.onNodeWithText("5 min").assertIsDisplayed()
@@ -40,7 +48,10 @@ class DeparturesPanelTest {
     @Test
     fun departuresPanel_departure_showsDirectionStopAndWalkTime() {
         composeRule.setContent {
-            DeparturesPanel(DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED))
+            DeparturesPanel(
+                DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
         }
 
         composeRule
@@ -51,16 +62,37 @@ class DeparturesPanelTest {
     @Test
     fun departuresPanel_delayedDeparture_showsDelayedLabel() {
         composeRule.setContent {
-            DeparturesPanel(DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED))
+            DeparturesPanel(
+                DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
         }
 
         composeRule.onNodeWithText("Delayed").assertIsDisplayed()
     }
 
     @Test
+    fun departuresPanel_rowClicked_reportsThatDeparture() {
+        val clicked = mutableListOf<DepartureItem>()
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = { clicked.add(it) }
+            )
+        }
+
+        composeRule.onNodeWithText("P1").performClick()
+
+        assertEquals(listOf(TWO_DEPARTURES[1]), clicked)
+    }
+
+    @Test
     fun departuresPanel_readyWithNoDepartures_showsEmptyState() {
         composeRule.setContent {
-            DeparturesPanel(DeparturesUiState(emptyList(), DeparturesStatus.Ready, UPDATED))
+            DeparturesPanel(
+                DeparturesUiState(emptyList(), DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
         }
 
         composeRule
@@ -70,7 +102,7 @@ class DeparturesPanelTest {
 
     @Test
     fun departuresPanel_loading_showsLoadingText() {
-        composeRule.setContent { DeparturesPanel(DeparturesUiState()) }
+        composeRule.setContent { DeparturesPanel(DeparturesUiState(), onDepartureClick = {}) }
 
         composeRule.onNodeWithText("Loading departures…").assertIsDisplayed()
     }
@@ -80,6 +112,7 @@ class DeparturesPanelTest {
         composeRule.setContent {
             DeparturesPanel(
                 DeparturesUiState(TWO_DEPARTURES, NETWORK_FAILURE, UPDATED),
+                onDepartureClick = {},
                 zone = PITTSBURGH
             )
         }
@@ -92,6 +125,7 @@ class DeparturesPanelTest {
         composeRule.setContent {
             DeparturesPanel(
                 DeparturesUiState(TWO_DEPARTURES, NETWORK_FAILURE, UPDATED),
+                onDepartureClick = {},
                 zone = PITTSBURGH
             )
         }
@@ -111,7 +145,8 @@ class DeparturesPanelTest {
                     emptyList(),
                     DeparturesStatus.Failed(TrueTimeError.MissingApiKey),
                     lastUpdated = null
-                )
+                ),
+                onDepartureClick = {}
             )
         }
 
@@ -133,9 +168,21 @@ class DeparturesPanelTest {
                 "Forbes Ave at Morewood Ave",
                 2,
                 5,
-                false
+                false,
+                "7117",
+                "5601"
             ),
-            DepartureItem("P1", "INBOUND", "Downtown", "Forbes Ave at Morewood Ave", 2, 12, true)
+            DepartureItem(
+                "P1",
+                "INBOUND",
+                "Downtown",
+                "Forbes Ave at Morewood Ave",
+                2,
+                12,
+                true,
+                "7117",
+                "3210"
+            )
         )
     }
 }
