@@ -105,6 +105,24 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   已確認拿掉索引時這個測試會失敗
 - 查詢沒有過濾 `location_type`（真實 PRT feed 全部是 0）。F6 / F7 若要排除 station（type 1）再加
 
+## 定位（F5 決定）
+
+- 程式在 `app/src/main/java/org/openprt/app/location/`：
+  - `LocationProvider.kt`：純 Kotlin 介面 + `LocationResult` / `LocationError`（PermissionMissing / Unavailable / Timeout / Failed）
+    與預設座標 `DOWNTOWN_PITTSBURGH`（Market Square 40.4406, -79.9959）
+  - `FusedLocationProvider.kt`：`getCurrentLocation(PRIORITY_HIGH_ACCURACY)` 單次定位，`await(CancellationTokenSource)` 讓協程取消時一併取消請求。
+    回傳 null（定位關閉）→ Unavailable；`SecurityException` → PermissionMissing；`ApiException` → Failed
+  - `LocationViewModel.kt`：狀態 AwaitingPermission → Loading → Located / PermissionDenied / Failed。
+    逾時在 ViewModel 用 `withTimeoutOrNull`（預設 10 秒），provider 本身不設逾時；PermissionDenied / Failed 都帶 downtown 座標
+- 權限流程在 `MainActivity`：狀態是 AwaitingPermission 時，已授權就直接定位，否則用 `RequestMultiplePermissions` 要 FINE + COARSE，
+  任一允許就算授權。旋轉後 ViewModel 狀態已不是 AwaitingPermission，不會重複跳對話框
+- 錯誤訊息在 UI 層由 `LocationError` 對應到字串資源，ViewModel 不放字串。介面文字目前只有英文（語言問題仍未回答）
+- 主畫面暫時只顯示定位狀態文字（含座標），F6 換成地圖時取代
+- F6 注意：「重新定位」按鈕需要在 ViewModel 加 refresh；狀態中各終態的座標欄位名稱都是 `location`，
+  F6 可視需要在 `LocationUiState` 加共用屬性。定位目前只取一次，沒有持續更新（F6 的「移動超過 100 m 才重查」需要加 location updates）
+- `FusedLocationProvider` 沒有自動化測試（Robolectric 沒有 Play services），列入實機驗收
+- 新增依賴：play-services-location 21.4.0、kotlinx-coroutines-play-services 1.11.0、lifecycle-viewmodel-compose / runtime-compose 2.11.0
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -119,7 +137,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 
 - [ ] F2 填入 `PRT_API_KEY` 後實際呼叫各端點成功，並把真實回應換成測試 fixture
 - [ ] F3 在手機上執行一次 GTFS 匯入（目前還沒有接到畫面或背景工作，F4/F16 接上後再驗）
-- [ ] F5 首次啟動跳出定位權限對話框，允許後取得真實位置
+- [ ] F5 首次啟動跳出定位權限對話框，允許後主畫面顯示真實座標；拒絕時顯示 Downtown 提示；關閉手機定位時顯示「location is turned off」
 - [ ] F6 地圖顯示匹茲堡，站牌標記位置正確
 - [ ] F9 路線折線沿實際道路，上車站醒目標示
 - [ ] F10 公車標記移動與實際車輛一致
@@ -149,3 +167,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   DAO 邊界框查詢與座標索引（schema v2）。新增 12 個測試，verify 通過
   - 不需要實機驗收（純邏輯 + Room，全部自動化）
   - 下一步：F5 定位（LocationProvider 抽象 + 權限流程），需要加 play-services-location 依賴
+- 2026-10-01：**F5 完成**（版號 0.1.4，tag `v0.1.4` 只在本機）。`LocationProvider` 抽象、Fused 實作、權限流程、
+  拒絕 / 逾時 / 失敗退回 Downtown 並在畫面提示。新增 13 個測試（全部 74 個），verify 通過
+  - 需要實機驗收（見清單 F5），Fused 實作只能在實機或有 Play services 的模擬器上驗
+  - 下一步：F6 地圖主畫面。開工前要先確定地圖 SDK（questions 第一題仍未回答；Google Maps 需要使用者提供 Maps API key）
