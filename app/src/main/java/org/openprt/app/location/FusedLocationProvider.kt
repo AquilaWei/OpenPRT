@@ -3,12 +3,19 @@ package org.openprt.app.location
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.location.CurrentLocationRequest
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import org.openprt.app.geo.LatLng
 
@@ -28,6 +35,8 @@ fun hasLocationPermission(context: Context): Boolean = LOCATION_PERMISSIONS.any 
 class FusedLocationProvider(private val context: Context) : LocationProvider {
     private val client = LocationServices.getFusedLocationProviderClient(context)
 
+    // await(CancellationTokenSource) is still marked experimental in kotlinx-coroutines-play-services.
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun currentLocation(): LocationResult {
         if (!hasLocationPermission(context)) {
             return LocationResult.Failure(LocationError.PermissionMissing)
@@ -54,5 +63,35 @@ class FusedLocationProvider(private val context: Context) : LocationProvider {
         } catch (e: ApiException) {
             LocationResult.Failure(LocationError.Failed(e))
         }
+    }
+
+    override fun locationUpdates(): Flow<LatLng> = callbackFlow {
+        if (!hasLocationPermission(context)) {
+            close()
+            return@callbackFlow
+        }
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, UPDATE_INTERVAL_MS)
+            .setMinUpdateDistanceMeters(MIN_UPDATE_DISTANCE_METERS)
+            .build()
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: com.google.android.gms.location.LocationResult) {
+                result.lastLocation?.let { trySend(LatLng(it.latitude, it.longitude)) }
+            }
+        }
+        try {
+            client.requestLocationUpdates(request, callback, Looper.getMainLooper())
+        } catch (e: SecurityException) {
+            // Permission revoked between the check above and the request.
+            close()
+            return@callbackFlow
+        }
+        awaitClose { client.removeLocationUpdates(callback) }
+    }
+
+    private companion object {
+        const val UPDATE_INTERVAL_MS = 10_000L
+
+        // Smaller moves cannot change which stops are nearby, so skip them to save battery.
+        const val MIN_UPDATE_DISTANCE_METERS = 20f
     }
 }

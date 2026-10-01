@@ -1,10 +1,12 @@
 <resources>
     <string name="app_name">OpenPRT</string>
     <string name="location_locating">Finding your location…</string>
-    <string name="location_located">Your location: %1$s</string>
     <string name="location_permission_denied">Location permission denied. Showing Downtown Pittsburgh instead; allow location access in Settings to see stops near you.</string>
     <string name="location_failed">Couldn\'t get your location (%1$s). Showing Downtown Pittsburgh instead.</string>
     <string name="location_error_timeout">timed out</string>
     <string name="location_error_unavailable">location is turned off</string>
     <string name="location_error_failed">location service error</string>
+    <string name="map_relocate">Re-center on my location</string>
+    <string name="stops_loading">Loading nearby stops…</string>
+    <string name="stops_failed">Couldn\'t load bus stops. Check your connection; the app retries when you move or re-center.</string>
 </resources>

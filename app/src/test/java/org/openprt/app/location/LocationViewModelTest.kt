@@ -5,6 +5,11 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -159,13 +164,110 @@ class LocationViewModelTest {
         )
     }
 
-    /** Returns [result] on every call, or suspends until cancelled when [result] is null. */
+    @Test
+    fun followLocation_afterFix_appliesLaterUpdates() = runTest(dispatcher) {
+        val provider = FakeLocationProvider(OAKLAND_FIX)
+        val viewModel = LocationViewModel(provider)
+        val following = launch { viewModel.followLocation() }
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        provider.updates.emit(LatLng(40.4417, -79.9562))
+        runCurrent()
+
+        following.cancel()
+        assertEquals(LocationUiState.Located(LatLng(40.4417, -79.9562)), viewModel.state.value)
+    }
+
+    @Test
+    fun followLocation_afterFailedFix_updateTurnsStateIntoLocated() = runTest(dispatcher) {
+        val provider = FakeLocationProvider(LocationResult.Failure(LocationError.Unavailable))
+        val viewModel = LocationViewModel(provider)
+        val following = launch { viewModel.followLocation() }
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        provider.updates.emit(LatLng(40.4417, -79.9562))
+        runCurrent()
+
+        following.cancel()
+        assertEquals(LocationUiState.Located(LatLng(40.4417, -79.9562)), viewModel.state.value)
+    }
+
+    @Test
+    fun followLocation_permissionDenied_doesNotListenForUpdates() = runTest(dispatcher) {
+        val provider = FakeLocationProvider(OAKLAND_FIX)
+        val viewModel = LocationViewModel(provider)
+        val following = launch { viewModel.followLocation() }
+
+        viewModel.onPermissionResult(granted = false)
+        advanceUntilIdle()
+
+        following.cancel()
+        assertEquals(0, provider.updateSubscriptions)
+    }
+
+    @Test
+    fun followLocation_cancelled_stopsListening() = runTest(dispatcher) {
+        val provider = FakeLocationProvider(OAKLAND_FIX)
+        val viewModel = LocationViewModel(provider)
+        val following = launch { viewModel.followLocation() }
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        following.cancel()
+        advanceUntilIdle()
+
+        assertEquals(0, provider.updates.subscriptionCount.value)
+    }
+
+    @Test
+    fun relocate_afterFix_returnsToAwaitingPermission() = runTest(dispatcher) {
+        val viewModel = LocationViewModel(FakeLocationProvider(OAKLAND_FIX))
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        viewModel.relocate()
+
+        assertEquals(LocationUiState.AwaitingPermission, viewModel.state.value)
+    }
+
+    @Test
+    fun relocate_thenGranted_takesFreshFix() = runTest(dispatcher) {
+        val provider = FakeLocationProvider(OAKLAND_FIX)
+        val viewModel = LocationViewModel(provider)
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        viewModel.relocate()
+        viewModel.onPermissionResult(granted = true)
+        advanceUntilIdle()
+
+        assertEquals(2, provider.calls)
+    }
+
+    @Test
+    fun location_whileLoading_isNull() {
+        assertEquals(null, LocationUiState.Loading.location)
+    }
+
+    /**
+     * Returns [result] on every call, or suspends until cancelled when [result] is null.
+     * Continuous updates are whatever the test emits into [updates].
+     */
     private class FakeLocationProvider(private val result: LocationResult?) : LocationProvider {
         var calls = 0
+        var updateSubscriptions = 0
+        val updates = MutableSharedFlow<LatLng>()
 
         override suspend fun currentLocation(): LocationResult {
             calls++
             return result ?: awaitCancellation()
+        }
+
+        override fun locationUpdates(): Flow<LatLng> = flow {
+            updateSubscriptions++
+            emitAll(updates)
         }
     }
 

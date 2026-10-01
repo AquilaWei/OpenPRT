@@ -67,6 +67,9 @@ interface GtfsDao {
         maxLongitude: Double
     ): List<StopEntity>
 
+    @Query("SELECT COUNT(*) FROM stops")
+    suspend fun countStops(): Int
+
     @Query("SELECT * FROM routes ORDER BY routeId")
     suspend fun getAllRoutes(): List<RouteEntity>
 

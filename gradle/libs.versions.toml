@@ -17,6 +17,7 @@ kotlinx-coroutines = "1.11.0"
 ksp = "2.3.12"
 room = "2.8.5"
 play-services-location = "21.4.0"
+maplibre = "13.6.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
@@ -45,6 +46,7 @@ room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "play-services-location" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "kotlinx-coroutines" }
+maplibre-android = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibre" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
 
 [plugins]

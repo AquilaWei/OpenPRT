@@ -1,5 +1,6 @@
 package org.openprt.app.location
 
+import kotlinx.coroutines.flow.Flow
 import org.openprt.app.geo.LatLng
 
 /** Market Square, used as the map center whenever the device location is not available. */
@@ -15,6 +16,13 @@ interface LocationProvider {
      * own timeout and may suspend for a long time, so callers must bound the wait.
      */
     suspend fun currentLocation(): LocationResult
+
+    /**
+     * Fixes as the device moves, for as long as the flow is collected; the platform request stops
+     * when collection stops. Completes without emitting if location permission is missing, and
+     * emits nothing while location services are off.
+     */
+    fun locationUpdates(): Flow<LatLng>
 }
 
 /** Outcome of one location request. */

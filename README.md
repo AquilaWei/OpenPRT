@@ -13,6 +13,9 @@
 - 🧭 **路線規劃**：選擇目的地後規劃乘車路線，提供時間預估、班次與轉乘資訊
 
 資料來源：PRT TrueTime 即時 API 與 PRT GTFS 靜態時刻表（[`GTFS.zip`](https://www.rideprt.org/developerresources/GTFS.zip)，公開下載、不需 key）。
+地圖用 **[MapLibre](https://maplibre.org/)** 搭配 **[OpenFreeMap](https://openfreemap.org/)** 的 OpenStreetMap 圖磚，免費、**不需要地圖 API key**。
+
+> 第一次開啟時 App 會下載 GTFS 站牌資料（約 22 MB），之後才會在地圖上顯示附近站牌。
 
 ## 需求
 

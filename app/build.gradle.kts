@@ -81,6 +81,7 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.maplibre.android)
     ksp(libs.room.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

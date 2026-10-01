@@ -1,0 +1,200 @@
+package org.openprt.app.map
+
+import java.io.IOException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Before
+import org.junit.Test
+import org.openprt.app.data.gtfs.GtfsImportError
+import org.openprt.app.data.gtfs.NearbyStop
+import org.openprt.app.data.gtfs.NearbyStopSource
+import org.openprt.app.data.gtfs.NearbyStopsResult
+import org.openprt.app.data.gtfs.StopEntity
+import org.openprt.app.geo.LatLng
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class MapViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun state_beforeAnyLocation_isLoadingWithNoMarkers() {
+        val viewModel = MapViewModel(FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS)))
+
+        assertEquals(MapUiState(emptyList(), StopsStatus.Loading), viewModel.state.value)
+    }
+
+    @Test
+    fun onLocationChanged_withNearbyStops_producesMarkerPerStop() = runTest(dispatcher) {
+        val viewModel = MapViewModel(FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS)))
+
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+
+        assertEquals(
+            MapUiState(
+                stopMarkers = listOf(
+                    StopMarker(
+                        "2635",
+                        "FIFTH AVE + BELLEFIELD, OPP",
+                        LatLng(40.445770, -79.951416)
+                    ),
+                    StopMarker("8312", "FORBES AVE + MOREWOOD AVE", LatLng(40.444557, -79.942791))
+                ),
+                stopsStatus = StopsStatus.Ready
+            ),
+            viewModel.state.value
+        )
+    }
+
+    @Test
+    fun onLocationChanged_queriesAroundLocationWith400mRadius() = runTest(dispatcher) {
+        val source = FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS))
+        val viewModel = MapViewModel(source)
+
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+
+        assertEquals(listOf(LatLng(40.4443, -79.9532) to 400.0), source.queries)
+    }
+
+    @Test
+    fun onLocationChanged_movedLessThan100m_doesNotQueryAgain() = runTest(dispatcher) {
+        val source = FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS))
+        val viewModel = MapViewModel(source)
+
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+        // 0.0008° of latitude is about 89 m.
+        viewModel.onLocationChanged(LatLng(40.4451, -79.9532))
+        advanceUntilIdle()
+
+        assertEquals(1, source.queries.size)
+    }
+
+    @Test
+    fun onLocationChanged_movedMoreThan100m_queriesNewLocation() = runTest(dispatcher) {
+        val source = FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS))
+        val viewModel = MapViewModel(source)
+
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+        // 0.0010° of latitude is about 111 m.
+        viewModel.onLocationChanged(LatLng(40.4453, -79.9532))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(LatLng(40.4443, -79.9532) to 400.0, LatLng(40.4453, -79.9532) to 400.0),
+            source.queries
+        )
+    }
+
+    @Test
+    fun onLocationChanged_smallMovesAddingUpPast100m_queriesOnceFarFromLastQuery() =
+        runTest(dispatcher) {
+            val source = FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS))
+            val viewModel = MapViewModel(source)
+
+            // Steps of about 44 m: 44 m and 89 m from the first query stay below 100 m, 133 m does not.
+            viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+            advanceUntilIdle()
+            viewModel.onLocationChanged(LatLng(40.4447, -79.9532))
+            advanceUntilIdle()
+            viewModel.onLocationChanged(LatLng(40.4451, -79.9532))
+            advanceUntilIdle()
+            viewModel.onLocationChanged(LatLng(40.4455, -79.9532))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(LatLng(40.4443, -79.9532) to 400.0, LatLng(40.4455, -79.9532) to 400.0),
+                source.queries
+            )
+        }
+
+    @Test
+    fun onLocationChanged_lookupFails_reportsFailureAndKeepsPreviousMarkers() =
+        runTest(dispatcher) {
+            val source = FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS))
+            val viewModel = MapViewModel(source)
+            viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+            advanceUntilIdle()
+
+            source.result = NearbyStopsResult.Failure(GtfsImportError.Network(NETWORK_DOWN))
+            viewModel.onLocationChanged(LatLng(40.4453, -79.9532))
+            advanceUntilIdle()
+
+            assertEquals(
+                MapUiState(
+                    stopMarkers = listOf(
+                        StopMarker(
+                            "2635",
+                            "FIFTH AVE + BELLEFIELD, OPP",
+                            LatLng(40.445770, -79.951416)
+                        ),
+                        StopMarker(
+                            "8312",
+                            "FORBES AVE + MOREWOOD AVE",
+                            LatLng(40.444557, -79.942791)
+                        )
+                    ),
+                    stopsStatus = StopsStatus.Failed(GtfsImportError.Network(NETWORK_DOWN))
+                ),
+                viewModel.state.value
+            )
+        }
+
+    @Test
+    fun onLocationChanged_afterFailure_retriesEvenWithoutMoving() = runTest(dispatcher) {
+        val source = FakeStopSource(NearbyStopsResult.Failure(GtfsImportError.Timeout))
+        val viewModel = MapViewModel(source)
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+
+        source.result = NearbyStopsResult.Success(OAKLAND_STOPS)
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+
+        assertEquals(StopsStatus.Ready, viewModel.state.value.stopsStatus)
+    }
+
+    /** Answers every lookup with [result] and records the requested centers and radii. */
+    private class FakeStopSource(var result: NearbyStopsResult) : NearbyStopSource {
+        val queries = mutableListOf<Pair<LatLng, Double>>()
+
+        override suspend fun nearbyStops(center: LatLng, radiusMeters: Double): NearbyStopsResult {
+            queries.add(center to radiusMeters)
+            return result
+        }
+    }
+
+    private companion object {
+        val NETWORK_DOWN = IOException("no network")
+
+        val OAKLAND_STOPS = listOf(
+            NearbyStop(
+                StopEntity("2635", "2635", "FIFTH AVE + BELLEFIELD, OPP", 40.445770, -79.951416, 0),
+                distanceMeters = 218.0
+            ),
+            NearbyStop(
+                StopEntity("8312", "8312", "FORBES AVE + MOREWOOD AVE", 40.444557, -79.942791, 0),
+                distanceMeters = 880.0
+            )
+        )
+    }
+}
