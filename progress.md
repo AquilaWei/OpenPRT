@@ -1,0 +1,70 @@
+# OpenPRT 進度紀錄
+
+## 目標
+
+匹茲堡公車（Pittsburgh Regional Transit, PRT）乘車資訊 App。先做 Android，iOS 之後再處理。
+
+1. 用手機定位找到使用者位置，列出附近最合適的班次並自動更新
+2. 點擊班次：地圖上顯示路線、站牌、公車即時位置與預估抵達時間
+3. 選擇目的地：規劃乘車路線，提供時間預估、班次與轉乘資訊
+
+## 計畫概覽
+
+功能清單在 `feature_list.json`，依序實作，一次一個 session。
+
+| 階段 | 功能 | 內容 |
+|---|---|---|
+| 基礎 | F1 | 專案骨架、lint、測試、CI |
+| 資料 | F2–F4 | TrueTime API 用戶端、GTFS 站牌匯入、附近站牌查詢 |
+| 附近班次 | F5–F8 | 定位、地圖主畫面、班次排序、班次列表自動更新 |
+| 班次詳情 | F9–F10 | 路線折線與站牌、即時公車位置與 ETA |
+| 路線規劃 | F11–F15 | 目的地選擇、GTFS 時刻表、RAPTOR 規劃器、方案 UI、方案地圖 |
+| 收尾 | F16–F17 | 離線 / 錯誤狀態、GTFS 背景更新、發佈流程 |
+
+F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答（見 `feature_list.json` 的 questions）；
+如果改用 Google Directions API 或 OpenTripPlanner，F12–F13 要改寫成對應的 API 用戶端功能。
+
+## 資料來源
+
+- **即時資料**：PRT TrueTime，Clever Devices BusTime API v3（`getpredictions`、`getvehicles`、`getpatterns` 等），需要 API key
+- **靜態資料**：PRT GTFS zip（站牌、路線、時刻表）。附近站牌查詢需要它，因為 TrueTime 的 `getstops` 必須指定路線與方向，無法依座標查詢
+- 實作 F2 前先確認 API 實際網址與 GTFS 下載網址（PRT 改名後網域可能有變），並把真實回應存成測試 fixture
+
+## 技術選擇（預設，使用者可在審核時調整）
+
+- Kotlin + Jetpack Compose，單一 `app` 模組起步
+- 不依賴 Android 的邏輯（API 解析、距離計算、班次排序、RAPTOR）寫成純 Kotlin，方便日後抽到 KMP shared 模組給 iOS
+- Room 存 GTFS 資料；OkHttp/Retrofit + kotlinx.serialization 呼叫 API；WorkManager 做背景更新
+- 測試：JUnit + MockWebServer + Robolectric（Compose / Room），時間一律注入 `Clock`，協程用虛擬時間
+- ktlint + Android Lint；warning 要處理
+
+## 環境（本機已確認）
+
+- Android SDK 在 `~/Android/Sdk`，已裝 platform `android-35`、build-tools `35.0.0`
+- 本機只有 **JDK 25**：Gradle wrapper 至少要 9.1 才能在 JDK 25 上跑；AGP 版本要與之相容。
+  若遇到相容問題，設定 Gradle toolchain 或請使用者安裝 JDK 21
+- `local.properties`（不進 git）需要 `sdk.dir=/home/Aquila/Android/Sdk`，之後再加 `PRT_API_KEY=...`（由使用者自己填）
+
+## 給下一個 session 的注意事項
+
+- 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
+- verify 指令：`./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug`，F1 完成前會失敗屬正常
+- 需要網路或 API key 的測試：本機沒有就自動略過，CI 一定要跑
+- 版號：功能寫完未經實機驗收用 PATCH；使用者驗收後才升 MINOR
+- CLAUDE.md、`.claude/`、`notes/` 不進 git
+
+## 需要實機驗收的項目（累積清單）
+
+自動化測不到，完成對應功能後由使用者在手機上確認：
+
+- [ ] F5 首次啟動跳出定位權限對話框，允許後取得真實位置
+- [ ] F6 地圖顯示匹茲堡，站牌標記位置正確
+- [ ] F9 路線折線沿實際道路，上車站醒目標示
+- [ ] F10 公車標記移動與實際車輛一致
+- [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小
+- [ ] F15 完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
+- [ ] F17 從 Release 下載 APK 安裝並啟動
+
+## 狀態
+
+- 2026-10-01：完成規劃，尚未實作任何功能，等待使用者審核與回答問題
