@@ -2,6 +2,13 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.2] - 2026-10-01
+
+### 新增
+
+- 匯入 PRT 公開的 GTFS 站牌與路線資料存在手機上，為「附近站牌」功能做準備（尚未接到畫面）
+- 下載失敗或檔案損毀時保留原本的資料，不會清空
+
 ## [0.1.1] - 2026-10-01
 
 ### 新增
