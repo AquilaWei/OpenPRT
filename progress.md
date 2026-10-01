@@ -148,6 +148,20 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - 測試寫法提醒：`runTest` 的 `advanceUntilIdle` **不會執行 `backgroundScope` 的協程**，要長時間收集的協程用一般 `launch` 並在結尾 `cancel()`
 - 順手處理 F5 留下的編譯警告：`await(CancellationTokenSource)` 是 experimental API，已加 `@OptIn`
 
+## 班次排序（F7 決定）
+
+- 程式在 `app/src/main/java/org/openprt/app/departures/DepartureRanker.kt`，純 Kotlin（只依賴 `java.time` 與 TrueTime 的 `Prediction`）
+- 輸入是 `WalkableStop(stopId, distanceMeters)` 清單與 `Prediction` 清單，用 `stopId` 字串相等配對；不在清單內的站牌的預測直接忽略。
+  **F8 呼叫前要把 GTFS 站牌轉成和 TrueTime `stpid` 相同的 ID**（stop_id 或 stop_code 仍未確認，見 F3 段落），
+  ranker 本身不處理對照
+- 步行時間 = 直線距離 / 1.2 m/s，**無條件進位到整秒**；速度可由建構子覆寫（必須 > 0）
+- 「趕得上」：抵達站牌時間 ≤ 預測時間（剛好同時算趕得上，沒有額外緩衝）；已經過去的預測自然被排除
+- 「最合適」的定義：**依公車預測時間由早到晚**（不是依「到站後等待時間」，否則會偏好遠站的晚班車），
+  同時間再依步行時間、路線、方向、stop_id 排，確保輸出穩定。同一路線同方向（`route` + `routeDirection`）只留排序後第一筆
+- 輸出 `RankedDeparture`：`walkTime`、`timeUntilDeparture`（現在到公車抵達）、`spareTime`（到站後還要等多久），F8 顯示「x 分」用 `timeUntilDeparture`
+- 「現在」一律來自注入的 `java.time.Clock`，測試用 `Clock.fixed`
+- 沒有考慮 `Prediction.type`（ARRIVAL / DEPARTURE）的差異，也沒有考慮實際步行路徑；若實機覺得太樂觀，可在 F8 加步行時間緩衝
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -203,3 +217,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 需要實機驗收（見清單 F6），地圖本身無法在 Robolectric 測
   - 新增依賴：org.maplibre.gl:android-sdk 13.6.1
   - 下一步：F7 班次排序邏輯（純 Kotlin）。開工前注意 progress.md F3 段落：TrueTime `stpid` 對應 GTFS 的 stop_id 還是 stop_code 尚未確認
+- 2026-10-01：**F7 完成**（版號 0.1.6，tag `v0.1.6` 只在本機）。`DepartureRanker`：步行時間、排除趕不上的班次、
+  同路線同方向只留最早能搭上的站牌、穩定排序、注入 Clock。新增 15 個測試（全部 111 個），verify 通過
+  - 不需要實機驗收（純邏輯，全部自動化）
+  - 下一步：F8 附近班次列表 UI（bottom sheet、30 秒自動更新）。需要先決定 GTFS 站牌 → TrueTime `stpid` 的對照方式，
+    沒有 API key 時只能先假設（建議先用 stop_code，並在 progress.md 記下待驗證）
