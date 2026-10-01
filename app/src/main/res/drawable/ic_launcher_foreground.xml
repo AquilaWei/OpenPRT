@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple bus front, drawn inside the 66dp adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#1F1F1F"
+        android:pathData="M38,32h32a6,6 0,0 1,6 6v30a4,4 0,0 1,-4 4h-2v4a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-4h-16v4a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-4h-2a4,4 0,0 1,-4 -4v-30a6,6 0,0 1,6 -6z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,40h32v14h-32z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,64m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M66,64m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+</vector>
