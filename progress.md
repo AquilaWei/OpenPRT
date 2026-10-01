@@ -91,6 +91,20 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - GTFS 測試 fixture（`app/src/test/resources/gtfs/feed/`）保留真實 feed 的 BOM 與 CRLF，`.gitattributes` 設 `-text` 避免被轉換；
   測試時才組成 zip，不把二進位檔放進 git
 
+## 附近站牌查詢（F4 決定）
+
+- 純 Kotlin 幾何在 `app/src/main/java/org/openprt/app/geo/Geo.kt`：`LatLng`、`haversineMeters`（球體半徑 6371008.8 m）、
+  `BoundingBox.around`（球冠的精確經度半寬，保證不漏掉圓內的點；不處理跨極點 / 換日線）。
+  Downtown→Oakland 實測 haversine 3780 m，對照 WGS84 Vincenty 3789 m，差 0.24%
+- `NearbyStopFinder`（`data/gtfs/`）：DAO `getStopsInBox` 在 SQLite 先用邊界框篩，再以 haversine 精確過濾，
+  依距離排序、距離相同時依 stop_id。回傳 `NearbyStop(stop, distanceMeters)`，距離是直線距離
+- `stops` 加了 `latitude` 單欄索引，schema 升到 **version 2**（`app/schemas/.../2.json`）。
+  `GtfsDatabase.create` 用 `fallbackToDestructiveMigration(dropAllTables = true)`：資料庫只放 GTFS 匯入資料，
+  改 schema 時直接重建，**之後不需要寫 migration**（但升級後到下次匯入前沒有站牌，F16 的「資料過期」判斷要涵蓋空資料庫）
+- 有測試用 Room query callback 抓 DAO 實際執行的 SQL 再跑 `EXPLAIN QUERY PLAN`，確認走 `index_stops_latitude`；
+  已確認拿掉索引時這個測試會失敗
+- 查詢沒有過濾 `location_type`（真實 PRT feed 全部是 0）。F6 / F7 若要排除 station（type 1）再加
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -131,3 +145,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 新增依賴：Room 2.8.5、KSP 2.3.12
   - 匯入功能還沒有呼叫點（沒有 UI、沒有 WorkManager），F4 起再接上
   - 下一步：F4 附近站牌查詢（邊界框 + haversine），記得加座標索引
+- 2026-10-01：**F4 完成**（版號 0.1.3，tag `v0.1.3` 只在本機）。haversine / 邊界框、`NearbyStopFinder`、
+  DAO 邊界框查詢與座標索引（schema v2）。新增 12 個測試，verify 通過
+  - 不需要實機驗收（純邏輯 + Room，全部自動化）
+  - 下一步：F5 定位（LocationProvider 抽象 + 權限流程），需要加 play-services-location 依賴
