@@ -1,10 +1,10 @@
 # OpenPRT
 
-![version](https://img.shields.io/badge/version-0.1.0-blue)
+![version](https://img.shields.io/badge/version-0.1.1-blue)
 
 **匹茲堡公車（Pittsburgh Regional Transit, PRT）乘車資訊 App**，先做 Android，iOS 之後再處理。
 
-> 目前是 **0.1.0 骨架版**：只有空白主畫面，以下功能仍在開發中。
+> 目前是 **0.1.1 開發版**：畫面仍是空白主畫面，已完成 PRT TrueTime 即時資料的連線元件，以下功能仍在開發中。
 
 ## 做什麼
 
