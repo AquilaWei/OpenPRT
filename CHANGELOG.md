@@ -2,6 +2,13 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.4] - 2026-10-01
+
+### 新增
+
+- 啟動時請求定位權限（精確或大約位置皆可），允許後在主畫面顯示目前座標
+- 拒絕權限、定位關閉、逾時（10 秒）或定位服務錯誤時，改用 Downtown Pittsburgh 並說明原因
+
 ## [0.1.3] - 2026-10-01
 
 ### 新增
