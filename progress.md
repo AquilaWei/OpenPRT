@@ -162,6 +162,25 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - 「現在」一律來自注入的 `java.time.Clock`，測試用 `Clock.fixed`
 - 沒有考慮 `Prediction.type`（ARRIVAL / DEPARTURE）的差異，也沒有考慮實際步行路徑；若實機覺得太樂觀，可在 F8 加步行時間緩衝
 
+## 附近班次列表（F8 決定）
+
+- 程式在 `departures/NearbyDeparturesViewModel.kt`（狀態與自動更新）與 `departures/DeparturesPanel.kt`（Compose 列表）
+- **GTFS → TrueTime 站牌 ID 暫定用 `stop_code`，沒有 code 時退回 `stop_id`**（`StopEntity.trueTimeStopId`）。
+  仍未用真實 key 驗證；若實機上永遠沒有班次，先檢查這裡
+- `MapUiState` 加了 `walkableStops`（TrueTime ID + 距離）。`MainActivity` 只在 `stopsStatus == Ready` 時轉給
+  departures ViewModel，避免站牌還沒載入前就顯示「附近沒有公車」
+- 每次更新只問**最近的 10 個站牌**（`MAX_IDS_PER_CALL`），一次 API 呼叫；30 秒一次一天 2880 次，在 BusTime 預設每日額度內。
+  400 m 內超過 10 個站牌時（Downtown），較遠站牌的班次不會出現
+- `autoRefresh()` 是 suspend 函式，`MainActivity` 用 `repeatOnLifecycle(STARTED)` 呼叫：背景時停止，回前景立刻更新一次。
+  站牌改變時 `collectLatest` 重新開始（立刻查新站牌、重新計時 30 秒）
+- TrueTime 回 `No data found` 錯誤（所有站都沒有預測）視為空列表，不是失敗。其他錯誤保留舊列表與 `lastUpdated`
+- 分鐘數：到站時間**無條件捨去**（跟站牌顯示一致），步行時間**無條件進位**。分鐘數在每次更新時計算，兩次更新之間最多舊 30 秒
+- 失敗訊息只分兩種：沒有 API key、其他。F16 再細分離線 / key 無效 / 配額
+- 主畫面改用 `BottomSheetScaffold`（peek 240 dp），重新定位按鈕移到內容區右下角
+- 測試寫法提醒：`TestLifecycleOwner` 的 `currentState` setter 會 `runBlocking` 在它的 dispatcher 上，
+  傳 `StandardTestDispatcher` 會**卡死**，要用 `UnconfinedTestDispatcher(同一個 scheduler)`
+- 新增測試依賴：`androidx.lifecycle:lifecycle-runtime-testing`
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -179,6 +198,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - [ ] F5 首次啟動跳出定位權限對話框，允許後主畫面顯示真實座標；拒絕時顯示 Downtown 提示；關閉手機定位時顯示「location is turned off」
 - [ ] F6 首次啟動後自動下載站牌資料，地圖顯示匹茲堡與你的位置（藍點），附近站牌（深藍圓點）位置與實際站牌吻合；
   走動時地圖跟著移動；按「重新定位」回到目前位置；圖磚右下角有 OSM 標示
+- [ ] F8 填入 `PRT_API_KEY` 後下方面板出現附近班次，路線 / 分鐘數與站牌電子看板一致（同時驗證 stop_code 是否就是 TrueTime 的 stpid）；
+  面板可往上拉開並捲動；收合時地圖中心（你的位置）沒有被面板遮住；切到背景再回來會立刻更新
 - [ ] F9 路線折線沿實際道路，上車站醒目標示
 - [ ] F10 公車標記移動與實際車輛一致
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小
@@ -222,3 +243,9 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 不需要實機驗收（純邏輯，全部自動化）
   - 下一步：F8 附近班次列表 UI（bottom sheet、30 秒自動更新）。需要先決定 GTFS 站牌 → TrueTime `stpid` 的對照方式，
     沒有 API key 時只能先假設（建議先用 stop_code，並在 progress.md 記下待驗證）
+- 2026-10-01：**F8 完成**（版號 0.1.7，tag `v0.1.7` 只在本機）。附近班次 bottom sheet：路線、方向、目的地、站牌、步行分鐘、
+  到站分鐘、誤點標示；前景每 30 秒更新、背景停止；失敗保留舊列表並顯示最後更新時間；空狀態與缺 API key 提示。
+  新增 26 個測試（全部 137 個），verify 通過
+  - 站牌 ID 對照暫定用 stop_code（未驗證，見 F8 段落）；需要實機驗收（見清單 F8）
+  - 下一步：F9 班次詳情。注意 `getpredictions` 沒有 pid，要先用 `getVehicles(vid)` 取 `patternId`；
+    `DepartureItem` 目前沒有 vehicleId，F9 需要加上

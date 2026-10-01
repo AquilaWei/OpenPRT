@@ -91,7 +91,7 @@
         "Compose 測試：給定兩筆班次，列表顯示對應路線編號與「x 分」文字",
         "沒有附近班次時顯示空狀態文字（Compose 測試）"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F9",
