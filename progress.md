@@ -73,6 +73,24 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   是依 BusTime v3 文件格式手寫的。使用者填入 `PRT_API_KEY` 後，應錄製真實回應比對欄位
   （特別是 directions 的 `id`/`name`、PRT 多資料源 `rtpidatafeed` 是否必填）
 
+## GTFS 匯入（F3 決定）
+
+- 下載網址 `https://www.rideprt.org/developerresources/GTFS.zip`（Developer Resources 頁面的連結，公開、不需 key）。
+  2026-10-01 實測：zip 22 MB，解開 104 MB（stop_times.txt 80 MB、shapes.txt 22 MB），檔案是 **CRLF** 換行
+- 真實 feed 實測：6388 個站牌（全部 location_type 0，沒有重複 ID）、102 條路線，JVM 上解析約 0.6 秒（含略過 stop_times）
+- 程式在 `app/src/main/java/org/openprt/app/data/gtfs/`：`GtfsCsv.kt`（純 Kotlin CSV 解析）、`GtfsFeed.kt`
+  （從 zip 串流讀 stops / routes）、`GtfsDatabase.kt`（Room entity / DAO）、`GtfsImporter.kt`（下載 + 寫入）
+- **邊下載邊解析**，整份 feed 解析成功後才在單一 transaction 內「全部刪除再插入」，所以失敗時舊資料不變，
+  新 feed 移除的站牌也會消失。F12 加 stop_times 時這個做法要重新評估（80 MB 全讀進記憶體太大，可能要分批寫入暫存表再切換）
+- 錯誤型別 `GtfsImportError`：Http / Timeout / Network / MalformedFeed（含非 zip 內容、缺檔案、重複 stop_id）
+- Room 2.8.5 + KSP 2.3.12；schema 匯出到 `app/schemas/`（進 git）。目前 version 1，上線前改 schema 可直接改，
+  上線後要寫 migration
+- F4 注意：stops 還沒有座標索引，F4 做邊界框查詢時要在 `StopEntity` 加 `latitude` 索引並升 schema 版本
+- **stop_id 與 stop_code 不同**（例：Steel Plaza stop_id `10`、stop_code `99994`）。TrueTime 的 `stpid`
+  對應哪一個尚未確認（沒有 API key），F7 合併兩邊資料前要用真實回應確認
+- GTFS 測試 fixture（`app/src/test/resources/gtfs/feed/`）保留真實 feed 的 BOM 與 CRLF，`.gitattributes` 設 `-text` 避免被轉換；
+  測試時才組成 zip，不把二進位檔放進 git
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -86,6 +104,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 自動化測不到，完成對應功能後由使用者在手機上確認：
 
 - [ ] F2 填入 `PRT_API_KEY` 後實際呼叫各端點成功，並把真實回應換成測試 fixture
+- [ ] F3 在手機上執行一次 GTFS 匯入（目前還沒有接到畫面或背景工作，F4/F16 接上後再驗）
 - [ ] F5 首次啟動跳出定位權限對話框，允許後取得真實位置
 - [ ] F6 地圖顯示匹茲堡，站牌標記位置正確
 - [ ] F9 路線折線沿實際道路，上車站醒目標示
@@ -107,3 +126,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 尚未用真實 key 驗證（見實機驗收清單）
   - 下一步：F3 GTFS 站牌與路線匯入，開工前先確認 PRT GTFS 下載網址（Developer Resources 頁面
     `https://www.rideprt.org/business-center/developer-resources/`）
+- 2026-10-01：**F3 完成**（版號 0.1.2，tag `v0.1.2` 只在本機）。GTFS CSV 解析器、stops / routes 匯入 Room、
+  下載失敗保留舊資料。新增 28 個測試（全部 49 個），verify 通過；也用真實 PRT GTFS.zip 手動跑過解析（未進測試）
+  - 新增依賴：Room 2.8.5、KSP 2.3.12
+  - 匯入功能還沒有呼叫點（沒有 UI、沒有 WorkManager），F4 起再接上
+  - 下一步：F4 附近站牌查詢（邊界框 + haversine），記得加座標索引
