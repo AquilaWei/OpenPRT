@@ -1,10 +1,10 @@
 # OpenPRT
 
-![version](https://img.shields.io/badge/version-0.1.8-blue)
+![version](https://img.shields.io/badge/version-0.1.9-blue)
 
 **匹茲堡公車（Pittsburgh Regional Transit, PRT）乘車資訊 App**，先做 Android，iOS 之後再處理。
 
-> 目前是 **0.1.8 開發版**：主畫面是地圖，顯示你的位置與 400 公尺內的公車站牌，移動時跟著更新（拒絕定位時改用 Downtown Pittsburgh）；下方的「Nearby departures」面板列出走得到、趕得上的附近班次，每 30 秒更新；點一班車會在地圖上畫出它的路線、沿線站牌，並標出你要上車的站牌。即時班次需要先設定 `PRT_API_KEY`（見下方說明），沒有 key 時面板會提示。
+> 目前是 **0.1.9 開發版**：主畫面是地圖，顯示你的位置與 400 公尺內的公車站牌，移動時跟著更新（拒絕定位時改用 Downtown Pittsburgh）；下方的「Nearby departures」面板列出走得到、趕得上的附近班次，每 30 秒更新；點一班車會在地圖上畫出它的路線、沿線站牌，標出你要上車的站牌，並顯示這班車的即時位置與還有幾分鐘到站（每 15 秒更新）。即時班次需要先設定 `PRT_API_KEY`（見下方說明），沒有 key 時面板會提示。
 
 ## 做什麼
 

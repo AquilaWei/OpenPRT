@@ -2,6 +2,15 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.9] - 2026-10-01
+
+### 新增
+
+- 班次詳情裡，地圖用綠色圓點顯示這班公車的即時位置，每 15 秒更新一次（App 在背景時暫停）
+- 面板顯示「Arrives at your stop in x min」與最後更新時間，誤點時標示「Delayed」
+- 公車開過你的上車站，或 TrueTime 不再預測它會到這站時，面板顯示「This bus has left your stop.」
+- 更新失敗時保留上一次的位置與到站時間，並說明資料是幾點的；路線載入失敗會在下次更新時自動重試
+
 ## [0.1.8] - 2026-10-01
 
 ### 新增
