@@ -5,12 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,6 +21,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import org.openprt.app.departures.DeparturesPanel
+import org.openprt.app.departures.DeparturesUiState
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
@@ -30,9 +32,13 @@ import org.openprt.app.map.StopsStatus
 /** Test tag of the box that holds the map, whichever map implementation fills it. */
 const val MAP_CONTAINER_TAG = "map"
 
+/** How much of the departures sheet shows while collapsed: the title and about two rows. */
+private val SHEET_PEEK_HEIGHT = 240.dp
+
 /**
  * Home screen: a map of the stops around the user, centered on the current location (or the
- * downtown fallback), with status messages on top and a button to re-center.
+ * downtown fallback), with status messages on top, a button to re-center, and the nearby
+ * departures in a bottom sheet that can be dragged up.
  *
  * [mapContent] draws the map inside the container; tests replace it because the real MapLibre
  * map needs native code that Robolectric cannot load.
@@ -42,6 +48,7 @@ const val MAP_CONTAINER_TAG = "map"
 fun HomeScreen(
     locationState: LocationUiState,
     mapState: MapUiState,
+    departuresState: DeparturesUiState,
     onRelocate: () -> Unit,
     modifier: Modifier = Modifier,
     mapContent: @Composable (Modifier) -> Unit = { mapModifier ->
@@ -53,19 +60,13 @@ fun HomeScreen(
         )
     }
 ) {
-    Scaffold(
+    BottomSheetScaffold(
         modifier = modifier,
+        sheetPeekHeight = SHEET_PEEK_HEIGHT,
         topBar = {
             CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) })
         },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onRelocate) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_my_location),
-                    contentDescription = stringResource(R.string.map_relocate)
-                )
-            }
-        }
+        sheetContent = { DeparturesPanel(departuresState) }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Box(modifier = Modifier.fillMaxSize().testTag(MAP_CONTAINER_TAG)) {
@@ -78,6 +79,15 @@ fun HomeScreen(
                 ),
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+            FloatingActionButton(
+                onClick = onRelocate,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_my_location),
+                    contentDescription = stringResource(R.string.map_relocate)
+                )
+            }
         }
     }
 }
@@ -137,6 +147,7 @@ private fun HomeScreenPreview() {
     HomeScreen(
         locationState = LocationUiState.PermissionDenied(),
         mapState = MapUiState(stopsStatus = StopsStatus.Ready),
+        departuresState = DeparturesUiState(),
         onRelocate = {},
         mapContent = { Surface(it, color = MaterialTheme.colorScheme.surfaceVariant) {} }
     )

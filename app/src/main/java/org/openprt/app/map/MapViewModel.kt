@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import org.openprt.app.data.gtfs.GtfsImportError
 import org.openprt.app.data.gtfs.NearbyStopSource
 import org.openprt.app.data.gtfs.NearbyStopsResult
+import org.openprt.app.departures.WalkableStop
+import org.openprt.app.departures.trueTimeStopId
 import org.openprt.app.geo.LatLng
 import org.openprt.app.geo.haversineMeters
 
@@ -30,7 +32,9 @@ sealed interface StopsStatus {
 
 data class MapUiState(
     val stopMarkers: List<StopMarker> = emptyList(),
-    val stopsStatus: StopsStatus = StopsStatus.Loading
+    val stopsStatus: StopsStatus = StopsStatus.Loading,
+    /** The same stops as [stopMarkers], keyed by TrueTime stop ID, for the departures list. */
+    val walkableStops: List<WalkableStop> = emptyList()
 )
 
 /**
@@ -78,7 +82,10 @@ class MapViewModel(
                         position = LatLng(it.stop.latitude, it.stop.longitude)
                     )
                 },
-                stopsStatus = StopsStatus.Ready
+                stopsStatus = StopsStatus.Ready,
+                walkableStops = result.stops.map {
+                    WalkableStop(it.stop.trueTimeStopId, it.distanceMeters)
+                }
             )
 
             is NearbyStopsResult.Failure -> {

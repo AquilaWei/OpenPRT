@@ -16,6 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.openprt.app.data.gtfs.GtfsImportError
+import org.openprt.app.departures.DeparturesUiState
 import org.openprt.app.geo.LatLng
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
@@ -33,7 +34,13 @@ class HomeScreenTest {
     @Test
     fun homeScreen_whenShown_displaysAppTitle() {
         composeRule.setContent {
-            HomeScreen(LocationUiState.Loading, MapUiState(), onRelocate = {}, mapContent = stubMap)
+            HomeScreen(
+                LocationUiState.Loading,
+                MapUiState(),
+                DeparturesUiState(),
+                onRelocate = {},
+                mapContent = stubMap
+            )
         }
 
         composeRule.onNodeWithText("OpenPRT").assertIsDisplayed()
@@ -42,7 +49,13 @@ class HomeScreenTest {
     @Test
     fun homeScreen_whenShown_hasMapContainer() {
         composeRule.setContent {
-            HomeScreen(LocationUiState.Loading, MapUiState(), onRelocate = {}, mapContent = stubMap)
+            HomeScreen(
+                LocationUiState.Loading,
+                MapUiState(),
+                DeparturesUiState(),
+                onRelocate = {},
+                mapContent = stubMap
+            )
         }
 
         composeRule.onNodeWithTag("map").assertIsDisplayed()
@@ -51,7 +64,13 @@ class HomeScreenTest {
     @Test
     fun homeScreen_whenShown_hasRelocateButton() {
         composeRule.setContent {
-            HomeScreen(LocationUiState.Loading, MapUiState(), onRelocate = {}, mapContent = stubMap)
+            HomeScreen(
+                LocationUiState.Loading,
+                MapUiState(),
+                DeparturesUiState(),
+                onRelocate = {},
+                mapContent = stubMap
+            )
         }
 
         composeRule.onNodeWithContentDescription("Re-center on my location").assertIsDisplayed()
@@ -64,6 +83,7 @@ class HomeScreenTest {
             HomeScreen(
                 LocationUiState.Located(LatLng(40.4443, -79.9532)),
                 MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
                 onRelocate = { relocations++ },
                 mapContent = stubMap
             )
@@ -80,6 +100,7 @@ class HomeScreenTest {
             HomeScreen(
                 LocationUiState.PermissionDenied(),
                 MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
                 onRelocate = {},
                 mapContent = stubMap
             )
@@ -96,6 +117,7 @@ class HomeScreenTest {
             HomeScreen(
                 LocationUiState.Failed(LocationError.Timeout),
                 MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
                 onRelocate = {},
                 mapContent = stubMap
             )
@@ -112,6 +134,7 @@ class HomeScreenTest {
             HomeScreen(
                 LocationUiState.Located(LatLng(40.4443, -79.9532)),
                 MapUiState(stopsStatus = StopsStatus.Loading),
+                DeparturesUiState(),
                 onRelocate = {},
                 mapContent = stubMap
             )
@@ -128,6 +151,7 @@ class HomeScreenTest {
                 MapUiState(
                     stopsStatus = StopsStatus.Failed(GtfsImportError.Network(IOException()))
                 ),
+                DeparturesUiState(),
                 onRelocate = {},
                 mapContent = stubMap
             )
@@ -136,5 +160,20 @@ class HomeScreenTest {
         composeRule
             .onNodeWithText("Couldn't load bus stops", substring = true)
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_whenShown_showsDeparturesSheet() {
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
+                onRelocate = {},
+                mapContent = stubMap
+            )
+        }
+
+        composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
     }
 }

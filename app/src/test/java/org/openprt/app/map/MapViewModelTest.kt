@@ -17,6 +17,7 @@ import org.openprt.app.data.gtfs.NearbyStop
 import org.openprt.app.data.gtfs.NearbyStopSource
 import org.openprt.app.data.gtfs.NearbyStopsResult
 import org.openprt.app.data.gtfs.StopEntity
+import org.openprt.app.departures.WalkableStop
 import org.openprt.app.geo.LatLng
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -57,10 +58,42 @@ class MapViewModelTest {
                     ),
                     StopMarker("8312", "FORBES AVE + MOREWOOD AVE", LatLng(40.444557, -79.942791))
                 ),
-                stopsStatus = StopsStatus.Ready
+                stopsStatus = StopsStatus.Ready,
+                walkableStops = listOf(WalkableStop("2635", 218.0), WalkableStop("8312", 880.0))
             ),
             viewModel.state.value
         )
+    }
+
+    @Test
+    fun onLocationChanged_stopWithCode_walkableStopUsesStopCodeAsTrueTimeId() =
+        runTest(dispatcher) {
+            val steelPlaza = NearbyStop(
+                StopEntity("10", "99994", "STEEL PLAZA STATION", 40.440277, -79.996529, 0),
+                distanceMeters = 120.0
+            )
+            val viewModel = MapViewModel(
+                FakeStopSource(NearbyStopsResult.Success(listOf(steelPlaza)))
+            )
+
+            viewModel.onLocationChanged(LatLng(40.4406, -79.9959))
+            advanceUntilIdle()
+
+            assertEquals(listOf(WalkableStop("99994", 120.0)), viewModel.state.value.walkableStops)
+        }
+
+    @Test
+    fun onLocationChanged_stopWithoutCode_walkableStopFallsBackToStopId() = runTest(dispatcher) {
+        val noCode = NearbyStop(
+            StopEntity("E12345", null, "SOME STOP", 40.440277, -79.996529, 0),
+            distanceMeters = 120.0
+        )
+        val viewModel = MapViewModel(FakeStopSource(NearbyStopsResult.Success(listOf(noCode))))
+
+        viewModel.onLocationChanged(LatLng(40.4406, -79.9959))
+        advanceUntilIdle()
+
+        assertEquals(listOf(WalkableStop("E12345", 120.0)), viewModel.state.value.walkableStops)
     }
 
     @Test
@@ -153,7 +186,11 @@ class MapViewModelTest {
                             LatLng(40.444557, -79.942791)
                         )
                     ),
-                    stopsStatus = StopsStatus.Failed(GtfsImportError.Network(NETWORK_DOWN))
+                    stopsStatus = StopsStatus.Failed(GtfsImportError.Network(NETWORK_DOWN)),
+                    walkableStops = listOf(
+                        WalkableStop("2635", 218.0),
+                        WalkableStop("8312", 880.0)
+                    )
                 ),
                 viewModel.state.value
             )
