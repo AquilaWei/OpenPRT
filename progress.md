@@ -58,6 +58,21 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - Compose 測試用 `androidx.compose.ui.test.junit4.v2.createComposeRule`（舊版已 deprecated）
 - 已知、非本專案能修的警告：某個 plugin 呼叫 `Configuration.setVisible`（Gradle 11 移除），以及 Kotlin 編譯器在 JDK 25 上的 `sun.misc.Unsafe` 警告
 
+## TrueTime 用戶端（F2 決定）
+
+- 網址 `https://truetime.rideprt.org/bustime/api/v3/`（舊網域 truetime.portauthority.org 也還能用）；
+  2026-10-01 用假 key 實測兩者都回 `Invalid API access key supplied`
+- 程式在 `app/src/main/java/org/openprt/app/data/truetime/`：OkHttp 5 + kotlinx.serialization，
+  不依賴 Android（只有 `TrueTimeClientFactory.kt` 讀 `BuildConfig`），之後可抽到 KMP
+- 所有呼叫回傳 `TrueTimeResult`，錯誤型別：MissingApiKey / Api(messages) / Http / Timeout / Network / MalformedResponse。
+  F16 要區分「key 無效」「配額用盡」時，從 `Api.messages` 判斷
+- 回應同時有資料與 error（例如多站查詢中部分站無資料）時回傳資料
+- 時間欄位以 America/New_York 解析成 `Instant`；vehicle 的 lat/lon/hdg 是字串，Json 設 lenient 同時接受兩種
+- `getpredictions` 回應**沒有 pid**；F9 要畫 pattern 時要先用 `getVehicles(vid)` 取 `patternId`
+- **測試 fixture 不是真實錄製**：沒有 API key，所以 `app/src/test/resources/truetime/*.json`
+  是依 BusTime v3 文件格式手寫的。使用者填入 `PRT_API_KEY` 後，應錄製真實回應比對欄位
+  （特別是 directions 的 `id`/`name`、PRT 多資料源 `rtpidatafeed` 是否必填）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -70,6 +85,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 
 自動化測不到，完成對應功能後由使用者在手機上確認：
 
+- [ ] F2 填入 `PRT_API_KEY` 後實際呼叫各端點成功，並把真實回應換成測試 fixture
 - [ ] F5 首次啟動跳出定位權限對話框，允許後取得真實位置
 - [ ] F6 地圖顯示匹茲堡，站牌標記位置正確
 - [ ] F9 路線折線沿實際道路，上車站醒目標示
@@ -85,3 +101,9 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   verify 在乾淨副本上通過。CI 尚未在 GitHub 上實際跑過（repo 還沒推送）
   - `feature_list.json` 的 questions 仍未回答；F2 以後照 progress.md 的預設技術選擇進行，minSdk 先用 26
   - 下一步：F2 TrueTime API 用戶端，開工前先確認 API 實際網址並錄製 fixture
+- 2026-10-01：**F2 完成**（版號 0.1.1，tag `v0.1.1` 只在本機）。TrueTime API 用戶端六個端點 + 錯誤型別，
+  20 個 MockWebServer 測試，README 加上申請與設定 `PRT_API_KEY` 的說明。verify 通過
+  - 新增依賴：OkHttp 5.5.0（含 okhttp-coroutines、mockwebserver3）、kotlinx-serialization 1.11.0、coroutines 1.11.0
+  - 尚未用真實 key 驗證（見實機驗收清單）
+  - 下一步：F3 GTFS 站牌與路線匯入，開工前先確認 PRT GTFS 下載網址（Developer Resources 頁面
+    `https://www.rideprt.org/business-center/developer-resources/`）

@@ -23,7 +23,7 @@
         "local.properties 沒有 PRT_API_KEY 時建置仍成功，呼叫 API 時回傳 MissingApiKey 錯誤（有測試）",
         "README 寫明如何申請與設定 PRT_API_KEY"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F3",
