@@ -23,6 +23,9 @@ import org.openprt.app.data.gtfs.GtfsImportError
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.DeparturesStatus
 import org.openprt.app.departures.DeparturesUiState
+import org.openprt.app.destination.DestinationActions
+import org.openprt.app.destination.DestinationUiState
+import org.openprt.app.destination.Place
 import org.openprt.app.details.DepartureDetailsUiState
 import org.openprt.app.details.RouteStatus
 import org.openprt.app.geo.LatLng
@@ -47,6 +50,8 @@ class HomeScreenTest {
                 MapUiState(),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -65,6 +70,8 @@ class HomeScreenTest {
                 MapUiState(),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -83,6 +90,8 @@ class HomeScreenTest {
                 MapUiState(),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -102,6 +111,8 @@ class HomeScreenTest {
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = { relocations++ },
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -122,6 +133,8 @@ class HomeScreenTest {
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -142,6 +155,8 @@ class HomeScreenTest {
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -162,6 +177,8 @@ class HomeScreenTest {
                 MapUiState(stopsStatus = StopsStatus.Loading),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -182,6 +199,8 @@ class HomeScreenTest {
                 ),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -202,6 +221,8 @@ class HomeScreenTest {
                 MapUiState(stopsStatus = StopsStatus.Ready),
                 DeparturesUiState(),
                 detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -254,6 +275,8 @@ class HomeScreenTest {
             MapUiState(stopsStatus = StopsStatus.Ready),
             DeparturesUiState(listOf(DEPARTURE), DeparturesStatus.Ready),
             detailsState = details,
+            destinationState = DestinationUiState(),
+            destinationActions = NoDestinationActions,
             onRelocate = onRelocate,
             onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
             onCloseDetails = { details = null },
@@ -273,5 +296,17 @@ class HomeScreenTest {
             stopId = "7117",
             vehicleId = "5601"
         )
+    }
+
+    private object NoDestinationActions : DestinationActions {
+        override fun onQueryChanged(query: String) = Unit
+
+        override fun retry() = Unit
+
+        override fun selectPlace(place: Place) = Unit
+
+        override fun onMapLongPress(location: LatLng) = Unit
+
+        override fun clearDestination() = Unit
     }
 }

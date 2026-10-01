@@ -4,7 +4,7 @@
 
 **匹茲堡公車（Pittsburgh Regional Transit, PRT）乘車資訊 App**，先做 Android，iOS 之後再處理。
 
-> 目前是 **0.1.9 開發版**：主畫面是地圖，顯示你的位置與 400 公尺內的公車站牌，移動時跟著更新（拒絕定位時改用 Downtown Pittsburgh）；下方的「Nearby departures」面板列出走得到、趕得上的附近班次，每 30 秒更新；點一班車會在地圖上畫出它的路線、沿線站牌，標出你要上車的站牌，並顯示這班車的即時位置與還有幾分鐘到站（每 15 秒更新）。即時班次需要先設定 `PRT_API_KEY`（見下方說明），沒有 key 時面板會提示。
+> 目前是 **0.1.9 開發版**：主畫面是地圖，顯示你的位置與 400 公尺內的公車站牌，移動時跟著更新（拒絕定位時改用 Downtown Pittsburgh）；下方的「Nearby departures」面板列出走得到、趕得上的附近班次，每 30 秒更新；點一班車會在地圖上畫出它的路線、沿線站牌，標出你要上車的站牌，並顯示這班車的即時位置與還有幾分鐘到站（每 15 秒更新）。地圖上方的搜尋框可以找匹茲堡地區的目的地，或長按地圖直接選點（路線規劃還在開發中）。即時班次需要先設定 `PRT_API_KEY`（見下方說明），沒有 key 時面板會提示。
 
 ## 做什麼
 
@@ -14,6 +14,7 @@
 
 資料來源：PRT TrueTime 即時 API 與 PRT GTFS 靜態時刻表（[`GTFS.zip`](https://www.rideprt.org/developerresources/GTFS.zip)，公開下載、不需 key）。
 地圖用 **[MapLibre](https://maplibre.org/)** 搭配 **[OpenFreeMap](https://openfreemap.org/)** 的 OpenStreetMap 圖磚，免費、**不需要地圖 API key**。
+目的地搜尋用 **[Photon](https://photon.komoot.io/)**（OpenStreetMap 地理編碼），同樣免費、不需 key。
 
 > 第一次開啟時 App 會下載 GTFS 站牌資料（約 22 MB），之後才會在地圖上顯示附近站牌。
 

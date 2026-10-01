@@ -20,6 +20,8 @@ import java.time.Clock
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.fromBuildConfig
 import org.openprt.app.departures.NearbyDeparturesViewModel
+import org.openprt.app.destination.DestinationViewModel
+import org.openprt.app.destination.PhotonGeocoder
 import org.openprt.app.details.DepartureDetailsViewModel
 import org.openprt.app.details.asTripSource
 import org.openprt.app.location.FusedLocationProvider
@@ -43,6 +45,11 @@ class MainActivity : ComponentActivity() {
             }
             initializer { NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC()) }
             initializer { DepartureDetailsViewModel(trueTime.asTripSource(), Clock.systemUTC()) }
+            initializer {
+                DestinationViewModel(
+                    PhotonGeocoder(userAgent = "OpenPRT/${BuildConfig.VERSION_NAME}")
+                )
+            }
         }
         setContent {
             val locationViewModel: LocationViewModel = viewModel(factory = viewModelFactory)
@@ -54,6 +61,8 @@ class MainActivity : ComponentActivity() {
             val departuresState by departuresViewModel.state.collectAsStateWithLifecycle()
             val detailsViewModel: DepartureDetailsViewModel = viewModel(factory = viewModelFactory)
             val detailsState by detailsViewModel.state.collectAsStateWithLifecycle()
+            val destinationViewModel: DestinationViewModel = viewModel(factory = viewModelFactory)
+            val destinationState by destinationViewModel.state.collectAsStateWithLifecycle()
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { grants -> locationViewModel.onPermissionResult(grants.values.any { it }) }
@@ -110,6 +119,8 @@ class MainActivity : ComponentActivity() {
                     mapState = mapState,
                     departuresState = departuresState,
                     detailsState = detailsState,
+                    destinationState = destinationState,
+                    destinationActions = destinationViewModel,
                     onRelocate = locationViewModel::relocate,
                     onDepartureClick = detailsViewModel::open,
                     onCloseDetails = detailsViewModel::close

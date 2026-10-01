@@ -25,9 +25,14 @@ import androidx.compose.ui.unit.dp
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.DeparturesPanel
 import org.openprt.app.departures.DeparturesUiState
+import org.openprt.app.destination.DestinationActions
+import org.openprt.app.destination.DestinationSearch
+import org.openprt.app.destination.DestinationUiState
+import org.openprt.app.destination.Place
 import org.openprt.app.details.DepartureDetailsPanel
 import org.openprt.app.details.DepartureDetailsUiState
 import org.openprt.app.details.RouteStatus
+import org.openprt.app.geo.LatLng
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
@@ -48,6 +53,9 @@ private val SHEET_PEEK_HEIGHT = 240.dp
  * While [detailsState] is set, the sheet shows that departure instead and the map shows its
  * route in place of the nearby stops; the back button and system back call [onCloseDetails].
  *
+ * The destination search floats at the top of the map; long-pressing the map also picks a
+ * destination. Both go to [destinationActions].
+ *
  * [mapContent] draws the map inside the container; tests replace it because the real MapLibre
  * map needs native code that Robolectric cannot load.
  */
@@ -58,6 +66,8 @@ fun HomeScreen(
     mapState: MapUiState,
     departuresState: DeparturesUiState,
     detailsState: DepartureDetailsUiState?,
+    destinationState: DestinationUiState,
+    destinationActions: DestinationActions,
     onRelocate: () -> Unit,
     onDepartureClick: (DepartureItem) -> Unit,
     onCloseDetails: () -> Unit,
@@ -70,6 +80,8 @@ fun HomeScreen(
             stops = if (detailsState == null) mapState.stopMarkers else emptyList(),
             route = (detailsState?.route as? RouteStatus.Ready)?.shape,
             bus = detailsState?.bus?.position,
+            destination = destinationState.destination?.location,
+            onLongPress = destinationActions::onMapLongPress,
             modifier = mapModifier
         )
     }
@@ -93,13 +105,21 @@ fun HomeScreen(
             Box(modifier = Modifier.fillMaxSize().testTag(MAP_CONTAINER_TAG)) {
                 mapContent(Modifier.fillMaxSize())
             }
-            StatusMessages(
-                messages = listOfNotNull(
-                    locationStatusText(locationState),
-                    stopsStatusText(locationState, mapState.stopsStatus)
-                ),
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            Column(modifier = Modifier.align(Alignment.TopCenter)) {
+                DestinationSearch(
+                    state = destinationState,
+                    onQueryChanged = destinationActions::onQueryChanged,
+                    onPlaceSelected = destinationActions::selectPlace,
+                    onRetry = destinationActions::retry,
+                    onClearDestination = destinationActions::clearDestination
+                )
+                StatusMessages(
+                    messages = listOfNotNull(
+                        locationStatusText(locationState),
+                        stopsStatusText(locationState, mapState.stopsStatus)
+                    )
+                )
+            }
             FloatingActionButton(
                 onClick = onRelocate,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
@@ -170,9 +190,23 @@ private fun HomeScreenPreview() {
         mapState = MapUiState(stopsStatus = StopsStatus.Ready),
         departuresState = DeparturesUiState(),
         detailsState = null,
+        destinationState = DestinationUiState(),
+        destinationActions = PreviewDestinationActions,
         onRelocate = {},
         onDepartureClick = {},
         onCloseDetails = {},
         mapContent = { Surface(it, color = MaterialTheme.colorScheme.surfaceVariant) {} }
     )
+}
+
+private object PreviewDestinationActions : DestinationActions {
+    override fun onQueryChanged(query: String) = Unit
+
+    override fun retry() = Unit
+
+    override fun selectPlace(place: Place) = Unit
+
+    override fun onMapLongPress(location: LatLng) = Unit
+
+    override fun clearDestination() = Unit
 }

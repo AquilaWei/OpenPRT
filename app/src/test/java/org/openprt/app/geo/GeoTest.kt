@@ -1,6 +1,8 @@
 package org.openprt.app.geo
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GeoTest {
@@ -37,5 +39,22 @@ class GeoTest {
     @Test(expected = IllegalArgumentException::class)
     fun boundingBoxAround_negativeRadius_throws() {
         BoundingBox.around(downtown, -1.0)
+    }
+
+    @Test
+    fun pittsburghArea_downtown_isInside() {
+        assertTrue(downtown in PITTSBURGH_AREA)
+    }
+
+    @Test
+    fun pittsburghArea_philadelphia_isOutside() {
+        assertFalse(LatLng(39.952583, -75.165222) in PITTSBURGH_AREA)
+    }
+
+    @Test
+    fun boundingBoxContains_pointOnEdge_isInside() {
+        val box = BoundingBox(40.0, 41.0, -80.0, -79.0)
+
+        assertTrue(LatLng(41.0, -80.0) in box)
     }
 }

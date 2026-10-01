@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -50,11 +51,12 @@ private const val ROUTE_LINE_SOURCE = "route-line"
 private const val ROUTE_STOPS_SOURCE = "route-stops"
 private const val BOARDING_STOP_SOURCE = "boarding-stop"
 private const val BUS_SOURCE = "bus"
+private const val DESTINATION_SOURCE = "destination"
 
 // Street level: a 400 m stop radius fills most of a phone screen.
 private const val FOLLOW_ZOOM = 16.0
 
-/** Margin kept between a fitted route and the map edges. */
+/** Margin kept between a fitted route (or user and destination) and the map edges. */
 private val ROUTE_FIT_PADDING = 48.dp
 
 /**
@@ -64,6 +66,10 @@ private val ROUTE_FIT_PADDING = 48.dp
  * While a [route] is shown, the camera is fitted to it instead and stops following [center];
  * the route's line, its stops and the highlighted boarding stop are drawn under the user dot.
  * The selected [bus], when reported, is drawn on top of the route; the camera does not follow it.
+ *
+ * A [destination], when set, is drawn as a red dot and, while no route is shown, the camera fits
+ * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
+ * reports the pressed spot through [onLongPress].
  *
  * Needs the native MapLibre library, so it does not run under Robolectric; screen tests pass a
  * stand-in instead.
@@ -75,6 +81,8 @@ fun StopMap(
     stops: List<StopMarker>,
     route: RouteShape?,
     bus: BusPosition?,
+    destination: LatLng?,
+    onLongPress: (LatLng) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -82,10 +90,16 @@ fun StopMap(
     val mapView = remember { createMapView(context) }
     // Null until the style has loaded; sources can only be updated after that.
     var style by remember { mutableStateOf<Style?>(null) }
+    // The listener is registered once; this keeps it calling the latest callback.
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
 
     MapViewLifecycle(mapView)
     LaunchedEffect(mapView) {
         mapView.getMapAsync { map ->
+            map.addOnMapLongClickListener { point ->
+                currentOnLongPress(LatLng(point.latitude, point.longitude))
+                true
+            }
             map.setStyle(Style.Builder().fromUri(STYLE_URL)) { loaded ->
                 addMarkerLayers(loaded)
                 style = loaded
@@ -113,15 +127,25 @@ fun StopMap(
     LaunchedEffect(style, bus) {
         style?.setPoints(BUS_SOURCE, listOfNotNull(bus?.location))
     }
+    LaunchedEffect(style, destination) {
+        style?.setPoints(DESTINATION_SOURCE, listOfNotNull(destination))
+    }
     LaunchedEffect(style, userLocation) {
         style?.setPoints(USER_SOURCE, listOfNotNull(userLocation))
     }
     // Keyed on whether a route is shown, so closing the route moves back to the user.
-    LaunchedEffect(center, route == null) {
+    LaunchedEffect(center, destination, route == null) {
         if (center == null || route != null) return@LaunchedEffect
-        mapView.getMapAsync { map ->
-            map.animateCamera(CameraUpdateFactory.newLatLngZoom(center.toMapLibre(), FOLLOW_ZOOM))
+        val update = if (destination == null || destination == center) {
+            CameraUpdateFactory.newLatLngZoom(center.toMapLibre(), FOLLOW_ZOOM)
+        } else {
+            val bounds = LatLngBounds.Builder()
+                .include(center.toMapLibre())
+                .include(destination.toMapLibre())
+                .build()
+            CameraUpdateFactory.newLatLngBounds(bounds, routeFitPaddingPx)
         }
+        mapView.getMapAsync { map -> map.animateCamera(update) }
     }
     LaunchedEffect(route) {
         // LatLngBounds needs two distinct points; real patterns always have many.
@@ -170,7 +194,8 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
 }
 
 /**
- * Layers are drawn in the order added: route line, stops, route stops, boarding stop, bus, user.
+ * Layers are drawn in the order added: route line, stops, route stops, boarding stop,
+ * destination, bus, user.
  */
 private fun addMarkerLayers(style: Style) {
     listOf(
@@ -178,6 +203,7 @@ private fun addMarkerLayers(style: Style) {
         STOPS_SOURCE,
         ROUTE_STOPS_SOURCE,
         BOARDING_STOP_SOURCE,
+        DESTINATION_SOURCE,
         BUS_SOURCE,
         USER_SOURCE
     ).forEach { style.addSource(GeoJsonSource(it)) }
@@ -210,6 +236,15 @@ private fun addMarkerLayers(style: Style) {
         CircleLayer("boarding-stop-layer", BOARDING_STOP_SOURCE).withProperties(
             circleRadius(10f),
             circleColor("#E8710A"),
+            circleStrokeColor("#FFFFFF"),
+            circleStrokeWidth(3f)
+        )
+    )
+    // Red, the usual map color for "where you are going".
+    style.addLayer(
+        CircleLayer("destination-layer", DESTINATION_SOURCE).withProperties(
+            circleRadius(10f),
+            circleColor("#D93025"),
             circleStrokeColor("#FFFFFF"),
             circleStrokeWidth(3f)
         )

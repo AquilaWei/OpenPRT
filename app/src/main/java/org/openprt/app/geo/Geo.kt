@@ -11,6 +11,17 @@ const val EARTH_RADIUS_METERS = 6_371_008.8
 /** A WGS84 coordinate in degrees. */
 data class LatLng(val latitude: Double, val longitude: Double)
 
+/**
+ * Allegheny County, PRT's service area, rounded outwards. Place search is limited to it because
+ * a destination outside has no PRT route to it.
+ */
+val PITTSBURGH_AREA = BoundingBox(
+    minLatitude = 40.19,
+    maxLatitude = 40.68,
+    minLongitude = -80.37,
+    maxLongitude = -79.68
+)
+
 /** Straight-line (great-circle) distance between two points, in meters. */
 fun haversineMeters(from: LatLng, to: LatLng): Double {
     val lat1 = Math.toRadians(from.latitude)
@@ -28,6 +39,10 @@ data class BoundingBox(
     val minLongitude: Double,
     val maxLongitude: Double
 ) {
+    /** Edges count as inside. */
+    operator fun contains(point: LatLng): Boolean = point.latitude in minLatitude..maxLatitude &&
+        point.longitude in minLongitude..maxLongitude
+
     companion object {
         /**
          * The smallest box that contains every point within [radiusMeters] of [center] on the
