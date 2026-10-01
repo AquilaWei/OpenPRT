@@ -40,10 +40,23 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 
 ## 環境（本機已確認）
 
-- Android SDK 在 `~/Android/Sdk`，已裝 platform `android-35`、build-tools `35.0.0`
-- 本機只有 **JDK 25**：Gradle wrapper 至少要 9.1 才能在 JDK 25 上跑；AGP 版本要與之相容。
-  若遇到相容問題，設定 Gradle toolchain 或請使用者安裝 JDK 21
+- Android SDK 在 `~/Android/Sdk`。原本只有 platform `android-35`、build-tools `35.0.0`；
+  F1 建置時 AGP 已自動下載 platform `android-37.0` 與 build-tools `36.0.0`
+- 本機的 Java 25 **只有 JRE（沒有 javac）**。Gradle 9.8 本身可以在上面跑，
+  編譯用的 JDK 21 由 foojay toolchain resolver 自動下載到 `~/.gradle/jdks`
 - `local.properties`（不進 git）需要 `sdk.dir=/home/Aquila/Android/Sdk`，之後再加 `PRT_API_KEY=...`（由使用者自己填）
+
+## 建置設定（F1 決定）
+
+- Gradle 9.8.0、AGP 9.4.1（內建 Kotlin，不需 `kotlin-android` plugin）、Kotlin 2.4.20、Compose BOM 2026.09.00
+- **compileSdk / targetSdk 37、minSdk 26**。原計畫寫 SDK 35，但目前所有 AndroidX 版本
+  （core-ktx 1.19、activity 1.13）都要求 compileSdk ≥ 36/37；為了留在 35 而鎖住一年前的函式庫不划算，
+  所以改用 37，README 也據此寫明需求。若使用者堅持 35 要回頭調整
+- Lint 設 `warningsAsErrors = true`；ktlint 用 `android_studio` 風格，`.editorconfig` 允許 `@Composable` 用大寫函式名
+- Robolectric 4.17 跑 SDK 36+ 需要 `--add-opens=java.base/jdk.internal.access=ALL-UNNAMED`（已設在 `app/build.gradle.kts`）
+- Compose ui-test 會帶入舊版 espresso 3.5（呼叫 SDK 36 已移除的 `InputManager.getInstance()`），已明確指定 espresso-core 3.7.0
+- Compose 測試用 `androidx.compose.ui.test.junit4.v2.createComposeRule`（舊版已 deprecated）
+- 已知、非本專案能修的警告：某個 plugin 呼叫 `Configuration.setVisible`（Gradle 11 移除），以及 Kotlin 編譯器在 JDK 25 上的 `sun.misc.Unsafe` 警告
 
 ## 給下一個 session 的注意事項
 
@@ -68,3 +81,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 ## 狀態
 
 - 2026-10-01：完成規劃，尚未實作任何功能，等待使用者審核與回答問題
+- 2026-10-01：**F1 完成**（版號 0.1.0）。專案骨架、ktlint、Lint、Robolectric Compose 測試、GitHub Actions CI、README / CHANGELOG。
+  verify 在乾淨副本上通過。CI 尚未在 GitHub 上實際跑過（repo 還沒推送）
+  - `feature_list.json` 的 questions 仍未回答；F2 以後照 progress.md 的預設技術選擇進行，minSdk 先用 26
+  - 下一步：F2 TrueTime API 用戶端，開工前先確認 API 實際網址並錄製 fixture

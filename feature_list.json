@@ -11,7 +11,7 @@
         ".github/workflows/ci.yml 在 push / PR 上跑與 verify 相同的指令",
         "README 說明專案用途、需求（JDK、Android SDK 35）、建置指令；CHANGELOG 有 0.1.0 條目"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F2",
