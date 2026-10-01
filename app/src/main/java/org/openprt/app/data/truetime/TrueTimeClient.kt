@@ -26,9 +26,14 @@ import okhttp3.coroutines.executeAsync
  * [TrueTimeResult.Failure], never exceptions. Only invalid arguments (e.g. too many IDs) throw
  * [IllegalArgumentException]. With a blank [apiKey] every call returns
  * [TrueTimeError.MissingApiKey] without touching the network.
+ *
+ * PRT serves several data feeds from one site and most endpoints refuse requests that do not
+ * name one, so every request carries [dataFeed]. Light rail is a separate feed ("Light Rail")
+ * and would need its own client.
  */
 class TrueTimeClient(
     private val apiKey: String,
+    private val dataFeed: String = BUS_DATA_FEED,
     private val httpClient: OkHttpClient = defaultHttpClient(),
     private val baseUrl: HttpUrl = DEFAULT_BASE_URL.toHttpUrl(),
     // Response bodies are read with blocking I/O.
@@ -125,6 +130,7 @@ class TrueTimeClient(
                 .addPathSegment(endpoint)
                 .addQueryParameter("key", apiKey)
                 .addQueryParameter("format", "json")
+                .addQueryParameter("rtpidatafeed", dataFeed)
                 .apply { params.forEach { (name, value) -> addQueryParameter(name, value) } }
                 .build()
 
@@ -199,6 +205,9 @@ class TrueTimeClient(
 
         /** BusTime rejects more than this many stop or vehicle IDs in one request. */
         const val MAX_IDS_PER_CALL = 10
+
+        /** PRT's bus feed, as named by `getrtpidatafeeds`. */
+        const val BUS_DATA_FEED = "Port Authority Bus"
 
         fun defaultHttpClient(): OkHttpClient = OkHttpClient
             .Builder()

@@ -63,6 +63,44 @@ class TrueTimeClientTest {
     }
 
     @Test
+    fun request_byDefault_sendsBusDataFeed() = runTest {
+        enqueueFixture("getdirections.json")
+
+        client.getDirections("61C")
+
+        // PRT runs several feeds; without rtpidatafeed most endpoints answer only with an error.
+        assertEquals(
+            "Port Authority Bus",
+            server.takeRequest().url.queryParameter("rtpidatafeed")
+        )
+    }
+
+    @Test
+    fun getPredictions_withRecordedPrtResponse_parsesPredictions() = runTest {
+        // Recorded from the real API on 2026-10-01; it has more fields than BusTime documents.
+        enqueueFixture("getpredictions_recorded.json")
+
+        val predictions = client.getPredictions(listOf("7117")).valueOrFail()
+
+        assertEquals(
+            Prediction(
+                generatedAt = Instant.parse("2026-10-01T20:03:00Z"),
+                type = PredictionType.ARRIVAL,
+                stopId = "7117",
+                stopName = "FORBES AVE + MOREWOOD (CARNEGIE MELLON)",
+                vehicleId = "3503",
+                distanceToStopFeet = 1846,
+                route = "61A",
+                routeDirection = "OUTBOUND",
+                destination = "BRADDOCK HILLS SHOPPING CENTER",
+                predictedTime = Instant.parse("2026-10-01T20:05:00Z"),
+                delayed = false
+            ),
+            predictions.first()
+        )
+    }
+
+    @Test
     fun getDirections_withFixture_parsesDirections() = runTest {
         enqueueFixture("getdirections.json")
 

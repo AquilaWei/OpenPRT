@@ -1,0 +1,54 @@
+{
+	"bustime-response": {
+		"prd": [
+			{
+				"tmstmp": "20261001 16:03",
+				"typ": "A",
+				"stpnm": "FORBES AVE + MOREWOOD (CARNEGIE MELLON)",
+				"stpid": "7117",
+				"vid": "3503",
+				"dstp": 1846,
+				"rt": "61A",
+				"rtdd": "61A",
+				"rtdir": "OUTBOUND",
+				"des": "BRADDOCK HILLS SHOPPING CENTER",
+				"prdtm": "20261001 16:05",
+				"tablockid": "61A-389",
+				"tatripid": "10769",
+				"origtatripno": "18143375",
+				"dly": false,
+				"dyn": 0,
+				"prdctdn": "DUE",
+				"zone": "",
+				"psgld": "HALF_EMPTY",
+				"stst": 55860,
+				"stsd": "2026-10-01",
+				"flagstop": 0
+			},
+			{
+				"tmstmp": "20261001 16:03",
+				"typ": "A",
+				"stpnm": "FORBES AVE + MOREWOOD (CARNEGIE MELLON)",
+				"stpid": "7117",
+				"vid": "3251",
+				"dstp": 2030,
+				"rt": "61D",
+				"rtdd": "61D",
+				"rtdir": "OUTBOUND",
+				"des": "WATERFRONT",
+				"prdtm": "20261001 16:06",
+				"tablockid": "61D-469",
+				"tatripid": "3303",
+				"origtatripno": "18139889",
+				"dly": false,
+				"dyn": 0,
+				"prdctdn": "2",
+				"zone": "",
+				"psgld": "EMPTY",
+				"stst": 55380,
+				"stsd": "2026-10-01",
+				"flagstop": 0
+			}
+		]
+	}
+}
