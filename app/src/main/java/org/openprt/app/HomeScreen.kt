@@ -69,6 +69,7 @@ fun HomeScreen(
             // The route's own stops replace the nearby ones so the boarding stop stands out.
             stops = if (detailsState == null) mapState.stopMarkers else emptyList(),
             route = (detailsState?.route as? RouteStatus.Ready)?.shape,
+            bus = detailsState?.bus?.position,
             modifier = mapModifier
         )
     }

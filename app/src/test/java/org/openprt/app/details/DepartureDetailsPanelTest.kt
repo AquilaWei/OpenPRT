@@ -6,6 +6,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.time.Instant
+import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -101,6 +103,97 @@ class DepartureDetailsPanelTest {
             .assertIsDisplayed()
     }
 
+    @Test
+    fun detailsPanel_busExpected_showsMinutesUntilArrival() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(arrival = Arrival.Expected(7, delayed = false))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Arrives at your stop in 7 min").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busExpectedDelayed_showsDelayed() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(arrival = Arrival.Expected(7, delayed = true))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Delayed").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busDeparted_saysItLeft() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(arrival = Arrival.Departed)
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("This bus has left your stop.").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busUpdated_showsUpdateTime() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(
+                        arrival = Arrival.Expected(7, delayed = false),
+                        lastUpdated = Instant.parse("2026-10-01T16:40:15Z")
+                    )
+                ),
+                onBack = {},
+                zone = PITTSBURGH
+            )
+        }
+
+        composeRule.onNodeWithText("Updated 12:40:15", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busUpdateFailed_showsErrorWithTimeOfLastData() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(
+                        arrival = Arrival.Expected(7, delayed = false),
+                        lastUpdated = Instant.parse("2026-10-01T16:40:15Z"),
+                        error = TrueTimeError.Timeout
+                    )
+                ),
+                onBack = {},
+                zone = PITTSBURGH
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Couldn't update the bus. Showing data from 12:40:15", substring = true)
+            .assertIsDisplayed()
+    }
+
     private companion object {
         val DEPARTURE = DepartureItem(
             route = "61C",
@@ -123,7 +216,10 @@ class DepartureDetailsPanelTest {
                 BOARDING,
                 StopMarker("2635", "Fifth Ave at Craig St", LatLng(40.4447, -79.9483))
             ),
-            boardingStop = BOARDING
+            boardingStop = BOARDING,
+            boardingDistanceFeet = 18620.0
         )
+
+        val PITTSBURGH: ZoneId = ZoneId.of("America/New_York")
     }
 }

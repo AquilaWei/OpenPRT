@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 MapViewModel((application as OpenPrtApplication).nearbyStopRepository)
             }
             initializer { NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC()) }
-            initializer { DepartureDetailsViewModel(trueTime.asTripSource()) }
+            initializer { DepartureDetailsViewModel(trueTime.asTripSource(), Clock.systemUTC()) }
         }
         setContent {
             val locationViewModel: LocationViewModel = viewModel(factory = viewModelFactory)
@@ -86,6 +86,13 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(lifecycleOwner) {
                 lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     departuresViewModel.autoRefresh()
+                }
+            }
+
+            // The open departure's bus is tracked every 15 seconds, also only while visible.
+            LaunchedEffect(lifecycleOwner) {
+                lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    detailsViewModel.autoRefresh()
                 }
             }
 

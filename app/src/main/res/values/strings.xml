@@ -24,5 +24,11 @@
     <string name="details_board_here">Board here</string>
     <string name="details_route_loading">Loading route…</string>
     <string name="details_route_not_found">This bus is no longer reporting its route; it may have finished its trip.</string>
-    <string name="details_route_failed">Couldn\'t load the route. Go back and tap the bus to try again.</string>
+    <string name="details_route_failed">Couldn\'t load the route. Trying again shortly.</string>
+    <string name="details_bus_locating">Locating the bus…</string>
+    <string name="details_arrives_in">Arrives at your stop in %1$d min</string>
+    <string name="details_bus_departed">This bus has left your stop.</string>
+    <string name="details_updated">Updated %1$s</string>
+    <string name="details_bus_failed">Couldn\'t update the bus.</string>
+    <string name="details_bus_failed_since">Couldn\'t update the bus. Showing data from %1$s.</string>
 </resources>

@@ -20,18 +20,24 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.departures.PanelText
 
 /**
- * Bottom-sheet content for one selected departure: which bus and where to board it, then the
- * stops of its route with the boarding stop marked. [onBack] returns to the nearby list.
+ * Bottom-sheet content for one selected departure: which bus and where to board it, when it
+ * reaches that stop, then the stops of its route with the boarding stop marked. Update times
+ * are shown in [zone]. [onBack] returns to the nearby list.
  */
 @Composable
 fun DepartureDetailsPanel(
     state: DepartureDetailsUiState,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    zone: ZoneId = ZoneId.systemDefault()
 ) {
     val departure = state.departure
     Column(modifier = modifier) {
@@ -56,6 +62,7 @@ fun DepartureDetailsPanel(
         PanelText(
             stringResource(R.string.details_board_at, departure.stopName, departure.walkMinutes)
         )
+        LiveBusText(state.bus, zone)
         when (val route = state.route) {
             RouteStatus.Loading -> PanelText(stringResource(R.string.details_route_loading))
 
@@ -70,6 +77,47 @@ fun DepartureDetailsPanel(
         }
     }
 }
+
+@Composable
+private fun LiveBusText(bus: LiveBus, zone: ZoneId) {
+    when (val arrival = bus.arrival) {
+        Arrival.Loading -> PanelText(stringResource(R.string.details_bus_locating))
+
+        is Arrival.Expected -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.details_arrives_in, arrival.minutes),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+            )
+            if (arrival.delayed) {
+                PanelText(
+                    stringResource(R.string.departures_delayed),
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+
+        Arrival.Departed -> PanelText(stringResource(R.string.details_bus_departed))
+    }
+    val time = bus.lastUpdated?.let { formatTime(it, zone) }
+    when {
+        bus.error != null && time != null -> PanelText(
+            stringResource(R.string.details_bus_failed_since, time),
+            color = MaterialTheme.colorScheme.error
+        )
+
+        bus.error != null -> PanelText(
+            stringResource(R.string.details_bus_failed),
+            color = MaterialTheme.colorScheme.error
+        )
+
+        time != null -> PanelText(stringResource(R.string.details_updated, time))
+    }
+}
+
+// With seconds, since the bus is refreshed more often than once a minute.
+private fun formatTime(time: Instant, zone: ZoneId): String =
+    DateTimeFormatter.ofLocalizedTime(FormatStyle.MEDIUM).withZone(zone).format(time)
 
 @Composable
 private fun RouteStopList(shape: RouteShape) {

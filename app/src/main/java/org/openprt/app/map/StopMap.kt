@@ -37,6 +37,7 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+import org.openprt.app.details.BusPosition
 import org.openprt.app.details.RouteShape
 import org.openprt.app.geo.LatLng
 
@@ -48,6 +49,7 @@ private const val USER_SOURCE = "user-location"
 private const val ROUTE_LINE_SOURCE = "route-line"
 private const val ROUTE_STOPS_SOURCE = "route-stops"
 private const val BOARDING_STOP_SOURCE = "boarding-stop"
+private const val BUS_SOURCE = "bus"
 
 // Street level: a 400 m stop radius fills most of a phone screen.
 private const val FOLLOW_ZOOM = 16.0
@@ -61,6 +63,7 @@ private val ROUTE_FIT_PADDING = 48.dp
  *
  * While a [route] is shown, the camera is fitted to it instead and stops following [center];
  * the route's line, its stops and the highlighted boarding stop are drawn under the user dot.
+ * The selected [bus], when reported, is drawn on top of the route; the camera does not follow it.
  *
  * Needs the native MapLibre library, so it does not run under Robolectric; screen tests pass a
  * stand-in instead.
@@ -71,6 +74,7 @@ fun StopMap(
     userLocation: LatLng?,
     stops: List<StopMarker>,
     route: RouteShape?,
+    bus: BusPosition?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -105,6 +109,9 @@ fun StopMap(
         )
         loaded.setPoints(ROUTE_STOPS_SOURCE, route?.stops.orEmpty().map { it.position })
         loaded.setPoints(BOARDING_STOP_SOURCE, listOfNotNull(route?.boardingStop?.position))
+    }
+    LaunchedEffect(style, bus) {
+        style?.setPoints(BUS_SOURCE, listOfNotNull(bus?.location))
     }
     LaunchedEffect(style, userLocation) {
         style?.setPoints(USER_SOURCE, listOfNotNull(userLocation))
@@ -162,13 +169,16 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
     )
 }
 
-/** Layers are drawn in the order added: route line, stops, route stops, boarding stop, user. */
+/**
+ * Layers are drawn in the order added: route line, stops, route stops, boarding stop, bus, user.
+ */
 private fun addMarkerLayers(style: Style) {
     listOf(
         ROUTE_LINE_SOURCE,
         STOPS_SOURCE,
         ROUTE_STOPS_SOURCE,
         BOARDING_STOP_SOURCE,
+        BUS_SOURCE,
         USER_SOURCE
     ).forEach { style.addSource(GeoJsonSource(it)) }
     style.addLayer(
@@ -200,6 +210,15 @@ private fun addMarkerLayers(style: Style) {
         CircleLayer("boarding-stop-layer", BOARDING_STOP_SOURCE).withProperties(
             circleRadius(10f),
             circleColor("#E8710A"),
+            circleStrokeColor("#FFFFFF"),
+            circleStrokeWidth(3f)
+        )
+    )
+    // Green and as large as the boarding stop so the bus is easy to spot on the route.
+    style.addLayer(
+        CircleLayer("bus-layer", BUS_SOURCE).withProperties(
+            circleRadius(10f),
+            circleColor("#188038"),
             circleStrokeColor("#FFFFFF"),
             circleStrokeWidth(3f)
         )

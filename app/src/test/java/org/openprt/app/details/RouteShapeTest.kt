@@ -56,6 +56,20 @@ class RouteShapeTest {
     }
 
     @Test
+    fun toRouteShape_boardingStopOnPattern_knowsHowFarAlongItIs() {
+        val shape = FIXTURE_PATTERN.toRouteShape(boardingStopId = "7117")
+
+        assertEquals(18620.0, shape.boardingDistanceFeet)
+    }
+
+    @Test
+    fun toRouteShape_boardingStopNotOnPattern_hasNoBoardingDistance() {
+        val shape = FIXTURE_PATTERN.toRouteShape(boardingStopId = "99994")
+
+        assertNull(shape.boardingDistanceFeet)
+    }
+
+    @Test
     fun toRouteShape_boardingStopNotOnPattern_hasNoBoardingStop() {
         val shape = FIXTURE_PATTERN.toRouteShape(boardingStopId = "99994")
 
