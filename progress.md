@@ -123,6 +123,31 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - `FusedLocationProvider` 沒有自動化測試（Robolectric 沒有 Play services），列入實機驗收
 - 新增依賴：play-services-location 21.4.0、kotlinx-coroutines-play-services 1.11.0、lifecycle-viewmodel-compose / runtime-compose 2.11.0
 
+## 地圖主畫面（F6 決定）
+
+- **地圖 SDK 用 MapLibre Android 13.6.1 + OpenFreeMap `liberty` 樣式**（OSM 圖磚，免費、不需 key、不需帳號）。
+  questions 第一題仍未回答，選它是因為不需要使用者先申請 Google Maps key，CI 也不需要 secret。
+  地圖只在 `map/StopMap.kt` 一個 composable 裡，要換 Google Maps Compose 只改這個檔案
+- 站牌與使用者位置用 GeoJsonSource + CircleLayer 畫（不是 Marker 物件），之後幾百個站牌也不會慢。
+  F9 畫路線折線時照同樣方式加 LineLayer
+- MapLibre 需要原生函式庫，**Robolectric 跑不起來**：`HomeScreen` 的 `mapContent` 參數讓測試換成空 Box，
+  Compose 測試驗的是 testTag `"map"` 的容器與重新定位按鈕。真正的地圖畫面只能實機驗收
+- `MapViewModel`：`onLocationChanged` 時，距離上次查詢點 ≥ 100 m 才重查（距離是跟「上次查詢點」比，不是上一個定位點，
+  所以多次小移動累積起來也會觸發）。查詢不取消、用 CONFLATED channel 合併期間的新位置，因為第一次查詢可能正在下載 GTFS。
+  查詢失敗時保留舊標記、清掉上次查詢點，下一個位置（含重新定位）就會重試
+- **第一次啟動自動匯入 GTFS**：`NearbyStopRepository` 發現 `stops` 是空的就先跑 `GtfsImporter`（Mutex 防重複下載）。
+  F16 的每週背景更新要和這裡共用同一個 importer / 鎖，或改成都走 WorkManager
+- `OpenPrtApplication` 持有唯一的 `GtfsDatabase` / repository（Room 要求每個行程一個實例）；已在 manifest 註冊
+- 持續定位：`LocationProvider.locationUpdates()`（Fused：10 秒間隔、20 m 最小位移），`LocationViewModel.followLocation()`
+  只在 Located / Failed 狀態才訂閱。`MainActivity` 用 `repeatOnLifecycle(STARTED)` 呼叫，所以 App 在背景時停止定位。
+  地圖跟隨每次定位更新移動鏡頭（使用者手動拖曳後，下次更新會被拉回；如果實機覺得干擾，F8 可加「拖曳後停止跟隨」）
+- 「重新定位」按鈕呼叫 `relocate()`：狀態回到 AwaitingPermission，由 `MainActivity` 原本的流程重新檢查權限（未授權會再跳對話框）並取新定位
+- `LocationUiState` 加了共用的 `location` 屬性（AwaitingPermission / Loading 為 null）
+- 主畫面不再顯示座標文字（地圖已顯示位置），`location_located` 字串已移除
+- **debug APK 現在是 63 MB**，大部分是 MapLibre 各 ABI 的原生函式庫（未量測加入前的大小）。F17 發佈時要用 ABI split 或 App Bundle
+- 測試寫法提醒：`runTest` 的 `advanceUntilIdle` **不會執行 `backgroundScope` 的協程**，要長時間收集的協程用一般 `launch` 並在結尾 `cancel()`
+- 順手處理 F5 留下的編譯警告：`await(CancellationTokenSource)` 是 experimental API，已加 `@OptIn`
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -138,7 +163,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - [ ] F2 填入 `PRT_API_KEY` 後實際呼叫各端點成功，並把真實回應換成測試 fixture
 - [ ] F3 在手機上執行一次 GTFS 匯入（目前還沒有接到畫面或背景工作，F4/F16 接上後再驗）
 - [ ] F5 首次啟動跳出定位權限對話框，允許後主畫面顯示真實座標；拒絕時顯示 Downtown 提示；關閉手機定位時顯示「location is turned off」
-- [ ] F6 地圖顯示匹茲堡，站牌標記位置正確
+- [ ] F6 首次啟動後自動下載站牌資料，地圖顯示匹茲堡與你的位置（藍點），附近站牌（深藍圓點）位置與實際站牌吻合；
+  走動時地圖跟著移動；按「重新定位」回到目前位置；圖磚右下角有 OSM 標示
 - [ ] F9 路線折線沿實際道路，上車站醒目標示
 - [ ] F10 公車標記移動與實際車輛一致
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小
@@ -171,3 +197,9 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   拒絕 / 逾時 / 失敗退回 Downtown 並在畫面提示。新增 13 個測試（全部 74 個），verify 通過
   - 需要實機驗收（見清單 F5），Fused 實作只能在實機或有 Play services 的模擬器上驗
   - 下一步：F6 地圖主畫面。開工前要先確定地圖 SDK（questions 第一題仍未回答；Google Maps 需要使用者提供 Maps API key）
+- 2026-10-01：**F6 完成**（版號 0.1.5，tag `v0.1.5` 只在本機）。MapLibre 地圖主畫面、使用者位置與附近站牌標記、
+  100 m 才重查站牌、持續定位（只在前景）、重新定位按鈕、首次啟動自動匯入 GTFS。新增 22 個測試（全部 96 個），verify 通過
+  - 地圖 SDK 自行選了 MapLibre + OpenFreeMap（questions 第一題未回答），若使用者要 Google Maps 只需改 `StopMap.kt`
+  - 需要實機驗收（見清單 F6），地圖本身無法在 Robolectric 測
+  - 新增依賴：org.maplibre.gl:android-sdk 13.6.1
+  - 下一步：F7 班次排序邏輯（純 Kotlin）。開工前注意 progress.md F3 段落：TrueTime `stpid` 對應 GTFS 的 stop_id 還是 stop_code 尚未確認
