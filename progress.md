@@ -44,7 +44,10 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   F1 建置時 AGP 已自動下載 platform `android-37.0` 與 build-tools `36.0.0`
 - 本機的 Java 25 **只有 JRE（沒有 javac）**。Gradle 9.8 本身可以在上面跑，
   編譯用的 JDK 21 由 foojay toolchain resolver 自動下載到 `~/.gradle/jdks`
-- `local.properties`（不進 git）需要 `sdk.dir=/home/Aquila/Android/Sdk`，之後再加 `PRT_API_KEY=...`（由使用者自己填）
+- `local.properties`（不進 git）需要 `sdk.dir=/home/Aquila/Android/Sdk` 與 `PRT_API_KEY=...`。
+  **2026-10-01 使用者已提供私人 key，已寫進本 worktree 的 `local.properties`**；key 絕不能進 git、log 或對話輸出
+  （用 `$(grep '^PRT_API_KEY=' local.properties | cut -d= -f2)` 帶入 curl，不要 echo）
+- adb 在 `~/Android/Sdk/platform-tools/adb`（不在 PATH）
 
 ## 建置設定（F1 決定）
 
@@ -69,9 +72,17 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - 回應同時有資料與 error（例如多站查詢中部分站無資料）時回傳資料
 - 時間欄位以 America/New_York 解析成 `Instant`；vehicle 的 lat/lon/hdg 是字串，Json 設 lenient 同時接受兩種
 - `getpredictions` 回應**沒有 pid**；F9 要畫 pattern 時要先用 `getVehicles(vid)` 取 `patternId`
-- **測試 fixture 不是真實錄製**：沒有 API key，所以 `app/src/test/resources/truetime/*.json`
-  是依 BusTime v3 文件格式手寫的。使用者填入 `PRT_API_KEY` 後，應錄製真實回應比對欄位
-  （特別是 directions 的 `id`/`name`、PRT 多資料源 `rtpidatafeed` 是否必填）
+- **測試 fixture 大多是手寫的**（依 BusTime v3 文件），只有 `getpredictions_recorded.json` 是 2026-10-01 真實錄製
+- **2026-10-01 用真實 key 實測（修正於 0.1.8）**：
+  - PRT 是 multifeed site，`getdirections` / `getstops` / `getpredictions` / `getpatterns` **沒有 `rtpidatafeed` 只回錯誤**
+    （`getroutes`、`getvehicles` 不需要但也接受）。F2 原本沒送，所以即時資料從來沒成功過。
+    現在 `TrueTimeClient` 每個請求都帶 `dataFeed`（預設 `"Port Authority Bus"`）
+  - 另一個資料源是 `"Light Rail"`（T 線）。目前只問公車，**附近是輕軌站時列表不會有 T 線班次**，之後要支援得多開一個 client 並合併
+  - 缺 feed 時的錯誤訊息含 `\-`（不合法的 JSON escape），現在不會再遇到
+  - 時間欄位沒有秒（`20261001 13:03`），既有的 `HH:mm[:ss]` 已能處理
+  - **TrueTime `stpid` = GTFS `stop_code`（已確認）**：Steel Plaza 用 `99994` 有預測、用 stop_id `10` 是 No data found
+  - 真實 pattern 515389（61D）：309 點、45 站，另有 `dtrid` / `dtrpt` 欄位（已忽略）；用暫時測試確認可解析並找到上車站 7117
+  - 跑完的車（例 vid 6619）`getvehicles` 回 `No data found for parameter`
 
 ## GTFS 匯入（F3 決定）
 
@@ -165,8 +176,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 ## 附近班次列表（F8 決定）
 
 - 程式在 `departures/NearbyDeparturesViewModel.kt`（狀態與自動更新）與 `departures/DeparturesPanel.kt`（Compose 列表）
-- **GTFS → TrueTime 站牌 ID 暫定用 `stop_code`，沒有 code 時退回 `stop_id`**（`StopEntity.trueTimeStopId`）。
-  仍未用真實 key 驗證；若實機上永遠沒有班次，先檢查這裡
+- **GTFS → TrueTime 站牌 ID 用 `stop_code`，沒有 code 時退回 `stop_id`**（`StopEntity.trueTimeStopId`）。
+  2026-10-01 已用真實 key 確認 stop_code 正確（見 F2 段落）
 - `MapUiState` 加了 `walkableStops`（TrueTime ID + 距離）。`MainActivity` 只在 `stopsStatus == Ready` 時轉給
   departures ViewModel，避免站牌還沒載入前就顯示「附近沒有公車」
 - 每次更新只問**最近的 10 個站牌**（`MAX_IDS_PER_CALL`），一次 API 呼叫；30 秒一次一天 2880 次，在 BusTime 預設每日額度內。
@@ -181,6 +192,27 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   傳 `StandardTestDispatcher` 會**卡死**，要用 `UnconfinedTestDispatcher(同一個 scheduler)`
 - 新增測試依賴：`androidx.lifecycle:lifecycle-runtime-testing`
 
+## 班次詳情（F9 決定）
+
+- 程式在 `app/src/main/java/org/openprt/app/details/`：
+  - `RouteShape.kt`：純 Kotlin，`Pattern.toRouteShape(boardingStopId)` 依 seq 排序，折線含所有點（站牌也在路上），
+    站牌清單略過 waypoint；上車站用 `stopId` 字串相等找第一次出現（環狀路線經過兩次時取第一次），找不到時為 null
+  - `DepartureDetailsViewModel.kt`：`state` 為 null 表示顯示附近列表。`open(departure)` 先 `getVehicles(vid)` 取 `patternId`
+    （predictions 沒有 pid）再 `getPatterns(pid)`；「No data found」或回應裡沒有該車 / pattern 視為 `NotFound`（車已跑完），
+    其他錯誤為 `Failed`。`close()` 取消載入中的請求。目前沒有重試按鈕，返回再點一次即重試
+  - `DepartureDetailsPanel.kt`：bottom sheet 換成詳情（返回箭頭、路線、目的地、上車站與步行分鐘、沿線站牌清單，
+    清單一開始捲到上車站，上車站粗體 + 「Board here」）
+- `DepartureItem` 加了 `stopId`（TrueTime ID）與 `vehicleId`
+- 導覽沒有用 Navigation 函式庫：只是 `HomeScreen` 依 `detailsState` 切換 sheet 內容與地圖圖層，系統返回鍵用 `BackHandler`。
+  所以返回時 `LocationViewModel` 完全不受影響、不會重新定位；附近班次在背景照常每 30 秒更新，回到列表時是新的
+- 地圖：詳情時隱藏附近站牌，改畫路線（深藍 LineLayer）、沿線站牌（白底小圓）、上車站（橘色大圓），使用者藍點在最上層。
+  鏡頭 fit 整條路線（四周 48 dp 邊距），此時**不再跟隨定位**；關閉詳情後回到跟隨。
+  bottom sheet 會蓋住路線下半部（邊距沒有扣掉 sheet 高度），實機若覺得被遮太多再調
+- `orEmptyWhenNoData()` 從 departures 移到 `TrueTimeResult.kt` 共用
+- F10 注意：詳情狀態目前只有「點擊當下」的 `DepartureItem` 快照（分鐘數不會更新）。F10 要在 `DepartureDetailsViewModel`
+  加 15 秒輪詢（`getVehicles` + `getPredictions`），`TripSource` 需要加 predictions；`Vehicle` 已有 `distanceAlongPatternFeet`，
+  可對照 `PatternStop.distanceAlongPatternFeet` 判斷「已過站」
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -193,14 +225,15 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 
 自動化測不到，完成對應功能後由使用者在手機上確認：
 
-- [ ] F2 填入 `PRT_API_KEY` 後實際呼叫各端點成功，並把真實回應換成測試 fixture
+- [x] F2 填入 `PRT_API_KEY` 後實際呼叫各端點成功（2026-10-01 用 curl 實測，發現並修正 rtpidatafeed 問題；fixture 只錄了 predictions）
 - [ ] F3 在手機上執行一次 GTFS 匯入（目前還沒有接到畫面或背景工作，F4/F16 接上後再驗）
 - [ ] F5 首次啟動跳出定位權限對話框，允許後主畫面顯示真實座標；拒絕時顯示 Downtown 提示；關閉手機定位時顯示「location is turned off」
 - [ ] F6 首次啟動後自動下載站牌資料，地圖顯示匹茲堡與你的位置（藍點），附近站牌（深藍圓點）位置與實際站牌吻合；
   走動時地圖跟著移動；按「重新定位」回到目前位置；圖磚右下角有 OSM 標示
 - [ ] F8 填入 `PRT_API_KEY` 後下方面板出現附近班次，路線 / 分鐘數與站牌電子看板一致（同時驗證 stop_code 是否就是 TrueTime 的 stpid）；
   面板可往上拉開並捲動；收合時地圖中心（你的位置）沒有被面板遮住；切到背景再回來會立刻更新
-- [ ] F9 路線折線沿實際道路，上車站醒目標示
+- [ ] F9 點一班車：地圖縮放到整條路線，折線沿實際道路，上車站是橘色大圓點；面板列出沿線站牌並捲到「Board here」；
+  按返回箭頭或手機返回鍵回到列表，地圖回到你的位置
 - [ ] F10 公車標記移動與實際車輛一致
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小
 - [ ] F15 完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
@@ -249,3 +282,10 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 站牌 ID 對照暫定用 stop_code（未驗證，見 F8 段落）；需要實機驗收（見清單 F8）
   - 下一步：F9 班次詳情。注意 `getpredictions` 沒有 pid，要先用 `getVehicles(vid)` 取 `patternId`；
     `DepartureItem` 目前沒有 vehicleId，F9 需要加上
+- 2026-10-01：使用者提供 PRT API key（只放 `local.properties`）。實測發現 **TrueTime 用戶端從來沒成功取得資料**：
+  PRT 要求 `rtpidatafeed` 參數。先以 `fix:` commit 修正（含回歸測試，已確認舊程式下失敗）並錄製一份真實 predictions fixture；
+  也確認 TrueTime `stpid` = GTFS `stop_code`
+- 2026-10-01：**F9 完成**（版號 0.1.8，含上述修正，tag `v0.1.8` 只在本機）。點班次後顯示路線折線、沿線站牌、上車站標示，
+  返回列表不重新定位。新增 30 個測試（全部 167 個），verify 通過；也用真實 pattern 回應暫時測試過轉換（未進 git）
+  - 需要實機驗收（見清單 F9、F8）。debug APK 會帶入 local.properties 的 key，可以直接裝到手機測
+  - 下一步：F10 即時公車位置與 ETA（見 F9 段落的 F10 注意）
