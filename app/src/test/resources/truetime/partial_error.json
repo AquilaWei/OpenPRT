@@ -1,0 +1,5 @@
+{"bustime-response": {"prd": [
+  {"tmstmp": "20261001 08:40", "typ": "A", "stpnm": "Forbes Ave at Morewood Ave (Carnegie Mellon)", "stpid": "7117", "vid": "5601", "dstp": 4210, "rt": "61C", "rtdd": "61C", "rtdir": "OUTBOUND", "des": "McKeesport", "prdtm": "20261001 08:52", "dly": false}
+], "error": [
+  {"stpid": "99999", "msg": "No data found for parameter"}
+]}}

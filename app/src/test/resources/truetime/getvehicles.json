@@ -1,0 +1,3 @@
+{"bustime-response": {"vehicle": [
+  {"vid": "5601", "tmstmp": "20261001 08:40:15", "lat": "40.43851", "lon": "-79.92284", "hdg": "145", "pid": 4512, "rt": "61C", "des": "McKeesport", "pdist": 12345, "dly": false, "tatripid": "12345", "origtatripno": "67890", "tablockid": "061C-123", "zone": "", "mode": 1, "psgld": "HALF_EMPTY"}
+]}}

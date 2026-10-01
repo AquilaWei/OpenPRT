@@ -1,0 +1,7 @@
+{"bustime-response": {"ptr": [
+  {"pid": 4512, "ln": 85432.0, "rtdir": "OUTBOUND", "pt": [
+    {"seq": 1, "lat": 40.440878, "lon": -79.999141, "typ": "S", "stpid": "20690", "stpnm": "Fifth Ave at Wood St", "pdist": 0.0},
+    {"seq": 2, "lat": 40.44121, "lon": -79.99502, "typ": "W"},
+    {"seq": 3, "lat": 40.444567, "lon": -79.942862, "typ": "S", "stpid": "7117", "stpnm": "Forbes Ave at Morewood Ave (Carnegie Mellon)", "pdist": 18620.0}
+  ]}
+]}}

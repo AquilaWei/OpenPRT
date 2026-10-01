@@ -1,0 +1,4 @@
+{"bustime-response": {"stops": [
+  {"stpid": "7117", "stpnm": "Forbes Ave at Morewood Ave (Carnegie Mellon)", "lat": 40.444567, "lon": -79.942862},
+  {"stpid": "20690", "stpnm": "Fifth Ave at Wood St", "lat": 40.440878, "lon": -79.999141}
+]}}

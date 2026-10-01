@@ -1,0 +1,4 @@
+{"bustime-response": {"routes": [
+  {"rt": "61C", "rtnm": "McKeesport-Homestead", "rtclr": "#cc00cc", "rtdd": "61C", "rtpidatafeed": "Port Authority Bus"},
+  {"rt": "P1", "rtnm": "East Busway-All Stops", "rtclr": "#3366ff", "rtdd": "P1", "rtpidatafeed": "Port Authority Bus"}
+]}}

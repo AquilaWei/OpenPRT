@@ -1,0 +1,4 @@
+{"bustime-response": {"prd": [
+  {"tmstmp": "20261001 08:40", "typ": "A", "stpnm": "Forbes Ave at Morewood Ave (Carnegie Mellon)", "stpid": "7117", "vid": "5601", "dstp": 4210, "rt": "61C", "rtdd": "61C", "rtdir": "OUTBOUND", "des": "McKeesport", "prdtm": "20261001 08:52", "tablockid": "061C-123", "tatripid": "12345", "origtatripno": "67890", "dly": false, "dyn": 0, "prdctdn": "12", "zone": ""},
+  {"tmstmp": "20261001 08:40", "typ": "D", "stpnm": "Forbes Ave at Morewood Ave (Carnegie Mellon)", "stpid": "7117", "vid": "3210", "dstp": 9050, "rt": "P1", "rtdd": "P1", "rtdir": "INBOUND", "des": "Downtown", "prdtm": "20261001 09:05", "tablockid": "P1-45", "tatripid": "23456", "origtatripno": "78901", "dly": true, "dyn": 0, "prdctdn": "DLY", "zone": ""}
+]}}
