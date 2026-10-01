@@ -1,0 +1,5 @@
+﻿stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,stop_timezone,wheelchair_boarding
+10,99994,STEEL PLAZA STATION,,40.439562,-79.995332,01,,1,,,0
+"8312","8312","FORBES AVE + MOREWOOD AVE ""CMU""",,40.444557,-79.942791,01,,,,,1
+2635,2635,"FIFTH AVE + BELLEFIELD, OPP",,40.445770,-79.951416,01,,0
+E1,,EAST BUSWAY NODE,,,,,,3,,,

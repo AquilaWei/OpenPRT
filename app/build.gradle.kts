@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 // The TrueTime key lives in the untracked local.properties; a missing key still builds,
@@ -53,6 +55,11 @@ kotlin {
     jvmToolchain(21)
 }
 
+room {
+    // Committed so future schema changes can be checked against shipped versions.
+    schemaDirectory("$projectDir/schemas")
+}
+
 ktlint {
     version.set(libs.versions.ktlint.cli)
 }
@@ -69,6 +76,8 @@ dependencies {
     implementation(libs.okhttp.coroutines)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 

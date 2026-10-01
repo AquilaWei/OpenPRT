@@ -1,0 +1,2 @@
+# GTFS fixtures keep the CRLF line endings and BOM of the real PRT feed.
+app/src/test/resources/gtfs/** -text
