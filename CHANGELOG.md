@@ -2,6 +2,12 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.18] - 2026-10-02
+
+### 變更
+
+- 班次詳情地圖上的公車從綠色圓點改成公車圖示，旁邊的小箭頭指向公車行進的方向
+
 ## [0.1.17] - 2026-10-02
 
 ### 修正
