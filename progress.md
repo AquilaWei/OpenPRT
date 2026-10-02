@@ -12,8 +12,8 @@
 
 ### 第二輪規劃（2026-10-02）：目前完成度
 
-**還沒完成**（F14 已於同日完成，接著是 F15）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）只做完底層
-（目的地選擇 F11、時刻表 F12、RAPTOR 引擎 F13），**畫面上還不能規劃路線**。另外缺輕軌、離線處理、發佈流程，
+**還沒完成**（F14、F15 已於同日完成，接著是 F16）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
+已能在畫面上列出方案（F15），**還不能在地圖上看方案、也不能從方案點進即時公車**（F16）。另外缺輕軌、離線處理、發佈流程，
 而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
 
 `feature_list.json` 已改寫成**只列剩下的功能**，編號接續第一輪（F1–F13 已完成，不再列出），
@@ -341,6 +341,29 @@
   - 搜尋在 `Dispatchers.Default` 執行；GTFS 更新後快取不會失效（F18 處理）
 - `OpenPrtApplication.tripPlanRepository` 已建好，F15 的 ViewModel 直接用
 
+## 規劃方案清單（F15 決定）
+
+- 程式在 `app/src/main/java/org/openprt/app/trip/`：`TripPlanViewModel.kt`（狀態、`TripOption`、`toOption`）與 `TripPlansPanel.kt`（Compose）
+- `TripPlanRepository` 實作新的 `fun interface TripPlanSource`（在 `TripPlanRepository.kt`），ViewModel 測試用 fake
+- 狀態 `TripPlanUiState?`：null = 沒有目的地（sheet 顯示附近班次）；`Planning` / `Results(options)` / `NoRoute(reason)` / `NoTimetable`（有「Try again」按鈕 → `retry()`）
+- **何時規劃**：`MainActivity` 把 `destinationState.destination?.location` 與 `locationState.location` 分別交給 `onDestinationChanged` / `onLocationChanged`。
+  只有「目的地改變」或「目的地已設、位置從 null 變成已知」（第一次定位、按重新定位後）才規劃；**走動時不重新規劃**，方案清單不會一直跳。
+  出發時間 = 注入的 `Clock` 的現在。清除或換目的地時 `cancel` 進行中的 job（都在 Main，取消後不會再寫入狀態）
+- 定位被拒 / 失敗時用的是 Downtown 預設座標當起點（`LocationUiState` 的 location），沒有另外提示
+- **即時首班車**：方案到了以後一次 `getpredictions`（所有方案首段上車站的 `trueTimeStopId` 去重，最多 3 個站，一次呼叫）。
+  配對規則：同路線（`Prediction.route == RideLeg.routeId`，PRT 的 GTFS route_id 等於 TrueTime rt）、同站、
+  使用者「現在出發走得到」（預測 ≥ 現在 + 首段步行時間）、與時刻表上車時間相差 ≤ 15 分鐘，取最接近時刻表的一筆。
+  採用時：上車時間 = 預測、出發時間 = 預測 − 首段步行；**抵達時間仍是時刻表**（後面幾段沒有即時資料），總分鐘數 = 抵達 − 出發，
+  所以公車誤點時總分鐘數會變短，若實機覺得誤導，直達方案可改成抵達也加上誤點分鐘。
+  預測失敗（含沒有 key）時退回時刻表，不讓規劃失敗；No data found 視為沒有預測。即時時間**只在規劃當下查一次**，不會自動更新
+- 輕軌首段：TrueTime 公車 feed 沒有輕軌站，配不到 → 顯示 scheduled（F17 再處理）
+- 列表：每列 = 總分鐘數（粗體）、「出發 – 抵達」、各段（Walk n min › 61C › …，FlowRow 讓長行程換行）、轉乘次數（`plurals`）、
+  「61C leaves <站> at <時間> · Live / (scheduled)」。步行分鐘無條件進位，0 秒的步行（起點就在站牌）不列
+- 地圖這一版沒有變（仍顯示附近站牌與目的地紅點），F16 才畫方案；點方案目前沒有反應。`TripOption.plan` 保留給 F16
+- 第一次規劃的耗時（JVM 1.4 秒）期間顯示「Planning your trip…」；手機上的時間列入實機驗收
+- 測試：`TripPlanViewModelTest`（16）、`TripOptionTest`（12）、`TripPlansPanelTest`（10）、`HomeScreenTest` +1。
+  Compose 測試不比對時間字串（JDK 的 `FormatStyle.SHORT` 在 AM/PM 前用的空白字元會因版本不同）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -369,7 +392,8 @@
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
   手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
   已裝過舊版的手機更新後會自動重新下載一次
-- [ ] （新 F15）選目的地後數秒內出現方案、時間合理；同時量手機上第一次建網路的時間（JVM 約 1.4 秒，見 F14 段落）
+- [ ] F15 選目的地後數秒內出現方案、時間合理（和 Google Maps / Transit App 比對一兩個行程）；量手機上第一次規劃的時間（JVM 約 1.4 秒，見 F14 段落）；
+  有即時預測的首班車顯示「· Live」且時間與站牌看板一致；按 ✕ 清除目的地回到附近班次
 - [ ] （新 F16）完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
@@ -452,3 +476,8 @@
   另用真實 PRT feed 暫時測試量了速度與結果（見 F14 段落，未進 git）
   - 不需要實機驗收（資料層，全部自動化）；手機上的第一次規劃時間併入 F15 的驗收項目
   - 下一步：F15 路線規劃方案清單 UI（`OpenPrtApplication.tripPlanRepository` 已可用）
+- 2026-10-02：**F15 完成**（版號 0.1.14，tag `v0.1.14` 只在本機）。選目的地後自動規劃，bottom sheet 列出方案（總分鐘數、出發 / 抵達、轉乘次數、
+  各段路線與步行分鐘），首班車有 TrueTime 預測時改用即時時間並標示 Live、預測失敗退回時刻表；三種 NoRoute 與 NoTimetable 各有說明，
+  清除目的地回到附近班次並取消規劃。新增 39 個測試（全部 329 個），verify 通過（lint 0 issue）
+  - 需要實機驗收（見清單 F15）。debug APK 會帶入 local.properties 的 key
+  - 下一步：F16 方案地圖（`TripOption.plan` 已保留完整 itinerary；乘車段折線可先用站點連線，GTFS shapes 尚未匯入）
