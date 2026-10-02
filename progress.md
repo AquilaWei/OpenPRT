@@ -396,7 +396,10 @@
 - `ui/theme/Theme.kt`：`OpenPrtTheme(mode)`、`ThemeMode`（SYSTEM / LIGHT / DARK）、`ThemeMode.isDark(systemDark)`
 - `data/settings/AppearanceSettings.kt`：SharedPreferences 檔 `appearance`，未知值讀成 SYSTEM。切換入口是 top bar 的半圓（contrast）圖示 → 下拉選單
 - `map/MapPalette.kt`：地圖樣式網址與所有標記顏色（字串，MapLibre 用），`mapPalette(dark)`；深色用 OpenFreeMap `dark` 樣式。
-  **F24 的圖例要用這份**。`StopMap` 新增 `palette` 參數，palette 變了就 `setStyle` 重新載入（會清掉圖層，所以重加圖層後由各 LaunchedEffect 重填資料）
+  **F24 的圖例要用這份**。
+  **深色地圖改用 `fiord`（0.1.17）**：使用者實機回報 `dark` 樣式太暗（背景 rgb(12,12,12)、道路 #181818，幾乎分不出來）；
+  `fiord` 背景 `#45516E`、道路 hsl(224,22%,45%)、路名 hsl(223,31%,61%)，實機截圖確認道路、建築、路名都看得清楚。
+  路線與站牌在深色改成 `#D5E3FF`（比 fiord 的道路亮很多），站牌外圈 `#111318``StopMap` 新增 `palette` 參數，palette 變了就 `setStyle` 重新載入（會清掉圖層，所以重加圖層後由各 LaunchedEffect 重填資料）
 - `ui/RouteBadge.kt`：路線編號色塊（primary 底），用在附近班次、班次詳情、方案清單的每一段
 - 系統列：`MainActivity` 依主題呼叫 `enableEdgeToEdge`；首頁 top bar 在淺色也是深藍，所以狀態列圖示一律白色，只有 API key 畫面（淺色）用深色圖示。
   視窗底色 `values` / `values-night` 的 `Theme.OpenPRT`，避免啟動時閃白（只跟系統深色模式，App 內手動選的不影響這一瞬間）
@@ -548,3 +551,5 @@
   地圖樣式與標記顏色隨主題、路線編號色塊、新 App 圖示（含單色主題圖示）。新增 37 個測試（全部 403 個），verify 通過（lint 0 issue）；
   已裝到手機並截圖確認深色與淺色（見 F21 段落）。使用者已在 App 內存了 key（截圖中附近班次有即時資料）
   - 下一步：F24 站牌可點擊 + 地圖圖例（顏色用 `mapPalette`）
+- 2026-10-02：使用者回報「暗的模式太暗，地圖完全看不清楚」。深色地圖從 OpenFreeMap `dark` 改成 `fiord`，路線 / 站牌改更亮的淡藍（`fix:`，版號 0.1.17，tag `v0.1.17` 只在本機）。
+  verify 通過，已裝到手機並截圖確認
