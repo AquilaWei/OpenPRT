@@ -148,7 +148,7 @@
         "起訖點步行可達範圍內沒有站牌時回傳 NoRoute 錯誤（有測試）",
         "演算法與 Android 無依賴，可在 JVM 單元測試中執行"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F14",
