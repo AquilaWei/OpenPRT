@@ -10,7 +10,30 @@
 
 ## 計畫概覽
 
-功能清單在 `feature_list.json`，依序實作，一次一個 session。
+### 第二輪規劃（2026-10-02）：目前完成度
+
+**還沒完成。** 目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）只做完底層
+（目的地選擇 F11、時刻表 F12、RAPTOR 引擎 F13），**畫面上還不能規劃路線**。另外缺輕軌、離線處理、發佈流程，
+而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
+
+`feature_list.json` 已改寫成**只列剩下的功能**，編號接續第一輪（F1–F13 已完成，不再列出），
+所以下面各段落對 F1–F13 的說明仍然有效。第一輪原本的 F14–F17 重新拆成：
+
+| 功能 | 內容 | 對應第一輪 |
+|---|---|---|
+| F14 | 從 Room 建 TransitNetwork、服務日快取、跨午夜、轉乘緩衝、`TripPlanRepository` | 原 F14 的資料層（拆出來） |
+| F15 | 路線規劃方案清單 UI + 首段即時時間 | 原 F14 |
+| F16 | 方案地圖 + 點乘車段看即時公車 | 原 F15 |
+| F17 | 輕軌 T 線（`Light Rail` feed）合併到附近班次與詳情 | 新增（F2 段落記下的缺口） |
+| F18 | 離線 / key 無效 / 配額 / GTFS 過期提示 + WorkManager 每週更新 | 原 F16 |
+| F19 | tag 觸發的簽章 release APK、SHA256、README badge | 原 F17 |
+
+- F17 / F19 是否保留、是否加繁體中文介面，等使用者回答 questions；回答前照表順序做 F14–F16 不受影響
+- verify 指令前面加了 `ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk}`：新的 worktree 沒有 `local.properties`，
+  也沒有設 `ANDROID_HOME`，不加會找不到 SDK。沒有 `PRT_API_KEY` 也能建置（呼叫時回 MissingApiKey）
+- iOS 不在這一輪範圍內
+
+### 第一輪計畫（2026-10-01，F1–F13 已完成）
 
 | 階段 | 功能 | 內容 |
 |---|---|---|
@@ -18,11 +41,7 @@
 | 資料 | F2–F4 | TrueTime API 用戶端、GTFS 站牌匯入、附近站牌查詢 |
 | 附近班次 | F5–F8 | 定位、地圖主畫面、班次排序、班次列表自動更新 |
 | 班次詳情 | F9–F10 | 路線折線與站牌、即時公車位置與 ETA |
-| 路線規劃 | F11–F15 | 目的地選擇、GTFS 時刻表、RAPTOR 規劃器、方案 UI、方案地圖 |
-| 收尾 | F16–F17 | 離線 / 錯誤狀態、GTFS 背景更新、發佈流程 |
-
-F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答（見 `feature_list.json` 的 questions）；
-如果改用 Google Directions API 或 OpenTripPlanner，F12–F13 要改寫成對應的 API 用戶端功能。
+| 路線規劃 | F11–F13 | 目的地選擇、GTFS 時刻表、RAPTOR 規劃器 |
 
 ## 資料來源
 
@@ -304,7 +323,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
-- verify 指令：`./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug`，F1 完成前會失敗屬正常
+- verify 指令：`ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk} ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug`
 - 需要網路或 API key 的測試：本機沒有就自動略過，CI 一定要跑
 - 版號：功能寫完未經實機驗收用 PATCH；使用者驗收後才升 MINOR
 - CLAUDE.md、`.claude/`、`notes/` 不進 git
@@ -329,8 +348,9 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
   手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
   已裝過舊版的手機更新後會自動重新下載一次
-- [ ] F15 完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
-- [ ] F17 從 Release 下載 APK 安裝並啟動
+- [ ] （新 F15）選目的地後數秒內出現方案、時間合理；同時量手機上第一次建網路的時間
+- [ ] （新 F16）完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
+- [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
 
@@ -403,3 +423,6 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   另用真實 PRT feed 暫時測試過結果與速度（見 F13 段落）
   - 不需要實機驗收（純邏輯，全部自動化）；畫面上還看不到，F14 才接上
   - 下一步：F14 路線規劃結果 UI。要先從 Room 建 `TransitNetwork`（見 F13 段落的「F14 要接的地方」）
+- 2026-10-02：**第二輪規劃**。檢查結果：App 尚未完成（見「計畫概覽」）。`feature_list.json` 改寫成剩下的 F14–F19，
+  verify 加上 `ANDROID_HOME` 預設值。等使用者審核與回答 questions（輕軌、GitHub repo / 發佈、介面語言、實機驗收時程）
+  - 下一步：F14 從 Room 建規劃網路（見 F13 段落的「F14 要接的地方」）
