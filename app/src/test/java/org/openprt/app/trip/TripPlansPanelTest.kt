@@ -2,6 +2,7 @@ package org.openprt.app.trip
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -30,7 +31,11 @@ class TripPlansPanelTest {
     @Test
     fun tripPlansPanel_twoOptions_showsRouteNumbersOfEachLeg() {
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), onRetry = {}, zone = UTC)
+            TripPlansPanel(
+                TripPlanUiState.Results(TWO_OPTIONS),
+                actions = RecordingActions(),
+                zone = UTC
+            )
         }
 
         composeRule.onNodeWithText("61C").assertIsDisplayed()
@@ -42,7 +47,11 @@ class TripPlansPanelTest {
     fun tripPlansPanel_darkTheme_showsRouteNumbers() {
         composeRule.setContent {
             OpenPrtTheme(ThemeMode.DARK) {
-                TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), onRetry = {}, zone = UTC)
+                TripPlansPanel(
+                    TripPlanUiState.Results(TWO_OPTIONS),
+                    actions = RecordingActions(),
+                    zone = UTC
+                )
             }
         }
 
@@ -52,7 +61,11 @@ class TripPlansPanelTest {
     @Test
     fun tripPlansPanel_twoOptions_showsTransferCounts() {
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), onRetry = {}, zone = UTC)
+            TripPlansPanel(
+                TripPlanUiState.Results(TWO_OPTIONS),
+                actions = RecordingActions(),
+                zone = UTC
+            )
         }
 
         composeRule.onNodeWithText("No transfers").assertIsDisplayed()
@@ -62,7 +75,11 @@ class TripPlansPanelTest {
     @Test
     fun tripPlansPanel_twoOptions_showsTotalMinutes() {
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), onRetry = {}, zone = UTC)
+            TripPlansPanel(
+                TripPlanUiState.Results(TWO_OPTIONS),
+                actions = RecordingActions(),
+                zone = UTC
+            )
         }
 
         composeRule.onNodeWithText("35 min").assertIsDisplayed()
@@ -74,7 +91,7 @@ class TripPlansPanelTest {
         composeRule.setContent {
             TripPlansPanel(
                 TripPlanUiState.Results(listOf(DIRECT.copy(live = true))),
-                onRetry = {},
+                actions = RecordingActions(),
                 zone = UTC
             )
         }
@@ -83,26 +100,26 @@ class TripPlansPanelTest {
             // The clock time's spacing depends on the JDK's locale data, so it is left out.
             .onNodeWithText("61C leaves Forbes Ave at Morewood at", substring = true)
             .assertIsDisplayed()
-        composeRule
-            .onNodeWithText("· Live", substring = true)
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("Live").assertIsDisplayed()
     }
 
     @Test
     fun tripPlansPanel_scheduledFirstBus_saysScheduled() {
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.Results(listOf(DIRECT)), onRetry = {}, zone = UTC)
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(DIRECT)),
+                actions = RecordingActions(),
+                zone = UTC
+            )
         }
 
-        composeRule
-            .onNodeWithText("(scheduled)", substring = true)
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("Scheduled").assertIsDisplayed()
     }
 
     @Test
     fun tripPlansPanel_planning_saysPlanning() {
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.Planning, onRetry = {})
+            TripPlansPanel(TripPlanUiState.Planning, actions = RecordingActions())
         }
 
         composeRule.onNodeWithText("Planning your trip…").assertIsDisplayed()
@@ -113,7 +130,7 @@ class TripPlansPanelTest {
         composeRule.setContent {
             TripPlansPanel(
                 TripPlanUiState.NoRoute(NoRouteReason.NO_STOP_NEAR_ORIGIN),
-                onRetry = {}
+                actions = RecordingActions()
             )
         }
 
@@ -127,7 +144,7 @@ class TripPlansPanelTest {
         composeRule.setContent {
             TripPlansPanel(
                 TripPlanUiState.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION),
-                onRetry = {}
+                actions = RecordingActions()
             )
         }
 
@@ -139,7 +156,10 @@ class TripPlansPanelTest {
     @Test
     fun tripPlansPanel_noConnection_saysSo() {
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.NoRoute(NoRouteReason.NO_CONNECTION), onRetry = {})
+            TripPlansPanel(
+                TripPlanUiState.NoRoute(NoRouteReason.NO_CONNECTION),
+                actions = RecordingActions()
+            )
         }
 
         composeRule
@@ -149,14 +169,105 @@ class TripPlansPanelTest {
 
     @Test
     fun tripPlansPanel_noTimetableRetryClicked_reportsRetry() {
-        var retries = 0
+        val actions = RecordingActions()
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.NoTimetable, onRetry = { retries++ })
+            TripPlansPanel(TripPlanUiState.NoTimetable, actions)
         }
 
         composeRule.onNodeWithText("Try again").performClick()
 
-        assertEquals(1, retries)
+        assertEquals(listOf("retry"), actions.calls)
+    }
+
+    @Test
+    fun tripPlansPanel_optionClicked_selectsIt() {
+        val actions = RecordingActions()
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), actions, zone = UTC)
+        }
+
+        composeRule.onNodeWithText("35 min").performClick()
+
+        assertEquals(listOf("select 61C"), actions.calls)
+    }
+
+    @Test
+    fun tripPlansPanel_optionSelected_listsEachLeg() {
+        composeRule.setContent {
+            TripPlansPanel(SELECTED, RecordingActions(), zone = UTC)
+        }
+
+        composeRule.onNodeWithText("Walk 4 min to Forbes Ave at Morewood").assertIsDisplayed()
+        composeRule.onNodeWithText("Toward DOWNTOWN").assertIsDisplayed()
+        composeRule.onNodeWithText("Walk 2 min to your destination").assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_optionSelected_showsWhereToBoardAndGetOff() {
+        composeRule.setContent {
+            TripPlansPanel(SELECTED, RecordingActions(), zone = UTC)
+        }
+
+        composeRule
+            .onNodeWithText("Board at Forbes Ave at Morewood", substring = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Get off at Steel Plaza", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_liveBusClicked_opensThatRide() {
+        val actions = RecordingActions()
+        composeRule.setContent { TripPlansPanel(SELECTED, actions, zone = UTC) }
+
+        composeRule.onNodeWithText("Live bus").performClick()
+
+        assertEquals(listOf("openRide 61C"), actions.calls)
+    }
+
+    @Test
+    fun tripPlansPanel_rideHasNoLiveData_saysTimesAreScheduled() {
+        val selected = SELECTED.copy(
+            selected = SELECTED.selected!!.copy(ride = RideLookup.ScheduledOnly(RIDE))
+        )
+        composeRule.setContent { TripPlansPanel(selected, RecordingActions(), zone = UTC) }
+
+        composeRule
+            .onNodeWithText("No live data for this bus right now", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_backFromSelectedOption_closesIt() {
+        val actions = RecordingActions()
+        composeRule.setContent { TripPlansPanel(SELECTED, actions, zone = UTC) }
+
+        composeRule.onNodeWithContentDescription("Back to ways to get there").performClick()
+
+        assertEquals(listOf("closeSelection"), actions.calls)
+    }
+
+    private class RecordingActions : TripPlanActions {
+        val calls = mutableListOf<String>()
+
+        override fun retry() {
+            calls += "retry"
+        }
+
+        override fun select(option: TripOption) {
+            calls += "select ${option.firstRoute}"
+        }
+
+        override fun closeSelection() {
+            calls += "closeSelection"
+        }
+
+        override fun openRide(ride: RideLeg) {
+            calls += "openRide ${ride.routeId}"
+        }
+
+        override fun onRideOpened() {
+            calls += "onRideOpened"
+        }
     }
 
     private companion object {
@@ -164,13 +275,16 @@ class TripPlansPanelTest {
         val CMU = TransitStop("s8312", "Forbes Ave at Morewood", LatLng(40.4443, -79.9532), "8312")
         val STEEL_PLAZA = TransitStop("s10", "Steel Plaza", LatLng(40.4406, -79.9959), "10")
 
-        // The panel only reads the summary fields; the plan is there for the map.
+        val RIDE = RideLeg("T1", "61C", "DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)
+
+        // The option list reads only the summary fields; the selected option lists these legs.
         val PLAN = TripPlan(
             LocalDate.of(2026, 10, 1),
             Itinerary(
                 listOf(
-                    WalkLeg(null, CMU, 0.0, 25_200, 25_200),
-                    RideLeg("T1", "61C", null, CMU, STEEL_PLAZA, 25_200, 27_000)
+                    WalkLeg(null, CMU, 288.0, 24_960, 25_200),
+                    RIDE,
+                    WalkLeg(STEEL_PLAZA, null, 120.0, 27_000, 27_100)
                 )
             )
         )
@@ -207,5 +321,13 @@ class TripPlansPanelTest {
         )
 
         val TWO_OPTIONS = listOf(DIRECT, WITH_TRANSFER)
+
+        val SELECTED = TripPlanUiState.Results(
+            TWO_OPTIONS,
+            SelectedTrip(
+                DIRECT,
+                TripMapLayers(emptyList(), emptyList(), emptyList(), emptyList())
+            )
+        )
     }
 }

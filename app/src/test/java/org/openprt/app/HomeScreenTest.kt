@@ -1,6 +1,7 @@
 package org.openprt.app
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +44,10 @@ class HomeScreenTest {
     val composeRule = createComposeRule()
 
     // The real MapLibre map needs native code that Robolectric cannot load.
-    private val stubMap: @Composable (Modifier) -> Unit = { Box(it) }
+    private val stubMap: @Composable (
+        Modifier,
+        PaddingValues
+    ) -> Unit = { modifier, _ -> Box(modifier) }
 
     @Test
     fun homeScreen_whenShown_displaysAppTitle() {
@@ -56,7 +60,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -81,7 +85,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -106,7 +110,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -132,7 +136,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = { relocations++ },
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -159,7 +163,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -186,7 +190,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -213,7 +217,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -240,7 +244,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -267,7 +271,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -293,7 +297,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -322,7 +326,7 @@ class HomeScreenTest {
                     destinationState = DestinationUiState(),
                     destinationActions = NoDestinationActions,
                     tripPlanState = null,
-                    onRetryPlan = {},
+                    tripPlanActions = NoTripPlanActions,
                     onRelocate = {},
                     onDepartureClick = {},
                     onCloseDetails = {},
@@ -349,7 +353,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = null,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -376,7 +380,7 @@ class HomeScreenTest {
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
                 tripPlanState = TripPlanUiState.Planning,
-                onRetryPlan = {},
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -434,7 +438,7 @@ class HomeScreenTest {
             destinationState = DestinationUiState(),
             destinationActions = NoDestinationActions,
             tripPlanState = null,
-            onRetryPlan = {},
+            tripPlanActions = NoTripPlanActions,
             onRelocate = onRelocate,
             onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
             onCloseDetails = { details = null },

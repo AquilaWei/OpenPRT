@@ -33,16 +33,22 @@ import org.openprt.app.ui.TimeStatus
 
 /**
  * The ways to the chosen destination, shown in the home screen's bottom sheet in place of the
- * nearby departures. Times are shown in [zone]; [onRetry] plans again when the timetable was
- * missing.
+ * nearby departures. Tapping an option shows it leg by leg ([TripDetailsPanel]); the other
+ * requests, such as planning again when the timetable was missing, go to [actions]. Times are
+ * shown in [zone].
  */
 @Composable
 fun TripPlansPanel(
     state: TripPlanUiState,
-    onRetry: () -> Unit,
+    actions: TripPlanActions,
     modifier: Modifier = Modifier,
     zone: ZoneId = ZoneId.systemDefault()
 ) {
+    val selected = (state as? TripPlanUiState.Results)?.selected
+    if (selected != null) {
+        TripDetailsPanel(selected, actions, modifier, zone)
+        return
+    }
     Column(modifier = modifier) {
         Text(
             text = stringResource(R.string.trip_title),
@@ -52,13 +58,16 @@ fun TripPlansPanel(
         when (state) {
             TripPlanUiState.Planning -> PanelText(stringResource(R.string.trip_planning))
 
-            is TripPlanUiState.Results -> OptionList(state.options, zone)
+            is TripPlanUiState.Results -> OptionList(state.options, actions::select, zone)
 
             is TripPlanUiState.NoRoute -> PanelText(stringResource(state.reason.textRes()))
 
             TripPlanUiState.NoTimetable -> {
                 PanelText(stringResource(R.string.trip_no_timetable))
-                TextButton(onClick = onRetry, modifier = Modifier.padding(horizontal = 8.dp)) {
+                TextButton(
+                    onClick = actions::retry,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                ) {
                     Text(stringResource(R.string.trip_retry))
                 }
             }
@@ -73,7 +82,7 @@ private fun NoRouteReason.textRes(): Int = when (this) {
 }
 
 @Composable
-private fun OptionList(options: List<TripOption>, zone: ZoneId) {
+private fun OptionList(options: List<TripOption>, onSelect: (TripOption) -> Unit, zone: ZoneId) {
     val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
     // Bounded so the list scrolls inside the sheet instead of growing past the screen.
     LazyColumn(
@@ -81,42 +90,19 @@ private fun OptionList(options: List<TripOption>, zone: ZoneId) {
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(options) { option -> OptionCard(option, time) }
+        items(options) { option -> OptionCard(option, time, onClick = { onSelect(option) }) }
     }
 }
 
 /** One way to go: total time and clock times on top, the legs, then the first bus. */
 @Composable
-private fun OptionCard(option: TripOption, time: DateTimeFormatter) {
-    InfoCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stringResource(R.string.trip_total_minutes, option.totalMinutes),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(end = 12.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(
-                        R.string.trip_times,
-                        time.format(option.departureTime),
-                        time.format(option.arrivalTime)
-                    ),
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Text(
-                    text = transfersText(option.transfers),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            StatusChip(if (option.live) TimeStatus.LIVE else TimeStatus.SCHEDULED)
-        }
+private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () -> Unit) {
+    InfoCard(onClick = onClick) {
+        TripSummary(option, time)
         Legs(option.legs)
         Text(
             text = stringResource(
-                if (option.live) R.string.trip_first_bus_live else R.string.trip_first_bus,
+                R.string.trip_first_bus,
                 option.firstRoute,
                 option.boardingStopName,
                 time.format(option.boardingTime)
@@ -129,6 +115,35 @@ private fun OptionCard(option: TripOption, time: DateTimeFormatter) {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
         )
+    }
+}
+
+/** Total minutes, clock times, transfers and whether the first bus is live, on one row. */
+@Composable
+internal fun TripSummary(option: TripOption, time: DateTimeFormatter) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = stringResource(R.string.trip_total_minutes, option.totalMinutes),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(end = 12.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(
+                    R.string.trip_times,
+                    time.format(option.departureTime),
+                    time.format(option.arrivalTime)
+                ),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = transfersText(option.transfers),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        StatusChip(if (option.live) TimeStatus.LIVE else TimeStatus.SCHEDULED)
     }
 }
 

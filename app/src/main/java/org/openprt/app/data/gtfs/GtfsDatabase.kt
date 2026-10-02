@@ -141,6 +141,13 @@ interface GtfsDao {
     @Query("SELECT * FROM stop_times WHERE tripId = :tripId ORDER BY stopSequence")
     suspend fun getStopTimesOfTrip(tripId: String): List<StopTimeEntity>
 
+    /** The stops [tripId] serves, in travel order; a loop trip lists a stop once per visit. */
+    @Query(
+        "SELECT s.* FROM stop_times st JOIN stops s ON s.stopId = st.stopId " +
+            "WHERE st.tripId = :tripId ORDER BY st.stopSequence"
+    )
+    suspend fun getStopsOfTrip(tripId: String): List<StopEntity>
+
     /** Calendar rows whose date range contains [date], whatever their weekdays. */
     @Query("SELECT * FROM calendar WHERE :date BETWEEN startDate AND endDate")
     suspend fun getCalendarsCovering(date: LocalDate): List<ServiceCalendarEntity>

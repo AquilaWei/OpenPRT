@@ -3,6 +3,7 @@ package org.openprt.app
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -48,6 +51,9 @@ import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopMap
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.map.mapPalette
+import org.openprt.app.planner.RideLeg
+import org.openprt.app.trip.TripOption
+import org.openprt.app.trip.TripPlanActions
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.trip.TripPlansPanel
 import org.openprt.app.ui.theme.LocalOpenPrtColors
@@ -61,8 +67,8 @@ const val MAP_CONTAINER_TAG = "map"
 private val SHEET_PEEK_HEIGHT = 240.dp
 
 /**
- * Taller while a departure's details are shown, so the collapsed sheet shows the arrival time
- * below the route and direction card.
+ * Taller while a departure's details or a chosen trip are shown, so the collapsed sheet shows
+ * more than the header card: the arrival time, or the first leg.
  */
 private val DETAILS_SHEET_PEEK_HEIGHT = 300.dp
 
@@ -76,8 +82,9 @@ private val DETAILS_SHEET_PEEK_HEIGHT = 300.dp
  *
  * The destination search floats at the top of the map; long-pressing the map also picks a
  * destination. Both go to [destinationActions]. While [tripPlanState] is set (a destination is
- * chosen), the sheet lists the ways there instead of the nearby departures; [onRetryPlan] plans
- * again.
+ * chosen), the sheet lists the ways there instead of the nearby departures. Tapping one shows it
+ * leg by leg and on the map; those requests go to [tripPlanActions], and system back returns to
+ * the list.
  *
  * The key button in the top bar calls [onOpenApiKey] to change the TrueTime key; the theme
  * button offers System / Light / Dark, marks [themeMode] and reports a pick to [onThemeModeChange].
@@ -95,7 +102,7 @@ fun HomeScreen(
     destinationState: DestinationUiState,
     destinationActions: DestinationActions,
     tripPlanState: TripPlanUiState?,
-    onRetryPlan: () -> Unit,
+    tripPlanActions: TripPlanActions,
     onRelocate: () -> Unit,
     onDepartureClick: (DepartureItem) -> Unit,
     onCloseDetails: () -> Unit,
@@ -103,31 +110,41 @@ fun HomeScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
-    mapContent: @Composable (Modifier) -> Unit = { mapModifier ->
+    mapContent: @Composable (Modifier, PaddingValues) -> Unit = { mapModifier, overlayPadding ->
+        val trip = (tripPlanState as? TripPlanUiState.Results)?.selected?.map
         StopMap(
             center = locationState.location,
             userLocation = (locationState as? LocationUiState.Located)?.location,
-            // The route's own stops replace the nearby ones so the boarding stop stands out.
-            stops = if (detailsState == null) mapState.stopMarkers else emptyList(),
+            // A route's or trip's own stops replace the nearby ones so its stops stand out.
+            stops = if (detailsState == null && trip == null) mapState.stopMarkers else emptyList(),
             route = (detailsState?.route as? RouteStatus.Ready)?.shape,
             bus = detailsState?.bus?.position,
             destination = destinationState.destination?.location,
             onLongPress = destinationActions::onMapLongPress,
             palette = mapPalette(dark = LocalOpenPrtColors.current.isDark),
-            modifier = mapModifier
+            modifier = mapModifier,
+            trip = trip,
+            overlayPadding = overlayPadding
         )
     }
 ) {
+    val tripSelected = (tripPlanState as? TripPlanUiState.Results)?.selected != null
     BackHandler(enabled = detailsState != null, onBack = onCloseDetails)
+    BackHandler(
+        enabled = detailsState == null && tripSelected,
+        onBack = tripPlanActions::closeSelection
+    )
+    val peekHeight = if (detailsState != null || tripSelected) {
+        DETAILS_SHEET_PEEK_HEIGHT
+    } else {
+        SHEET_PEEK_HEIGHT
+    }
+    // The search box floats over the top of the map; camera fits keep clear of it.
+    var searchHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
     BottomSheetScaffold(
         modifier = modifier,
-        sheetPeekHeight = if (detailsState !=
-            null
-        ) {
-            DETAILS_SHEET_PEEK_HEIGHT
-        } else {
-            SHEET_PEEK_HEIGHT
-        },
+        sheetPeekHeight = peekHeight,
         topBar = {
             val brand = LocalOpenPrtColors.current
             CenterAlignedTopAppBar(
@@ -160,7 +177,7 @@ fun HomeScreen(
                     onSwitchDirection = onDepartureClick
                 )
 
-                tripPlanState != null -> TripPlansPanel(tripPlanState, onRetry = onRetryPlan)
+                tripPlanState != null -> TripPlansPanel(tripPlanState, tripPlanActions)
 
                 else -> DeparturesPanel(departuresState, onDepartureClick)
             }
@@ -168,9 +185,17 @@ fun HomeScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Box(modifier = Modifier.fillMaxSize().testTag(MAP_CONTAINER_TAG)) {
-                mapContent(Modifier.fillMaxSize())
+                mapContent(
+                    Modifier.fillMaxSize(),
+                    // The map ends at the sheet's top edge, so only the search box covers it.
+                    PaddingValues(top = searchHeight)
+                )
             }
-            Column(modifier = Modifier.align(Alignment.TopCenter)) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .onSizeChanged { searchHeight = with(density) { it.height.toDp() } }
+            ) {
                 DestinationSearch(
                     state = destinationState,
                     onQueryChanged = destinationActions::onQueryChanged,
@@ -314,14 +339,16 @@ private fun HomeScreenPreviewContent() {
         destinationState = DestinationUiState(),
         destinationActions = PreviewDestinationActions,
         tripPlanState = null,
-        onRetryPlan = {},
+        tripPlanActions = NoTripPlanActions,
         onRelocate = {},
         onDepartureClick = {},
         onCloseDetails = {},
         onOpenApiKey = {},
         themeMode = ThemeMode.SYSTEM,
         onThemeModeChange = {},
-        mapContent = { Surface(it, color = MaterialTheme.colorScheme.surfaceVariant) {} }
+        mapContent = { mapModifier, _ ->
+            Surface(mapModifier, color = MaterialTheme.colorScheme.surfaceVariant) {}
+        }
     )
 }
 
@@ -335,4 +362,17 @@ private object PreviewDestinationActions : DestinationActions {
     override fun onMapLongPress(location: LatLng) = Unit
 
     override fun clearDestination() = Unit
+}
+
+/** Trip actions that do nothing, for previews and screens without a trip. */
+internal object NoTripPlanActions : TripPlanActions {
+    override fun retry() = Unit
+
+    override fun select(option: TripOption) = Unit
+
+    override fun closeSelection() = Unit
+
+    override fun openRide(ride: RideLeg) = Unit
+
+    override fun onRideOpened() = Unit
 }

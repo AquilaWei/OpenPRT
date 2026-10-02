@@ -61,8 +61,16 @@
         <item quantity="one">%d transfer</item>
         <item quantity="other">%d transfers</item>
     </plurals>
-    <string name="trip_first_bus">%1$s leaves %2$s at %3$s (scheduled)</string>
-    <string name="trip_first_bus_live">%1$s leaves %2$s at %3$s · Live</string>
+    <string name="trip_first_bus">%1$s leaves %2$s at %3$s</string>
+    <string name="trip_back">Back to ways to get there</string>
+    <string name="trip_walk_to_stop">Walk %1$d min to %2$s</string>
+    <string name="trip_walk_to_destination">Walk %1$d min to your destination</string>
+    <string name="trip_toward">Toward %1$s</string>
+    <string name="trip_board_at">Board at %1$s · %2$s</string>
+    <string name="trip_get_off_at">Get off at %1$s · %2$s</string>
+    <string name="trip_live_bus">Live bus</string>
+    <string name="trip_finding_bus">Finding this bus…</string>
+    <string name="trip_scheduled_only">No live data for this bus right now; times are from the timetable.</string>
     <string name="trip_no_stop_near_origin">No bus stop within walking distance (800 m) of you.</string>
     <string name="trip_no_stop_near_destination">No bus stop within walking distance (800 m) of the destination.</string>
     <string name="trip_no_connection">No buses connect these places for the rest of today\'s timetable.</string>

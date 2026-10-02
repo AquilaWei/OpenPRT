@@ -10,6 +10,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -22,6 +23,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.openprt.app.data.gtfs.RideStopsSource
 import org.openprt.app.data.gtfs.TripPlan
 import org.openprt.app.data.gtfs.TripPlanResult
 import org.openprt.app.data.gtfs.TripPlanSource
@@ -57,7 +59,7 @@ class TripPlanViewModelTest {
 
     @Test
     fun state_withoutDestination_isNull() {
-        val viewModel = TripPlanViewModel(FakePlanSource(), NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(FakePlanSource(), NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
 
         assertNull(viewModel.state.value)
     }
@@ -65,7 +67,7 @@ class TripPlanViewModelTest {
     @Test
     fun onDestinationChanged_withLocation_plansFromLocationAtClockTime() = runTest(dispatcher) {
         val source = FakePlanSource()
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
 
         viewModel.onDestinationChanged(THERE)
@@ -77,7 +79,7 @@ class TripPlanViewModelTest {
     @Test
     fun onDestinationChanged_whilePlanning_isPlanning() = runTest(dispatcher) {
         val source = FakePlanSource(CompletableDeferred())
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
 
         viewModel.onDestinationChanged(THERE)
@@ -89,7 +91,7 @@ class TripPlanViewModelTest {
     @Test
     fun onDestinationChanged_plansFound_isResultsWithOneOptionPerPlan() = runTest(dispatcher) {
         val source = FakePlanSource(CompletableDeferred())
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
         runCurrent()
@@ -103,7 +105,7 @@ class TripPlanViewModelTest {
 
     @Test
     fun onDestinationChanged_toNull_returnsToNearbyDepartures() = runTest(dispatcher) {
-        val viewModel = TripPlanViewModel(FakePlanSource(), NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(FakePlanSource(), NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
         advanceUntilIdle()
@@ -116,7 +118,7 @@ class TripPlanViewModelTest {
     @Test
     fun onDestinationChanged_toNullWhilePlanning_cancelsThePlanning() = runTest(dispatcher) {
         val source = FakePlanSource(CompletableDeferred())
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
         runCurrent()
@@ -130,7 +132,7 @@ class TripPlanViewModelTest {
     @Test
     fun onDestinationChanged_toNullWhilePlanning_lateResultIsNotShown() = runTest(dispatcher) {
         val source = FakePlanSource(CompletableDeferred())
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
         runCurrent()
@@ -146,7 +148,7 @@ class TripPlanViewModelTest {
     fun onDestinationChanged_beforeLocationIsKnown_isPlanningWithoutSearching() =
         runTest(dispatcher) {
             val source = FakePlanSource()
-            val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+            val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
 
             viewModel.onDestinationChanged(THERE)
             advanceUntilIdle()
@@ -158,7 +160,7 @@ class TripPlanViewModelTest {
     @Test
     fun onLocationChanged_firstFixAfterDestination_plansFromIt() = runTest(dispatcher) {
         val source = FakePlanSource()
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onDestinationChanged(THERE)
 
         viewModel.onLocationChanged(HERE)
@@ -170,7 +172,7 @@ class TripPlanViewModelTest {
     @Test
     fun onLocationChanged_afterPlanning_doesNotPlanAgain() = runTest(dispatcher) {
         val source = FakePlanSource()
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
         advanceUntilIdle()
@@ -186,7 +188,7 @@ class TripPlanViewModelTest {
         val source = FakePlanSource(
             CompletableDeferred(TripPlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION))
         )
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
 
         viewModel.onDestinationChanged(THERE)
@@ -201,7 +203,7 @@ class TripPlanViewModelTest {
     @Test
     fun onDestinationChanged_noTimetable_isNoTimetable() = runTest(dispatcher) {
         val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable))
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
 
         viewModel.onDestinationChanged(THERE)
@@ -213,7 +215,7 @@ class TripPlanViewModelTest {
     @Test
     fun retry_withDestination_plansAgain() = runTest(dispatcher) {
         val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable))
-        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, CLOCK)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
         advanceUntilIdle()
@@ -230,7 +232,7 @@ class TripPlanViewModelTest {
             val predictions = FakePredictionSource(TrueTimeResult.Success(emptyList()))
             val source =
                 FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(DIRECT_PLAN))))
-            val viewModel = TripPlanViewModel(source, predictions, CLOCK)
+            val viewModel = TripPlanViewModel(source, predictions, STRAIGHT_RIDES, CLOCK)
             viewModel.onLocationChanged(HERE)
 
             viewModel.onDestinationChanged(THERE)
@@ -247,7 +249,7 @@ class TripPlanViewModelTest {
             )
             val source =
                 FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(DIRECT_PLAN))))
-            val viewModel = TripPlanViewModel(source, predictions, CLOCK)
+            val viewModel = TripPlanViewModel(source, predictions, STRAIGHT_RIDES, CLOCK)
             viewModel.onLocationChanged(HERE)
 
             viewModel.onDestinationChanged(THERE)
@@ -264,7 +266,7 @@ class TripPlanViewModelTest {
             TrueTimeResult.Failure(TrueTimeError.Network(IOException("offline")))
         )
         val source = FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(DIRECT_PLAN))))
-        val viewModel = TripPlanViewModel(source, predictions, CLOCK)
+        val viewModel = TripPlanViewModel(source, predictions, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
 
         viewModel.onDestinationChanged(THERE)
@@ -276,6 +278,155 @@ class TripPlanViewModelTest {
     }
 
     private data class PlanCall(val origin: LatLng, val destination: LatLng, val departAt: Instant)
+
+    @Test
+    fun select_option_isShownAsSelected() = runTest(dispatcher) {
+        val viewModel = plannedViewModel(NO_PREDICTIONS)
+        val option = viewModel.results().options.single()
+
+        viewModel.select(option)
+
+        assertEquals(option, viewModel.results().selected?.option)
+    }
+
+    @Test
+    fun select_beforeRideStopsLoad_drawsRideStraightBetweenItsStops() = runTest(dispatcher) {
+        val viewModel = plannedViewModel(NO_PREDICTIONS, rideStops = THROUGH_MIDDLE)
+
+        viewModel.select(viewModel.results().options.single())
+
+        assertEquals(listOf(listOf(HERE, THERE)), viewModel.results().selected?.map?.rides)
+    }
+
+    @Test
+    fun select_afterRideStopsLoad_drawsRideThroughThem() = runTest(dispatcher) {
+        val viewModel = plannedViewModel(NO_PREDICTIONS, rideStops = THROUGH_MIDDLE)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertEquals(listOf(listOf(HERE, MIDDLE, THERE)), viewModel.results().selected?.map?.rides)
+    }
+
+    @Test
+    fun closeSelection_returnsToOptionsWithoutPlanningAgain() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source = source)
+        viewModel.select(viewModel.results().options.single())
+
+        viewModel.closeSelection()
+        advanceUntilIdle()
+
+        assertNull(viewModel.results().selected)
+        assertEquals(1, source.calls.size)
+    }
+
+    @Test
+    fun openRide_asksTrueTimeAboutItsBoardingStop() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(TrueTimeResult.Success(emptyList()))
+        val viewModel = plannedViewModel(predictions)
+        viewModel.select(viewModel.results().options.single())
+
+        viewModel.openRide(DIRECT_PLAN.itinerary.rides.single())
+        advanceUntilIdle()
+
+        assertEquals(listOf("8312"), predictions.requests.last())
+    }
+
+    @Test
+    fun openRide_busPredicted_isLiveWithThatBus() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(
+            TrueTimeResult.Success(listOf(prediction("61C", "8312", "2026-10-01T11:02:00Z")))
+        )
+        val viewModel = plannedViewModel(predictions)
+        viewModel.select(viewModel.results().options.single())
+
+        viewModel.openRide(DIRECT_PLAN.itinerary.rides.single())
+        advanceUntilIdle()
+
+        val lookup = viewModel.results().selected?.ride as RideLookup.Live
+        assertEquals(
+            listOf("61C", "8312", "5501", "Forbes Ave at Morewood"),
+            with(lookup.departure) { listOf(route, stopId, vehicleId, stopName) }
+        )
+    }
+
+    @Test
+    fun openRide_busPredicted_departureCountsMinutesAndWalkToTheStop() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(
+            TrueTimeResult.Success(listOf(prediction("61C", "8312", "2026-10-01T11:02:00Z")))
+        )
+        val viewModel = plannedViewModel(predictions)
+        viewModel.select(viewModel.results().options.single())
+
+        viewModel.openRide(DIRECT_PLAN.itinerary.rides.single())
+        advanceUntilIdle()
+
+        val departure = (viewModel.results().selected?.ride as RideLookup.Live).departure
+        // 10:50Z to 11:02Z is 12 minutes; the 200 s walk rounds up to 4.
+        assertEquals(
+            listOf(12L, 4L),
+            listOf(departure.minutesUntilDeparture, departure.walkMinutes)
+        )
+    }
+
+    @Test
+    fun openRide_noPredictionForTheBus_isScheduledOnly() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(
+            TrueTimeResult.Success(listOf(prediction("71B", "8312", "2026-10-01T11:02:00Z")))
+        )
+        val viewModel = plannedViewModel(predictions)
+        viewModel.select(viewModel.results().options.single())
+        val ride = DIRECT_PLAN.itinerary.rides.single()
+
+        viewModel.openRide(ride)
+        advanceUntilIdle()
+
+        assertEquals(RideLookup.ScheduledOnly(ride), viewModel.results().selected?.ride)
+    }
+
+    @Test
+    fun openRide_trueTimeFails_isScheduledOnly() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(TrueTimeResult.Failure(TrueTimeError.Timeout))
+        val viewModel = plannedViewModel(predictions)
+        viewModel.select(viewModel.results().options.single())
+        val ride = DIRECT_PLAN.itinerary.rides.single()
+
+        viewModel.openRide(ride)
+        advanceUntilIdle()
+
+        assertEquals(RideLookup.ScheduledOnly(ride), viewModel.results().selected?.ride)
+    }
+
+    @Test
+    fun onRideOpened_afterLiveBusFound_isIdleAgain() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(
+            TrueTimeResult.Success(listOf(prediction("61C", "8312", "2026-10-01T11:02:00Z")))
+        )
+        val viewModel = plannedViewModel(predictions)
+        viewModel.select(viewModel.results().options.single())
+        viewModel.openRide(DIRECT_PLAN.itinerary.rides.single())
+        advanceUntilIdle()
+
+        viewModel.onRideOpened()
+
+        assertEquals(RideLookup.Idle, viewModel.results().selected?.ride)
+    }
+
+    /** A view model that has planned [DIRECT_PLAN] from HERE to THERE. */
+    private fun TestScope.plannedViewModel(
+        predictions: PredictionSource,
+        source: FakePlanSource = FakePlanSource(),
+        rideStops: RideStopsSource = STRAIGHT_RIDES
+    ): TripPlanViewModel {
+        val viewModel = TripPlanViewModel(source, predictions, rideStops, CLOCK)
+        viewModel.onLocationChanged(HERE)
+        viewModel.onDestinationChanged(THERE)
+        advanceUntilIdle()
+        return viewModel
+    }
+
+    private fun TripPlanViewModel.results() = state.value as TripPlanUiState.Results
 
     /** Answers every plan with [answer]; by default a direct plan right away. */
     private class FakePlanSource(
@@ -316,6 +467,11 @@ class TripPlanViewModelTest {
         val HERE = LatLng(40.4443, -79.9532)
         val THERE = LatLng(40.4406, -79.9959)
         val NO_PREDICTIONS = PredictionSource { TrueTimeResult.Success(emptyList()) }
+        val MIDDLE = LatLng(40.4420, -79.9750)
+
+        /** No stops read, so rides stay straight lines. */
+        val STRAIGHT_RIDES = RideStopsSource { _, _, _ -> emptyList() }
+        val THROUGH_MIDDLE = RideStopsSource { _, _, _ -> listOf(HERE, MIDDLE, THERE) }
 
         val CMU = TransitStop("s8312", "Forbes Ave at Morewood", HERE, trueTimeStopId = "8312")
         val STEEL_PLAZA = TransitStop("s10", "Steel Plaza", THERE, trueTimeStopId = "10")

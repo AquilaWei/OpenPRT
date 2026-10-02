@@ -5,6 +5,8 @@ import android.content.Context
 import org.openprt.app.data.gtfs.GtfsDatabase
 import org.openprt.app.data.gtfs.GtfsImporter
 import org.openprt.app.data.gtfs.NearbyStopRepository
+import org.openprt.app.data.gtfs.RideStopsSource
+import org.openprt.app.data.gtfs.RoomRideStopsSource
 import org.openprt.app.data.gtfs.RoomTransitNetworkSource
 import org.openprt.app.data.gtfs.TripPlanRepository
 import org.openprt.app.data.settings.ApiKeySettings
@@ -34,4 +36,6 @@ class OpenPrtApplication : Application() {
     val tripPlanRepository: TripPlanRepository by lazy {
         TripPlanRepository(RoomTransitNetworkSource(gtfsDatabase.gtfsDao()))
     }
+
+    val rideStops: RideStopsSource by lazy { RoomRideStopsSource(gtfsDatabase.gtfsDao()) }
 }

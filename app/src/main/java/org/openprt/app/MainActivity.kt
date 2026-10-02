@@ -36,6 +36,8 @@ import org.openprt.app.map.MapViewModel
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.settings.ApiKeyScreen
 import org.openprt.app.settings.ApiKeyViewModel
+import org.openprt.app.trip.RideLookup
+import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.trip.TripPlanViewModel
 import org.openprt.app.ui.theme.OpenPrtTheme
 import org.openprt.app.ui.theme.isDark
@@ -63,6 +65,7 @@ class MainActivity : ComponentActivity() {
                 TripPlanViewModel(
                     app.tripPlanRepository,
                     trueTime::getPredictions,
+                    app.rideStops,
                     Clock.systemUTC()
                 )
             }
@@ -129,6 +132,18 @@ class MainActivity : ComponentActivity() {
                 tripPlanViewModel.onLocationChanged(locationState.location)
             }
 
+            // A ride's live bus was found: show it like a nearby departure.
+            val liveRide = (
+                (tripPlanState as? TripPlanUiState.Results)?.selected?.ride
+                    as? RideLookup.Live
+                )?.departure
+            LaunchedEffect(liveRide) {
+                if (liveRide != null) {
+                    detailsViewModel.open(liveRide)
+                    tripPlanViewModel.onRideOpened()
+                }
+            }
+
             LaunchedEffect(destinationState.destination) {
                 tripPlanViewModel.onDestinationChanged(destinationState.destination?.location)
             }
@@ -169,7 +184,7 @@ class MainActivity : ComponentActivity() {
                         destinationState = destinationState,
                         destinationActions = destinationViewModel,
                         tripPlanState = tripPlanState,
-                        onRetryPlan = tripPlanViewModel::retry,
+                        tripPlanActions = tripPlanViewModel,
                         onRelocate = locationViewModel::relocate,
                         onDepartureClick = detailsViewModel::open,
                         onCloseDetails = detailsViewModel::close,

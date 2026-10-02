@@ -10,14 +10,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.openprt.app.data.gtfs.RideStopsSource
 import org.openprt.app.data.gtfs.TripPlan
 import org.openprt.app.data.gtfs.TripPlanResult
 import org.openprt.app.data.gtfs.TripPlanSource
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.TrueTimeResult
 import org.openprt.app.data.truetime.orEmptyWhenNoData
+import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.PredictionSource
 import org.openprt.app.geo.LatLng
+import org.openprt.app.planner.Itinerary
 import org.openprt.app.planner.NoRouteReason
 import org.openprt.app.planner.RideLeg
 import org.openprt.app.planner.WalkLeg
@@ -53,18 +56,63 @@ data class TripOption(
     val plan: TripPlan
 )
 
+/** Looking up the live bus of a ride the user tapped in a chosen trip. */
+sealed interface RideLookup {
+    data object Idle : RideLookup
+
+    data class Looking(val ride: RideLeg) : RideLookup
+
+    /**
+     * TrueTime predicts this bus at the ride's boarding stop; the screen opens its live details
+     * and then calls [TripPlanActions.onRideOpened].
+     */
+    data class Live(val departure: DepartureItem) : RideLookup
+
+    /** TrueTime has no prediction for this bus, or could not be asked; only its timetable is known. */
+    data class ScheduledOnly(val ride: RideLeg) : RideLookup
+}
+
+/**
+ * The option the user chose, shown leg by leg and on the map. [map] draws rides straight from
+ * stop to stop until the stops they pass have been read from the timetable.
+ */
+data class SelectedTrip(
+    val option: TripOption,
+    val map: TripMapLayers,
+    val ride: RideLookup = RideLookup.Idle
+)
+
 /** What the plan list shows while a destination is set. */
 sealed interface TripPlanUiState {
     /** Searching, or waiting for the first location fix to search from. */
     data object Planning : TripPlanUiState
 
-    /** At least one option, fewest rides first. */
-    data class Results(val options: List<TripOption>) : TripPlanUiState
+    /** At least one option, fewest rides first; [selected] is the one being looked at, if any. */
+    data class Results(val options: List<TripOption>, val selected: SelectedTrip? = null) :
+        TripPlanUiState
 
     data class NoRoute(val reason: NoRouteReason) : TripPlanUiState
 
     /** The timetable has not been downloaded yet; [TripPlanViewModel.retry] tries again. */
     data object NoTimetable : TripPlanUiState
+}
+
+/** What the trip panels can ask for; [TripPlanViewModel] does them. */
+interface TripPlanActions {
+    /** Searches again for the current destination, e.g. after the timetable has downloaded. */
+    fun retry()
+
+    /** Shows [option] leg by leg and on the map. */
+    fun select(option: TripOption)
+
+    /** Back from a chosen option to the list, without planning again. */
+    fun closeSelection()
+
+    /** Looks for the live bus of [ride] in the chosen option. */
+    fun openRide(ride: RideLeg)
+
+    /** The screen has opened the live bus found by [openRide]. */
+    fun onRideOpened()
 }
 
 /**
@@ -77,18 +125,28 @@ sealed interface TripPlanUiState {
  *
  * The first bus of each option is looked up in TrueTime once, when the plans arrive; if that
  * fails the options keep their timetable times rather than failing the whole search.
+ *
+ * A chosen option is drawn from the origin the plans were made from, not where the user is now.
+ * Its rides are traced through the stops [rideStops] reads from the timetable.
  */
 class TripPlanViewModel(
     private val source: TripPlanSource,
     private val predictions: PredictionSource,
+    private val rideStops: RideStopsSource,
     private val clock: Clock
-) : ViewModel() {
+) : ViewModel(),
+    TripPlanActions {
     private val mutableState = MutableStateFlow<TripPlanUiState?>(null)
     val state: StateFlow<TripPlanUiState?> = mutableState.asStateFlow()
 
     private var origin: LatLng? = null
     private var destination: LatLng? = null
+    private var plannedFrom: LatLng? = null
     private var planning: Job? = null
+
+    // Loads for the chosen option; cancelled when the choice or the plans change.
+    private var selection: Job? = null
+    private var rideLookup: Job? = null
 
     /** Reports the user's location; null while it is being looked up again. */
     fun onLocationChanged(location: LatLng?) {
@@ -104,14 +162,92 @@ class TripPlanViewModel(
         startPlanning()
     }
 
-    /** Searches again for the current destination, e.g. after the timetable has downloaded. */
-    fun retry() {
+    override fun retry() {
         if (destination != null) startPlanning()
+    }
+
+    override fun select(option: TripOption) {
+        val results = mutableState.value as? TripPlanUiState.Results ?: return
+        val from = plannedFrom ?: return
+        val to = destination ?: return
+        val itinerary = option.plan.itinerary
+        cancelSelectionLoads()
+        mutableState.value = results.copy(
+            selected = SelectedTrip(option, itinerary.toMapLayers(from, to, emptyList()))
+        )
+        selection = viewModelScope.launch {
+            val stops = itinerary.rides.map {
+                rideStops.stopsBetween(it.tripId, it.from.stopId, it.to.stopId)
+            }
+            val layers = itinerary.toMapLayers(from, to, stops)
+            updateSelected(option) { it.copy(map = layers) }
+        }
+    }
+
+    override fun closeSelection() {
+        cancelSelectionLoads()
+        val results = mutableState.value as? TripPlanUiState.Results ?: return
+        mutableState.value = results.copy(selected = null)
+    }
+
+    override fun openRide(ride: RideLeg) {
+        val option = (mutableState.value as? TripPlanUiState.Results)?.selected?.option ?: return
+        updateSelected(option) { it.copy(ride = RideLookup.Looking(ride)) }
+        rideLookup?.cancel()
+        rideLookup = viewModelScope.launch {
+            val found = findLiveBus(option, ride)
+            updateSelected(option) {
+                it.copy(ride = found?.let(RideLookup::Live) ?: RideLookup.ScheduledOnly(ride))
+            }
+        }
+    }
+
+    override fun onRideOpened() {
+        val option = (mutableState.value as? TripPlanUiState.Results)?.selected?.option ?: return
+        updateSelected(option) { it.copy(ride = RideLookup.Idle) }
+    }
+
+    private fun cancelSelectionLoads() {
+        selection?.cancel()
+        rideLookup?.cancel()
+    }
+
+    // A load that outlives its option must not change what replaced it.
+    private fun updateSelected(option: TripOption, transform: (SelectedTrip) -> SelectedTrip) {
+        val results = mutableState.value as? TripPlanUiState.Results ?: return
+        val selected = results.selected?.takeIf { it.option == option } ?: return
+        mutableState.value = results.copy(selected = transform(selected))
+    }
+
+    private suspend fun findLiveBus(option: TripOption, ride: RideLeg): DepartureItem? {
+        val now = clock.instant()
+        val stopId = ride.from.trueTimeStopId
+        val result = predictions.predictions(listOf(stopId)).orEmptyWhenNoData()
+        val live = (result as? TrueTimeResult.Success)?.value.orEmpty()
+        val plan = option.plan
+        val prediction = closestPrediction(
+            live,
+            ride,
+            scheduled = plan.timeOf(ride.startSeconds),
+            catchableFrom = now
+        ) ?: return null
+        return DepartureItem(
+            route = prediction.route,
+            direction = prediction.routeDirection,
+            destination = prediction.destination,
+            stopName = ride.from.name,
+            walkMinutes = plan.itinerary.walkBefore(ride),
+            minutesUntilDeparture = Duration.between(now, prediction.predictedTime).toMinutes(),
+            delayed = prediction.delayed,
+            stopId = prediction.stopId,
+            vehicleId = prediction.vehicleId
+        )
     }
 
     private fun startPlanning() {
         planning?.cancel()
         planning = null
+        cancelSelectionLoads()
         val to = destination
         if (to == null) {
             mutableState.value = null
@@ -119,6 +255,7 @@ class TripPlanViewModel(
         }
         mutableState.value = TripPlanUiState.Planning
         val from = origin ?: return
+        plannedFrom = from
         // Cancelled before it can write if the destination changes, since both run on Main.
         planning = viewModelScope.launch { mutableState.value = plan(from, to) }
     }
@@ -158,17 +295,7 @@ internal fun TripPlan.toOption(predictions: List<Prediction>, now: Instant): Tri
     val walkToBus = Duration.ofSeconds(
         (firstRide.startSeconds - itinerary.departureSeconds).toLong()
     )
-    val catchableFrom = now + walkToBus
-    val live = predictions
-        .filter {
-            it.route == firstRide.routeId &&
-                it.stopId == firstRide.from.trueTimeStopId &&
-                it.predictedTime >= catchableFrom
-        }
-        .map { it to Duration.between(scheduledBoarding, it.predictedTime).abs() }
-        .filter { (_, offset) -> offset <= MAX_LIVE_OFFSET }
-        .minByOrNull { (_, offset) -> offset }
-        ?.first
+    val live = closestPrediction(predictions, firstRide, scheduledBoarding, now + walkToBus)
     val boardingTime = live?.predictedTime ?: scheduledBoarding
     val departureTime = boardingTime - walkToBus
     return TripOption(
@@ -181,7 +308,7 @@ internal fun TripPlan.toOption(predictions: List<Prediction>, now: Instant): Tri
                 is RideLeg -> LegSummary.Ride(leg.routeId)
 
                 is WalkLeg -> {
-                    val minutes = Duration.ofSeconds(leg.durationSeconds()).roundedUpMinutes()
+                    val minutes = leg.minutes()
                     if (minutes > 0) LegSummary.Walk(minutes) else null
                 }
             }
@@ -194,6 +321,34 @@ internal fun TripPlan.toOption(predictions: List<Prediction>, now: Instant): Tri
     )
 }
 
-private fun WalkLeg.durationSeconds(): Long = (endSeconds - startSeconds).toLong()
+/**
+ * The entry of [predictions] for [ride]'s route at its boarding stop that leaves no earlier than
+ * [catchableFrom] and closest to the [scheduled] time, within [MAX_LIVE_OFFSET]; null if none.
+ */
+private fun closestPrediction(
+    predictions: List<Prediction>,
+    ride: RideLeg,
+    scheduled: Instant,
+    catchableFrom: Instant
+): Prediction? = predictions
+    .filter {
+        it.route == ride.routeId &&
+            it.stopId == ride.from.trueTimeStopId &&
+            it.predictedTime >= catchableFrom
+    }
+    .map { it to Duration.between(scheduled, it.predictedTime).abs() }
+    .filter { (_, offset) -> offset <= MAX_LIVE_OFFSET }
+    .minByOrNull { (_, offset) -> offset }
+    ?.first
+
+/** Minutes of walking right before [ride], rounded up; 0 after a ride or a wait. */
+private fun Itinerary.walkBefore(ride: RideLeg): Long {
+    val walk = legs.getOrNull(legs.indexOf(ride) - 1) as? WalkLeg ?: return 0
+    return walk.minutes()
+}
+
+/** How long this walk takes, rounded up so the user never gets less time than shown. */
+internal fun WalkLeg.minutes(): Long =
+    Duration.ofSeconds((endSeconds - startSeconds).toLong()).roundedUpMinutes()
 
 private fun Duration.roundedUpMinutes(): Long = (seconds + 59) / 60

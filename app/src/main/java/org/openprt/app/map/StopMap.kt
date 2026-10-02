@@ -1,6 +1,7 @@
 package org.openprt.app.map
 
 import android.content.Context
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -12,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -37,6 +39,7 @@ import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineDasharray
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.SymbolLayer
@@ -48,6 +51,7 @@ import org.maplibre.geojson.Point
 import org.openprt.app.details.BusPosition
 import org.openprt.app.details.RouteShape
 import org.openprt.app.geo.LatLng
+import org.openprt.app.trip.TripMapLayers
 
 private const val STOPS_SOURCE = "stops"
 private const val USER_SOURCE = "user-location"
@@ -56,6 +60,10 @@ private const val ROUTE_STOPS_SOURCE = "route-stops"
 private const val BOARDING_STOP_SOURCE = "boarding-stop"
 private const val BUS_SOURCE = "bus"
 private const val DESTINATION_SOURCE = "destination"
+private const val TRIP_WALK_SOURCE = "trip-walks"
+private const val TRIP_RIDE_SOURCE = "trip-rides"
+private const val TRIP_BOARDING_SOURCE = "trip-boarding"
+private const val TRIP_ALIGHTING_SOURCE = "trip-alighting"
 private const val BUS_BADGE_IMAGE = "bus-badge"
 private const val BUS_HEADING_IMAGE = "bus-heading"
 
@@ -78,6 +86,10 @@ private val ROUTE_FIT_PADDING = 48.dp
  * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
  * reports the pressed spot through [onLongPress].
  *
+ * A chosen [trip] is drawn the same way as a route, with its walks dashed; the camera is fitted
+ * to it while no route is shown. Camera fits keep [overlayPadding] clear, the space the search
+ * box covers.
+ *
  * [palette] sets the map style and marker colors; a new palette (the theme changed) reloads the
  * style, which drops every layer, so the markers are added and filled in again.
  *
@@ -94,10 +106,12 @@ fun StopMap(
     destination: LatLng?,
     onLongPress: (LatLng) -> Unit,
     palette: MapPalette,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trip: TripMapLayers? = null,
+    overlayPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
-    val routeFitPaddingPx = with(LocalDensity.current) { ROUTE_FIT_PADDING.roundToPx() }
+    val fitPadding = fitPaddingPx(overlayPadding)
     val mapView = remember { createMapView(context) }
     // Null until the style has loaded; sources can only be updated after that.
     var style by remember { mutableStateOf<Style?>(null) }
@@ -129,17 +143,16 @@ fun StopMap(
     }
     LaunchedEffect(style, route) {
         val loaded = style ?: return@LaunchedEffect
-        loaded.getSourceAs<GeoJsonSource>(ROUTE_LINE_SOURCE)?.setGeoJson(
-            FeatureCollection.fromFeatures(
-                listOfNotNull(
-                    route?.line?.let { line ->
-                        Feature.fromGeometry(LineString.fromLngLats(line.map { it.toPoint() }))
-                    }
-                )
-            )
-        )
+        loaded.setLines(ROUTE_LINE_SOURCE, listOfNotNull(route?.line))
         loaded.setPoints(ROUTE_STOPS_SOURCE, route?.stops.orEmpty().map { it.position })
         loaded.setPoints(BOARDING_STOP_SOURCE, listOfNotNull(route?.boardingStop?.position))
+    }
+    LaunchedEffect(style, trip) {
+        val loaded = style ?: return@LaunchedEffect
+        loaded.setLines(TRIP_WALK_SOURCE, trip?.walks.orEmpty())
+        loaded.setLines(TRIP_RIDE_SOURCE, trip?.rides.orEmpty())
+        loaded.setPoints(TRIP_BOARDING_SOURCE, trip?.boardingStops.orEmpty())
+        loaded.setPoints(TRIP_ALIGHTING_SOURCE, trip?.alightingStops.orEmpty())
     }
     LaunchedEffect(style, bus) {
         style?.getSourceAs<GeoJsonSource>(BUS_SOURCE)?.setGeoJson(
@@ -152,9 +165,9 @@ fun StopMap(
     LaunchedEffect(style, userLocation) {
         style?.setPoints(USER_SOURCE, listOfNotNull(userLocation))
     }
-    // Keyed on whether a route is shown, so closing the route moves back to the user.
-    LaunchedEffect(center, destination, route == null) {
-        if (center == null || route != null) return@LaunchedEffect
+    // Keyed on whether a route or trip is shown, so closing it moves back to the user.
+    LaunchedEffect(center, destination, route == null, trip == null) {
+        if (center == null || route != null || trip != null) return@LaunchedEffect
         val update = if (destination == null || destination == center) {
             CameraUpdateFactory.newLatLngZoom(center.toMapLibre(), FOLLOW_ZOOM)
         } else {
@@ -162,17 +175,16 @@ fun StopMap(
                 .include(center.toMapLibre())
                 .include(destination.toMapLibre())
                 .build()
-            CameraUpdateFactory.newLatLngBounds(bounds, routeFitPaddingPx)
+            fitPadding.boundsUpdate(bounds)
         }
         mapView.getMapAsync { map -> map.animateCamera(update) }
     }
     LaunchedEffect(route) {
-        // LatLngBounds needs two distinct points; real patterns always have many.
-        val line = route?.line?.distinct()?.takeIf { it.size >= 2 } ?: return@LaunchedEffect
-        val bounds = LatLngBounds.Builder().includes(line.map { it.toMapLibre() }).build()
-        mapView.getMapAsync { map ->
-            map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, routeFitPaddingPx))
-        }
+        mapView.fitTo(route?.line.orEmpty(), fitPadding)
+    }
+    // Keyed on the trip's points only, so filling in its ride lines does not move the camera.
+    LaunchedEffect(trip?.allPoints?.firstOrNull(), trip?.allPoints?.lastOrNull(), route == null) {
+        if (route == null) mapView.fitTo(trip?.allPoints.orEmpty(), fitPadding)
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
@@ -206,6 +218,42 @@ private fun MapViewLifecycle(mapView: MapView) {
     }
 }
 
+/** Pixels to keep clear on each side when fitting the camera: [overlay] plus a margin. */
+private class FitPadding(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+    fun boundsUpdate(bounds: LatLngBounds) =
+        CameraUpdateFactory.newLatLngBounds(bounds, left, top, right, bottom)
+}
+
+@Composable
+private fun fitPaddingPx(overlay: PaddingValues): FitPadding {
+    val direction = LocalLayoutDirection.current
+    return with(LocalDensity.current) {
+        FitPadding(
+            left = (overlay.calculateLeftPadding(direction) + ROUTE_FIT_PADDING).roundToPx(),
+            top = (overlay.calculateTopPadding() + ROUTE_FIT_PADDING).roundToPx(),
+            right = (overlay.calculateRightPadding(direction) + ROUTE_FIT_PADDING).roundToPx(),
+            bottom = (overlay.calculateBottomPadding() + ROUTE_FIT_PADDING).roundToPx()
+        )
+    }
+}
+
+/** Fits the camera to [points]; LatLngBounds needs two distinct points, so fewer do nothing. */
+private fun MapView.fitTo(points: List<LatLng>, padding: FitPadding) {
+    val distinct = points.distinct().takeIf { it.size >= 2 } ?: return
+    val bounds = LatLngBounds.Builder().includes(distinct.map { it.toMapLibre() }).build()
+    getMapAsync { map -> map.animateCamera(padding.boundsUpdate(bounds)) }
+}
+
+private fun Style.setLines(sourceId: String, lines: List<List<LatLng>>) {
+    getSourceAs<GeoJsonSource>(sourceId)?.setGeoJson(
+        FeatureCollection.fromFeatures(
+            lines.map { line ->
+                Feature.fromGeometry(LineString.fromLngLats(line.map { it.toPoint() }))
+            }
+        )
+    )
+}
+
 private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
     getSourceAs<GeoJsonSource>(sourceId)?.setGeoJson(
         FeatureCollection.fromFeatures(points.map { Feature.fromGeometry(it.toPoint()) })
@@ -221,6 +269,10 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
         ROUTE_LINE_SOURCE,
         STOPS_SOURCE,
         ROUTE_STOPS_SOURCE,
+        TRIP_WALK_SOURCE,
+        TRIP_RIDE_SOURCE,
+        TRIP_ALIGHTING_SOURCE,
+        TRIP_BOARDING_SOURCE,
         BOARDING_STOP_SOURCE,
         DESTINATION_SOURCE,
         BUS_SOURCE,
@@ -250,6 +302,7 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
             circleStrokeWidth(2f)
         )
     )
+    addTripLayers(style, palette)
     // Larger and gold so the stop to walk to stands out from the rest of the route.
     style.addLayer(
         largeMarkerLayer("boarding-stop-layer", BOARDING_STOP_SOURCE, palette.boardingStop, palette)
@@ -286,6 +339,37 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
             circleStrokeColor(palette.markerOutline),
             circleStrokeWidth(3f)
         )
+    )
+}
+
+/** A trip's rides like a route line, its walks dashed in the user's color, and its stops. */
+private fun addTripLayers(style: Style, palette: MapPalette) {
+    style.addLayer(
+        LineLayer("trip-walk-layer", TRIP_WALK_SOURCE).withProperties(
+            lineColor(palette.user),
+            lineWidth(4f),
+            lineDasharray(arrayOf(1f, 1.5f)),
+            lineCap(Property.LINE_CAP_ROUND)
+        )
+    )
+    style.addLayer(
+        LineLayer("trip-ride-layer", TRIP_RIDE_SOURCE).withProperties(
+            lineColor(palette.routeLine),
+            lineWidth(6f),
+            lineCap(Property.LINE_CAP_ROUND),
+            lineJoin(Property.LINE_JOIN_ROUND)
+        )
+    )
+    style.addLayer(
+        CircleLayer("trip-alighting-layer", TRIP_ALIGHTING_SOURCE).withProperties(
+            circleRadius(7f),
+            circleColor(palette.routeStop),
+            circleStrokeColor(palette.routeStopOutline),
+            circleStrokeWidth(3f)
+        )
+    )
+    style.addLayer(
+        largeMarkerLayer("trip-boarding-layer", TRIP_BOARDING_SOURCE, palette.boardingStop, palette)
     )
 }
 

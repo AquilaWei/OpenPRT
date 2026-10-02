@@ -32,20 +32,40 @@ import org.openprt.app.R
 
 /**
  * One block of related information in a bottom-sheet panel. Outlined so cards stay apart from
- * each other and from the sheet in both themes.
+ * each other and from the sheet in both themes. With [onClick] the whole card can be tapped.
  */
 @Composable
-fun InfoCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
+fun InfoCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val shape = RoundedCornerShape(16.dp)
+    val colors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    )
+    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    val inner: @Composable ColumnScope.() -> Unit = {
         Column(modifier = Modifier.padding(12.dp), content = content)
+    }
+    if (onClick == null) {
+        Card(
+            modifier.fillMaxWidth(),
+            shape = shape,
+            colors = colors,
+            border = border,
+            content = inner
+        )
+    } else {
+        Card(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth(),
+            shape = shape,
+            colors = colors,
+            border = border,
+            content = inner
+        )
     }
 }
 
