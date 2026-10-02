@@ -230,6 +230,28 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - 地圖：公車是綠色大圓點（`bus-layer`，在上車站之上、使用者藍點之下），沒有畫方向箭頭；鏡頭不跟隨公車
 - 時間顯示用 `FormatStyle.MEDIUM`（含秒），因為更新間隔小於一分鐘
 
+## 目的地選擇（F11 決定）
+
+- **地理編碼用 Photon**（`https://photon.komoot.io/api/`，komoot 架的 OSM 地理編碼）：免費、不需 key，專為邊打字邊搜尋設計。
+  沒選 Nominatim 是因為它的使用政策**禁止 client 端自動完成**；沒選 Android `Geocoder` 是因為結果品質依裝置而異、無法在 JVM 測。
+  請求帶 `User-Agent: OpenPRT/<版號>`、`lang=en`、`limit=10`、`bbox`（Photon 順序是 minLon,minLat,maxLon,maxLat）。
+  Photon 是公共服務、只有 fair use 限制，若之後使用量大或被限流，要換自架 Photon 或付費服務（只改 `PhotonGeocoder`）
+- 程式在 `app/src/main/java/org/openprt/app/destination/`：`Geocoder.kt`（介面、`Place`、`GeocodeResult` / `GeocodeError`：
+  Http / Timeout / Network / MalformedResponse）、`PhotonGeocoder.kt`、`DestinationViewModel.kt`、`DestinationSearch.kt`（Compose）
+- 地點名稱：有 `name` 用 name，沒有就用「門牌 街名」，兩者都沒有的結果略過。說明 = 地址（有 name 時）、locality、city。
+  2026-10-01 實測：搜尋地址時 Photon 常把同門牌的公車站或建築物排前面（例「5000 forbes ave」第一筆是公車站）
+- 匹茲堡地區 = `geo/Geo.kt` 的 `PITTSBURGH_AREA`（Allegheny County 外擴取整：lat 40.19–40.68、lon −80.37 – −79.68）。
+  `bbox` 只是給 Photon 的提示，**ViewModel 會再過濾一次**，任何 Geocoder 實作的區外結果都不會顯示。長按地圖**不限區域**
+- `DestinationViewModel` 用 `viewModelScope` + CONFLATED channel + `collectLatest`：打字 debounce 300 ms，新的輸入取消進行中的請求；
+  `retry()` 不 debounce；選地點 / 長按 / 清空輸入會送 null 取消搜尋。結果寫入前再檢查「還在等這個 query」，避免取消訊號還沒送到時舊結果蓋掉新狀態
+- 狀態 `DestinationUiState(query, search: Idle/Searching/Results/Failed, destination: Destination(name?, location)?)`。
+  長按產生的目的地 `name` 為 null，畫面顯示「Pinned spot (lat, lon)」（沒有反向地理編碼）。選定後搜尋框清空，下方顯示「To: …」與清除按鈕
+- `HomeScreen` 多了 `destinationState` 與 `destinationActions: DestinationActions`（介面，ViewModel 實作），避免再加五個 lambda 參數
+- 地圖：目的地是紅色大圓點（`destination-layer`，在上車站之上、公車之下）；長按用 `addOnMapLongClickListener`（`rememberUpdatedState` 保持最新 callback）。
+  有目的地且不在詳情模式時，鏡頭 fit「目前中心 + 目的地」，每次定位更新都會重新 fit（取代原本的 zoom 16 跟隨）
+- **F14 要接的地方**：規劃的起點用 `locationState.location`、終點用 `destinationState.destination.location`。
+  目前目的地只存在 ViewModel 記憶體（旋轉保留、行程被殺就消失）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -253,6 +275,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   按返回箭頭或手機返回鍵回到列表，地圖回到你的位置
 - [ ] F10 詳情中的綠色公車圓點與實際車輛位置一致、每 15 秒移動；「Arrives at your stop in x min」與站牌看板一致；
   公車開過上車站後顯示「This bus has left your stop.」；切到背景再回來立刻更新
+- [ ] F11 在搜尋框輸入「carnegie mellon」等地點，停止打字後出現匹茲堡的結果；點一筆後地圖出現紅點並縮放到你和目的地；
+  長按地圖任一處也會設成目的地（「To: Pinned spot …」）；按 ✕ 清除；關掉網路搜尋時出現錯誤與 Retry，開網路後按 Retry 有結果
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小
 - [ ] F15 完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
 - [ ] F17 從 Release 下載 APK 安裝並啟動
@@ -313,3 +337,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 需要實機驗收（見清單 F10、F9、F8）
   - 下一步：F11 目的地選擇（地理編碼 + 長按地圖）。需要決定地理編碼來源：Android `Geocoder`（免費但結果品質不一）
     或 Nominatim / Photon（OSM，需遵守使用政策），建議先用 Photon 或 Nominatim 並限制在匹茲堡邊界框
+- 2026-10-01：**F11 完成**（版號 0.1.10，tag `v0.1.10` 只在本機）。目的地搜尋（Photon，debounce 300 ms，限匹茲堡地區）、
+  長按地圖選點、目的地紅點與清除、搜尋失敗可重試。新增 35 個測試（全部 227 個），verify 通過；Photon fixture 為 2026-10-01 真實錄製
+  - 需要實機驗收（見清單 F11）
+  - 下一步：F12 GTFS 時刻表匯入（trips、stop_times、calendar、calendar_dates）。stop_times.txt 解開 80 MB，
+    不能整份讀進記憶體再一次寫入（見 F3 段落），要邊解析邊分批寫入暫存表再切換
