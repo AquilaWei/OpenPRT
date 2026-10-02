@@ -12,7 +12,7 @@
 
 ### 第二輪規劃（2026-10-02）：目前完成度
 
-**還沒完成**（F14、F15、F20、F21、F26、F25 已於同日完成，接著是 F24）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
+**還沒完成**（F14、F15、F20、F21、F26、F25、F16 已於同日完成，接著是 F24）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
 已能在畫面上列出方案（F15），**還不能在地圖上看方案、也不能從方案點進即時公車**（F16）。另外缺輕軌、離線處理、發佈流程，
 而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
 
@@ -439,6 +439,25 @@
 - 實機（Galaxy S23，深色、大字型）截圖確認：卡片、方向切換（61C Inbound ↔ Outbound 後上車站與時間軸都換掉）、「N stops away」、公車在時間軸與地圖上
 - 新增 43 個測試（全部 450 個），verify 通過（lint 0 issue）
 
+## 方案地圖（F16 決定）
+
+- 使用者 2026-10-02 實機測試搜尋「Carnegie Mellon University」後回報「找到路線但方案點不開、不能顯示在地圖上」，F16 移到 F24 前面
+- 公車段的線：GTFS shapes 沒有匯入，改用該 trip 在上車站與下車站之間經過的站牌連線（`GtfsDao.getStopsOfTrip` JOIN stops，
+  `RoomRideStopsSource` + `sliceBetween`；環狀路線若先經過下車站，取上車後的下一次）。只新增查詢，不改 schema，所以不需要 migration
+- `TripMapLayers`（`trip/TripMapLayers.kt`）：步行段（藍色虛線，`palette.user`）、公車段（路線色）、上車站（金色大點）、下車站（白點）。
+  選方案時先畫直線，讀到站牌後換成沿站牌的線；相機只依第一個與最後一個點決定，所以換線時不會跳動
+- `TripPlanViewModel` 實作 `TripPlanActions`（select / closeSelection / openRide / onRideOpened / retry）。
+  方案從規劃時的起點畫，不是使用者現在的位置；返回清單不重新規劃
+- 「Live bus」：查該段上車站的 TrueTime 預測，挑同路線、趕得上、與時刻表差 15 分鐘內最接近的一班（與 F15 共用 `closestPrediction`），
+  組成 `DepartureItem` 交給 `DepartureDetailsViewModel.open`（MainActivity 的 LaunchedEffect），之後呼叫 `onRideOpened` 回到 Idle；
+  沒有預測或 TrueTime 失敗都顯示「時間取自時刻表」。從班次詳情按返回會回到方案詳情
+- 地圖相機：`StopMap(overlayPadding)` 以 HomeScreen 量到的搜尋框高度當上方留白，修正目的地紅點被搜尋框蓋住。
+  **地圖只到 bottom sheet 上緣**（BottomSheetScaffold 的內容不在 sheet 下方），所以底部不用留白；一開始加了 sheet 高度，畫面縮到看不到東西
+- 方案詳情時 sheet 收合高度也用 300dp
+- 方案卡片的「Live」只留右上標籤；`trip_first_bus_live` 字串移除
+- 實機（Galaxy S23）確認：搜尋 Carnegie Mellon University → 點方案 → 地圖畫出 64 路線與上車站；6:33 的班次按「Live bus」顯示僅時刻表
+- 新增 26 個測試（全部 476 個），verify 通過（lint 0 issue）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -479,7 +498,8 @@
 - [ ] F25 附近班次卡片清楚好讀、同一路線兩個方向在同一張卡片；班次詳情的 Inbound / Outbound 切換直覺、切換後上車站與時間正確；
   「N stops away」與時間軸上的公車位置合理；淺色主題下卡片也分得清楚
 - [ ] F26 點一班車後，地圖上的公車是圓形公車圖示（不是綠點），旁邊小箭頭指向行進方向，淺色與深色主題都看得清楚
-- [ ] （新 F16）完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
+- [ ] F16 完整流程：定位 → 選目的地 → 規劃 → 點方案看地圖（步行虛線、公車線、上下車站） → 按「Live bus」看即時公車 → 返回回到方案；
+  快要開的班次（15 分鐘內）應該能打開即時詳情，較晚的班次顯示「時間取自時刻表」
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -597,3 +617,10 @@
   verify 通過（450 個測試），已裝到手機（含 F26）並截圖確認
   - 需要實機驗收（見清單 F25、F26）
   - 下一步：F24 站牌可點擊 + 地圖圖例（圖例用 `ic_bus` 與 `mapPalette`）
+- 2026-10-02：使用者實機問「為什麼無法 load the route」：連開 64、61D 兩個方向都正常，無法重現（錯誤代表 getvehicles 或 getpatterns 失敗，15 秒後自動重試）。
+  畫面目前不顯示失敗原因，建議之後改成顯示（未做）
+- 2026-10-02：**F16 完成**（版號 0.1.20，tag `v0.1.20` 只在本機），排到 F24 前。方案點開後地圖畫出行程、逐段列出、Live bus 打開即時詳情，
+  順便修正目的地被搜尋框蓋住與 Live 重複。verify 通過（476 個測試），已裝到手機並截圖確認
+  - 需要實機驗收（見清單 F16）
+  - 待辦小項：路線載入失敗時顯示原因；目的地名稱顯示地址（目前是 Photon 的名稱，如「Cathedral of Learning」）
+  - 下一步：F24 站牌可點擊 + 地圖圖例
