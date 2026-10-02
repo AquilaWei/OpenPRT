@@ -252,6 +252,33 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - **F14 要接的地方**：規劃的起點用 `locationState.location`、終點用 `destinationState.destination.location`。
   目前目的地只存在 ViewModel 記憶體（旋轉保留、行程被殺就消失）
 
+## GTFS 時刻表（F12 決定）
+
+- 新表：`trips`、`stop_times`、`calendar`、`calendar_dates`（`GtfsDatabase.kt`），schema 升到 **version 3**（舊版升級後 stops 被清空，第一次查站牌時會自動重新匯入）。
+  日期用 `GtfsConverters` 存成 epoch day；`stop_times` 主鍵 (tripId, stopSequence)（也供「某班次依序的站」`getStopTimesOfTrip`），
+  另有 (stopId, departureSeconds) 索引供「某站某時間後的發車」
+- **匯入流程改寫**：`GtfsImporter(database, downloadDir)` 先把 zip 下載到 `cacheDir` 暫存檔（下載中不碰資料庫，完成後刪除），
+  再用 `ZipFile` 逐表**串流解析、每 1000 筆寫入一次**，整個「deleteAll + 全部重新插入」包在 `database.withTransaction` 裡，
+  任何格式錯誤或重複主鍵都 rollback，舊資料不變。F3 的「先全部解析進記憶體再寫入」與 `GtfsFeed` / `GtfsStop` / `GtfsRoute` 已移除，
+  `GtfsFeed.kt` 現在只放 row → entity 的解析函式。`dao.replaceAll` 已移除（測試改用 `insertStops`）
+- 必要檔案：stops / routes / trips / stop_times，calendar 與 calendar_dates **至少一個**
+- 真實 PRT feed 觀察（2026-10-01）：stop_times 100 萬筆、trips 18817、**所有列都有 arrival/departure 時間**（不需要內插，程式也不支援空白時間，遇到會整份拒絕）、
+  arrival 一律等於 departure、25467 筆超過 24:00:00、`pickup_type=1` 7641 筆（終點站）、`drop_off_type=1` 8195 筆（起點站）。
+  calendar 只有 8 個 service：平日 / 週六 / 週日 / 一個只在國慶日跑的週六班表，calendar_dates 用來停駛（例：勞動節停平日班）
+- `stop_times` 存 `pickupAllowed` / `dropOffAllowed`（type 1 = 不行，2 / 3 視為可以），F13 RAPTOR 上下車要用；`departuresAfter` 已排除不能上車的列
+- 查詢：`GtfsTimetable.departuresAfter(stopId, serviceDate, afterSeconds, limit = 20)`，回傳 `ScheduledDeparture`（`departureTime` 轉成 `Instant`）。
+  `activeServiceIds(date, calendars, calendarDates)` 是純 Kotlin；`serviceTime(date, seconds)` 照 GTFS 規定從「當天中午減 12 小時」起算（夏令時間結束那天 00:00:00 是當地 01:00）。
+  時區常數 `PRT_TIME_ZONE`（TrueTime DTO 另有一個 private 的同值常數）
+- **F13 注意**：查詢一次只看一個 service day。凌晨查詢要另外問「前一個 service day、秒數 +86400 之後」，前一天的深夜班次才不會漏掉。
+  RAPTOR 需要依路線分組的 trip pattern，目前沒有這種查詢，F13 可能要在匯入後建索引表或啟動時建記憶體結構
+- **量測（JVM，Robolectric 本機 SQLite，2026-10-01）**：完整 PRT feed（22.5 MB zip）匯入 **3.9 秒**（不含網路下載，MockWebServer 供檔），
+  資料庫 **74.7 MB**（checkpoint 後，WAL 0），stop 17347 平日 10:00 後的發車查詢 12 ms，`EXPLAIN QUERY PLAN` 確認走 `index_stop_times_stopId_departureSeconds`。
+  **模擬器量測失敗**：本機 AVD `ge_test`（android-35 google_apis x86_64）在本 session 的環境中一啟動就 segfault（exit 139，swiftshader 與 guest GPU 都一樣），
+  所以手機上的匯入時間尚未量測，列入實機驗收。量測用的是暫時測試，未進 git
+- 75 MB 偏大：大部分是 stop_times（tripId / stopId 字串 + 兩個索引）。若手機空間或匯入時間有問題，可把 tripId / stopId 換成整數鍵
+- Fixture：`app/src/test/resources/gtfs/feed/` 新增 trips / stop_times / calendar / calendar_dates（LF 換行、沒有 BOM，跟真實 feed 這四個檔一樣）。
+  情境：平日 WK（T1 / T2 / 深夜 T4 跑到 25:10）、週六 SA（T3），2026-09-07 勞動節停 WK、加開 SA
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -277,7 +304,9 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   公車開過上車站後顯示「This bus has left your stop.」；切到背景再回來立刻更新
 - [ ] F11 在搜尋框輸入「carnegie mellon」等地點，停止打字後出現匹茲堡的結果；點一筆後地圖出現紅點並縮放到你和目的地；
   長按地圖任一處也會設成目的地（「To: Pinned spot …」）；按 ✕ 清除；關掉網路搜尋時出現錯誤與 Retry，開網路後按 Retry 有結果
-- [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小
+- [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
+  手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
+  已裝過舊版的手機更新後會自動重新下載一次
 - [ ] F15 完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
 - [ ] F17 從 Release 下載 APK 安裝並啟動
 
@@ -342,3 +371,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 需要實機驗收（見清單 F11）
   - 下一步：F12 GTFS 時刻表匯入（trips、stop_times、calendar、calendar_dates）。stop_times.txt 解開 80 MB，
     不能整份讀進記憶體再一次寫入（見 F3 段落），要邊解析邊分批寫入暫存表再切換
+- 2026-10-01：**F12 完成**（版號 0.1.11，tag `v0.1.11` 只在本機）。GTFS trips / stop_times / calendar / calendar_dates 匯入 Room（schema v3），
+  匯入改成「下載到暫存檔 → 單一 transaction 內串流分批寫入」；`GtfsTimetable.departuresAfter` 依站牌、服務日、時間查發車（含 calendar_dates 例外、超過 24:00 的時間）。
+  新增 28 個測試（全部 255 個），verify 通過
+  - 匯入耗時 / 資料庫大小只在 JVM 量到（3.9 秒、74.7 MB）；模擬器在本環境啟動即 segfault，手機量測列入實機驗收清單
+  - 下一步：F13 RAPTOR 規劃器（純 Kotlin）。注意 F12 段落的「F13 注意」：跨午夜要查前一個 service day，以及 RAPTOR 需要的 route pattern 結構
