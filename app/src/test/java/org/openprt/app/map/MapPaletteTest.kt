@@ -13,8 +13,8 @@ class MapPaletteTest {
     }
 
     @Test
-    fun mapPalette_dark_usesDarkStyle() {
-        assertEquals("https://tiles.openfreemap.org/styles/dark", mapPalette(dark = true).styleUrl)
+    fun mapPalette_dark_usesFiordStyle() {
+        assertEquals("https://tiles.openfreemap.org/styles/fiord", mapPalette(dark = true).styleUrl)
     }
 
     @Test
@@ -25,10 +25,10 @@ class MapPaletteTest {
     }
 
     @Test
-    fun mapPalette_dark_drawsRoutesAndStopsInLightBlue() {
+    fun mapPalette_dark_drawsRoutesAndStopsInPaleBlue() {
         val palette = mapPalette(dark = true)
 
-        assertEquals(listOf("#8AB4F8", "#A8C8FF"), listOf(palette.routeLine, palette.stop))
+        assertEquals(listOf("#D5E3FF", "#D5E3FF"), listOf(palette.routeLine, palette.stop))
     }
 
     @Test

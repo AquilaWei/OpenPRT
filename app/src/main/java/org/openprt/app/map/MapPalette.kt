@@ -21,21 +21,24 @@ data class MapPalette(
 
 /** OpenFreeMap styles: free, no API key; each carries the OSM attribution. */
 private const val LIGHT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
-private const val DARK_STYLE_URL = "https://tiles.openfreemap.org/styles/dark"
+
+// "fiord" rather than "dark": on the near-black "dark" style roads and labels were too faint to
+// read on a phone (user feedback, 2026-10-02).
+private const val DARK_STYLE_URL = "https://tiles.openfreemap.org/styles/fiord"
 
 /**
- * The map's style and marker colors for the light or [dark] theme. On the dark map the navy of
- * the light theme would vanish, so routes and stops turn light blue and the small stop dots get a
- * dark ring instead of a white one.
+ * The map's style and marker colors for the light or [dark] theme. On the slate-blue dark map the
+ * navy of the light theme would vanish, and its roads are mid blue-gray, so routes and stops turn
+ * a pale blue much lighter than the roads, and the small stop dots get a dark ring.
  */
 fun mapPalette(dark: Boolean): MapPalette = if (dark) {
     MapPalette(
         styleUrl = DARK_STYLE_URL,
-        routeLine = "#8AB4F8",
-        stop = "#A8C8FF",
+        routeLine = "#D5E3FF",
+        stop = "#D5E3FF",
         stopOutline = "#111318",
         routeStop = "#111318",
-        routeStopOutline = "#A8C8FF",
+        routeStopOutline = "#D5E3FF",
         boardingStop = "#FFC72C",
         destination = "#F28B82",
         bus = "#81C995",
