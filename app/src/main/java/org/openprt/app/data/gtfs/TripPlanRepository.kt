@@ -40,6 +40,12 @@ sealed interface TripPlanResult {
     data object NoTimetable : TripPlanResult
 }
 
+/** Where trip plans come from; an interface so screens can be tested with a fake. */
+fun interface TripPlanSource {
+    /** Ways from [origin] to [destination] setting off no earlier than [departAt]. */
+    suspend fun plan(origin: LatLng, destination: LatLng, departAt: Instant): TripPlanResult
+}
+
 /**
  * Plans trips on the device from the imported timetable.
  *
@@ -51,7 +57,7 @@ sealed interface TripPlanResult {
 class TripPlanRepository(
     private val networks: TransitNetworkSource,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default
-) {
+) : TripPlanSource {
     // Held while building, so overlapping requests for a new day build its network only once.
     private val lock = Mutex()
     private val planners = mutableMapOf<LocalDate, RoutePlanner>()
@@ -60,7 +66,11 @@ class TripPlanRepository(
      * Ways from [origin] to [destination] setting off no earlier than [departAt]. Searching runs
      * on [dispatcher]; the first request of a service day also reads its whole timetable.
      */
-    suspend fun plan(origin: LatLng, destination: LatLng, departAt: Instant): TripPlanResult {
+    override suspend fun plan(
+        origin: LatLng,
+        destination: LatLng,
+        departAt: Instant
+    ): TripPlanResult {
         val today = departAt.atZone(PRT_TIME_ZONE).toLocalDate()
         val days = listOf(today.minusDays(1), today).filter {
             secondsInto(it, departAt) <= LATEST_SERVICE_DAY_SECONDS

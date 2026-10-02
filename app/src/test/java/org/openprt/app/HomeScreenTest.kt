@@ -33,6 +33,7 @@ import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.trip.TripPlanUiState
 
 @RunWith(AndroidJUnit4::class)
 class HomeScreenTest {
@@ -52,6 +53,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -72,6 +75,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -92,6 +97,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -113,6 +120,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = { relocations++ },
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -135,6 +144,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -157,6 +168,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -179,6 +192,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -201,6 +216,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -223,6 +240,8 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
@@ -231,6 +250,29 @@ class HomeScreenTest {
         }
 
         composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_tripPlanSet_showsPlansInsteadOfDepartures() {
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = TripPlanUiState.Planning,
+                onRetryPlan = {},
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                mapContent = stubMap
+            )
+        }
+
+        composeRule.onNodeWithText("Planning your trip…").assertIsDisplayed()
+        composeRule.onNodeWithText("Nearby departures").assertDoesNotExist()
     }
 
     @Test
@@ -277,6 +319,8 @@ class HomeScreenTest {
             detailsState = details,
             destinationState = DestinationUiState(),
             destinationActions = NoDestinationActions,
+            tripPlanState = null,
+            onRetryPlan = {},
             onRelocate = onRelocate,
             onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
             onCloseDetails = { details = null },

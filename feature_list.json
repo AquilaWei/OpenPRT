@@ -24,7 +24,7 @@
         "NoRoute 的三種原因各顯示對應的空狀態文字（Compose 或 ViewModel 測試）",
         "實機驗收清單（progress.md）新增：選目的地後數秒內出現方案、時間合理"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F16",

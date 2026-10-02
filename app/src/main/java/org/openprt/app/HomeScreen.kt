@@ -38,6 +38,8 @@ import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopMap
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.trip.TripPlanUiState
+import org.openprt.app.trip.TripPlansPanel
 
 /** Test tag of the box that holds the map, whichever map implementation fills it. */
 const val MAP_CONTAINER_TAG = "map"
@@ -54,7 +56,9 @@ private val SHEET_PEEK_HEIGHT = 240.dp
  * route in place of the nearby stops; the back button and system back call [onCloseDetails].
  *
  * The destination search floats at the top of the map; long-pressing the map also picks a
- * destination. Both go to [destinationActions].
+ * destination. Both go to [destinationActions]. While [tripPlanState] is set (a destination is
+ * chosen), the sheet lists the ways there instead of the nearby departures; [onRetryPlan] plans
+ * again.
  *
  * [mapContent] draws the map inside the container; tests replace it because the real MapLibre
  * map needs native code that Robolectric cannot load.
@@ -68,6 +72,8 @@ fun HomeScreen(
     detailsState: DepartureDetailsUiState?,
     destinationState: DestinationUiState,
     destinationActions: DestinationActions,
+    tripPlanState: TripPlanUiState?,
+    onRetryPlan: () -> Unit,
     onRelocate: () -> Unit,
     onDepartureClick: (DepartureItem) -> Unit,
     onCloseDetails: () -> Unit,
@@ -94,10 +100,10 @@ fun HomeScreen(
             CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) })
         },
         sheetContent = {
-            if (detailsState == null) {
-                DeparturesPanel(departuresState, onDepartureClick)
-            } else {
-                DepartureDetailsPanel(detailsState, onBack = onCloseDetails)
+            when {
+                detailsState != null -> DepartureDetailsPanel(detailsState, onBack = onCloseDetails)
+                tripPlanState != null -> TripPlansPanel(tripPlanState, onRetry = onRetryPlan)
+                else -> DeparturesPanel(departuresState, onDepartureClick)
             }
         }
     ) { innerPadding ->
@@ -192,6 +198,8 @@ private fun HomeScreenPreview() {
         detailsState = null,
         destinationState = DestinationUiState(),
         destinationActions = PreviewDestinationActions,
+        tripPlanState = null,
+        onRetryPlan = {},
         onRelocate = {},
         onDepartureClick = {},
         onCloseDetails = {},

@@ -40,4 +40,21 @@
     <string name="destination_to">To: %1$s</string>
     <string name="destination_pinned">Pinned spot (%1$s, %2$s)</string>
     <string name="destination_clear">Clear destination</string>
+    <string name="trip_title">Ways to get there</string>
+    <string name="trip_planning">Planning your trip…</string>
+    <string name="trip_total_minutes">%1$d min</string>
+    <string name="trip_times">%1$s – %2$s</string>
+    <string name="trip_walk_minutes">Walk %1$d min</string>
+    <string name="trip_direct">No transfers</string>
+    <plurals name="trip_transfers">
+        <item quantity="one">%d transfer</item>
+        <item quantity="other">%d transfers</item>
+    </plurals>
+    <string name="trip_first_bus">%1$s leaves %2$s at %3$s (scheduled)</string>
+    <string name="trip_first_bus_live">%1$s leaves %2$s at %3$s · Live</string>
+    <string name="trip_no_stop_near_origin">No bus stop within walking distance (800 m) of you.</string>
+    <string name="trip_no_stop_near_destination">No bus stop within walking distance (800 m) of the destination.</string>
+    <string name="trip_no_connection">No buses connect these places for the rest of today\'s timetable.</string>
+    <string name="trip_no_timetable">The bus timetable hasn\'t finished downloading yet.</string>
+    <string name="trip_retry">Try again</string>
 </resources>

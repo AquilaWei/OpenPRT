@@ -31,6 +31,7 @@ import org.openprt.app.location.LocationViewModel
 import org.openprt.app.location.hasLocationPermission
 import org.openprt.app.map.MapViewModel
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.trip.TripPlanViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,6 +51,13 @@ class MainActivity : ComponentActivity() {
                     PhotonGeocoder(userAgent = "OpenPRT/${BuildConfig.VERSION_NAME}")
                 )
             }
+            initializer {
+                TripPlanViewModel(
+                    (application as OpenPrtApplication).tripPlanRepository,
+                    trueTime::getPredictions,
+                    Clock.systemUTC()
+                )
+            }
         }
         setContent {
             val locationViewModel: LocationViewModel = viewModel(factory = viewModelFactory)
@@ -63,6 +71,8 @@ class MainActivity : ComponentActivity() {
             val detailsState by detailsViewModel.state.collectAsStateWithLifecycle()
             val destinationViewModel: DestinationViewModel = viewModel(factory = viewModelFactory)
             val destinationState by destinationViewModel.state.collectAsStateWithLifecycle()
+            val tripPlanViewModel: TripPlanViewModel = viewModel(factory = viewModelFactory)
+            val tripPlanState by tripPlanViewModel.state.collectAsStateWithLifecycle()
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { grants -> locationViewModel.onPermissionResult(grants.values.any { it }) }
@@ -89,6 +99,11 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(locationState.location) {
                 locationState.location?.let(mapViewModel::onLocationChanged)
+                tripPlanViewModel.onLocationChanged(locationState.location)
+            }
+
+            LaunchedEffect(destinationState.destination) {
+                tripPlanViewModel.onDestinationChanged(destinationState.destination?.location)
             }
 
             // Departures refresh every 30 seconds, also only while the app is visible.
@@ -121,6 +136,8 @@ class MainActivity : ComponentActivity() {
                     detailsState = detailsState,
                     destinationState = destinationState,
                     destinationActions = destinationViewModel,
+                    tripPlanState = tripPlanState,
+                    onRetryPlan = tripPlanViewModel::retry,
                     onRelocate = locationViewModel::relocate,
                     onDepartureClick = detailsViewModel::open,
                     onCloseDetails = detailsViewModel::close
