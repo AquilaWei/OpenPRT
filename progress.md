@@ -279,6 +279,28 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - Fixture：`app/src/test/resources/gtfs/feed/` 新增 trips / stop_times / calendar / calendar_dates（LF 換行、沒有 BOM，跟真實 feed 這四個檔一樣）。
   情境：平日 WK（T1 / T2 / 深夜 T4 跑到 25:10）、週六 SA（T3），2026-09-07 勞動節停 WK、加開 SA
 
+## 路線規劃引擎（F13 決定）
+
+- 程式在 `app/src/main/java/org/openprt/app/planner/`，純 Kotlin（只依賴 `geo/` 與 `DEFAULT_WALKING_SPEED_METERS_PER_SECOND`），JVM 測試即可：
+  - `TransitNetwork.kt`：**一個服務日**的記憶體網路。輸入 `TransitStop` + `ScheduledTrip(TripStop…)`，建構時把班次依「routeId + 站序」分成 pattern
+    （pattern 內依首站發車排序，**假設同 pattern 不超車**），並用緯度排序掃描預先算好 400 m 內的步行轉乘
+  - `RoutePlanner.kt`：標準 RAPTOR（每輪 = 多搭一段車）。起訖步行上限 800 m、直線距離 / 1.2 m/s 無條件進位、`maxRides` 預設 3。
+    只有比「搭車段數更少的方案」**嚴格更早**抵達才收，所以結果是（抵達時間, 搭車段數）的 Pareto 集合，同時抵達時偏好轉乘少的；最多 3 個（每種段數一個），依段數由少到多
+  - `Itinerary.kt`：`WalkLeg`（from / to 為 null 代表起點 / 終點）、`RideLeg`、`PlanResult.Found / NoRoute(NO_STOP_NEAR_ORIGIN | NO_STOP_NEAR_DESTINATION | NO_CONNECTION)`
+- 時間全部是「服務日開始後的秒數」（和 GTFS 一樣可超過 24h），轉成 `Instant` 用 F12 的 `serviceTime`
+- 第一段步行設計成「剛好在公車發車時走到站」，所以 `Itinerary.departureSeconds` 可能晚於查詢時間；轉乘步行與最後步行從下車時開始
+- 不規劃純步行方案（起訖很近時也一定要搭車）；方案不會以兩段連續步行結尾（只從「搭車到達」的站算最後步行）
+- **轉乘沒有緩衝**：下車那一秒就能上下一班。真實 feed 上 Mt Lebanon → Pitt 出現「多轉一次只早 1 分鐘、轉乘時間 1 分鐘」的方案，
+  F14 實機看結果時若覺得不可靠，可在 `scanPattern` 上車判斷加最小轉乘秒數（同站與步行轉乘都要加）
+- **量測（暫時測試，未進 git，2026-10-02，JVM）**：真實 PRT feed 2026-10-01（週四）5588 班次 → 257 個 pattern，建網路 92 ms；
+  Market Sq → CMU 24 ms（69 直達）、Squirrel Hill → North Shore 7 ms（61C + Blue Line）、Mt Lebanon → Pitt 4 ms（Red Line + 61A）。
+  手機上的時間尚未量
+- **F14 要接的地方**：
+  - 還沒有從 Room 建 `TransitNetwork` 的程式。需要「某服務日的 active trips + 它們的 stop_times」查詢（`activeServiceIds` 已有），
+    一天約 5600 班、30 萬筆 stop_times，建議在背景執行緒建好後依服務日快取
+  - 跨午夜：凌晨查詢要另外用前一個服務日的網路（秒數 +86400）查一次，合併結果
+  - 首段公車的即時時間要另外用 TrueTime 查（RideLeg 有 routeId / from.stopId；TrueTime stpid = stop_code，`TransitStop.stopId` 目前是 GTFS stop_id，要對照）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -376,3 +398,8 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   新增 28 個測試（全部 255 個），verify 通過
   - 匯入耗時 / 資料庫大小只在 JVM 量到（3.9 秒、74.7 MB）；模擬器在本環境啟動即 segfault，手機量測列入實機驗收清單
   - 下一步：F13 RAPTOR 規劃器（純 Kotlin）。注意 F12 段落的「F13 注意」：跨午夜要查前一個 service day，以及 RAPTOR 需要的 route pattern 結構
+- 2026-10-02：**F13 完成**（版號 0.1.12，tag `v0.1.12` 只在本機）。純 Kotlin RAPTOR 路線規劃器：步行接駁、多段乘車、步行轉乘、
+  以抵達時間與搭車段數取 Pareto 最佳（最多 3 個方案）、找不到時回傳 NoRoute 與原因。新增 16 個測試（全部 271 個），verify 通過；
+  另用真實 PRT feed 暫時測試過結果與速度（見 F13 段落）
+  - 不需要實機驗收（純邏輯，全部自動化）；畫面上還看不到，F14 才接上
+  - 下一步：F14 路線規劃結果 UI。要先從 Room 建 `TransitNetwork`（見 F13 段落的「F14 要接的地方」）
