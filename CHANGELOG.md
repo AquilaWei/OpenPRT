@@ -2,6 +2,15 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.15] - 2026-10-02
+
+### 新增
+
+- 第一次開 App 會出現歡迎畫面，說明即時資料需要 PRT TrueTime API key、附上申請網頁連結，可以直接貼上 key；
+  App 會先向 TrueTime 確認 key 有效才儲存，key 錯誤時顯示 TrueTime 的錯誤訊息，連不上時可選擇不驗證直接儲存
+- 不想現在設定可以按「Skip for now」，之後點主畫面右上角的鑰匙圖示隨時輸入或更換 key；換 key 後下一次更新就生效，不用重開 App
+- 不再需要在電腦上把 key 寫進 `local.properties` 才能看到即時資料
+
 ## [0.1.14] - 2026-10-02
 
 ### 新增
