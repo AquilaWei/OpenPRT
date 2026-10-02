@@ -19,6 +19,8 @@ import org.openprt.app.planner.NoRouteReason
 import org.openprt.app.planner.RideLeg
 import org.openprt.app.planner.TransitStop
 import org.openprt.app.planner.WalkLeg
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.ThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class TripPlansPanelTest {
@@ -34,6 +36,17 @@ class TripPlansPanelTest {
         composeRule.onNodeWithText("61C").assertIsDisplayed()
         composeRule.onNodeWithText("P1").assertIsDisplayed()
         composeRule.onNodeWithText("71B").assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_darkTheme_showsRouteNumbers() {
+        composeRule.setContent {
+            OpenPrtTheme(ThemeMode.DARK) {
+                TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), onRetry = {}, zone = UTC)
+            }
+        }
+
+        composeRule.onNodeWithText("61C").assertIsDisplayed()
     }
 
     @Test

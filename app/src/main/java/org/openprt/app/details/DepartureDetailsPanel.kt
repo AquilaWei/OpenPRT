@@ -26,6 +26,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.departures.PanelText
+import org.openprt.app.ui.RouteBadge
 
 /**
  * Bottom-sheet content for one selected departure: which bus and where to board it, when it
@@ -48,11 +49,7 @@ fun DepartureDetailsPanel(
                     contentDescription = stringResource(R.string.details_back)
                 )
             }
-            Text(
-                text = departure.route,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            RouteBadge(departure.route, style = MaterialTheme.typography.titleLarge)
             Text(
                 text = stringResource(R.string.departures_destination, departure.destination),
                 style = MaterialTheme.typography.titleMedium,

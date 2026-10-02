@@ -1,12 +1,14 @@
 package org.openprt.app
 
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
@@ -35,6 +37,8 @@ import org.openprt.app.map.StopsStatus
 import org.openprt.app.settings.ApiKeyScreen
 import org.openprt.app.settings.ApiKeyViewModel
 import org.openprt.app.trip.TripPlanViewModel
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.isDark
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +69,8 @@ class MainActivity : ComponentActivity() {
             initializer { ApiKeyViewModel(app.apiKeySettings, TrueTimeClient.keyChecker()) }
         }
         setContent {
+            val themeMode by app.appearanceSettings.themeMode.collectAsStateWithLifecycle()
+            val dark = themeMode.isDark(isSystemInDarkTheme())
             val locationViewModel: LocationViewModel = viewModel(factory = viewModelFactory)
             val mapViewModel: MapViewModel = viewModel(factory = viewModelFactory)
             val locationState by locationViewModel.state.collectAsStateWithLifecycle()
@@ -80,6 +86,20 @@ class MainActivity : ComponentActivity() {
             val tripPlanState by tripPlanViewModel.state.collectAsStateWithLifecycle()
             val apiKeyViewModel: ApiKeyViewModel = viewModel(factory = viewModelFactory)
             val apiKeyState by apiKeyViewModel.state.collectAsStateWithLifecycle()
+            // Bar icons follow the app's theme, which may differ from the phone's. The home
+            // screen's top bar is navy in the light theme too, so its status icons stay white.
+            val lightStatusIcons = dark || !apiKeyState.visible
+            LaunchedEffect(dark, lightStatusIcons) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (lightStatusIcons) {
+                        SystemBarStyle.dark(Color.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    },
+                    navigationBarStyle =
+                        SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
+                )
+            }
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { grants -> locationViewModel.onPermissionResult(grants.values.any { it }) }
@@ -135,7 +155,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            MaterialTheme {
+            OpenPrtTheme(themeMode) {
                 // Location, stops and departures keep loading underneath, so the home screen is
                 // ready when the key screen closes.
                 if (apiKeyState.visible) {
@@ -153,7 +173,9 @@ class MainActivity : ComponentActivity() {
                         onRelocate = locationViewModel::relocate,
                         onDepartureClick = detailsViewModel::open,
                         onCloseDetails = detailsViewModel::close,
-                        onOpenApiKey = apiKeyViewModel::open
+                        onOpenApiKey = apiKeyViewModel::open,
+                        themeMode = themeMode,
+                        onThemeModeChange = app.appearanceSettings::setThemeMode
                     )
                 }
             }

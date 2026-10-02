@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -25,6 +26,7 @@ import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.departures.PanelText
 import org.openprt.app.planner.NoRouteReason
+import org.openprt.app.ui.RouteBadge
 
 /**
  * The ways to the chosen destination, shown in the home screen's bottom sheet in place of the
@@ -110,8 +112,9 @@ private fun OptionRow(option: TripOption, time: DateTimeFormatter) {
                         option.boardingStopName,
                         time.format(option.boardingTime)
                     ),
+                    // Green for live data, the same in both themes.
                     color = if (option.live) {
-                        MaterialTheme.colorScheme.primary
+                        MaterialTheme.colorScheme.tertiary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     }
@@ -124,12 +127,17 @@ private fun OptionRow(option: TripOption, time: DateTimeFormatter) {
 /** Each leg is its own text so a long trip wraps between legs, not inside a route number. */
 @Composable
 private fun Legs(legs: List<LegSummary>) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        itemVerticalAlignment = Alignment.CenterVertically
+    ) {
         legs.forEachIndexed { index, leg ->
             if (index > 0) Text("›")
             when (leg) {
                 is LegSummary.Walk -> Text(stringResource(R.string.trip_walk_minutes, leg.minutes))
-                is LegSummary.Ride -> Text(leg.route, fontWeight = FontWeight.Bold)
+
+                is LegSummary.Ride ->
+                    RouteBadge(leg.route, style = MaterialTheme.typography.labelLarge)
             }
         }
     }

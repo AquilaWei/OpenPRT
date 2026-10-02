@@ -8,6 +8,7 @@ import org.openprt.app.data.gtfs.NearbyStopRepository
 import org.openprt.app.data.gtfs.RoomTransitNetworkSource
 import org.openprt.app.data.gtfs.TripPlanRepository
 import org.openprt.app.data.settings.ApiKeySettings
+import org.openprt.app.data.settings.AppearanceSettings
 
 /** Holds the app-wide singletons; Room wants one database instance per process. */
 class OpenPrtApplication : Application() {
@@ -21,6 +22,12 @@ class OpenPrtApplication : Application() {
         ApiKeySettings(
             getSharedPreferences(ApiKeySettings.PREFS_NAME, Context.MODE_PRIVATE),
             builtInKey = BuildConfig.PRT_API_KEY
+        )
+    }
+
+    val appearanceSettings: AppearanceSettings by lazy {
+        AppearanceSettings(
+            getSharedPreferences(AppearanceSettings.PREFS_NAME, Context.MODE_PRIVATE)
         )
     }
 

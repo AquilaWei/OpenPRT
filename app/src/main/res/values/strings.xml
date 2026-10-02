@@ -74,4 +74,9 @@
     <string name="api_key_save_anyway">Save without checking</string>
     <string name="api_key_stored_locally">The key is stored only on this phone. Change it any time with the key icon on the map screen.</string>
     <string name="api_key_open">TrueTime API key</string>
+    <string name="theme_menu">Theme</string>
+    <string name="theme_system">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_selected">Selected</string>
 </resources>

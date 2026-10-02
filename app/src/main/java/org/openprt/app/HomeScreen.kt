@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -15,7 +17,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -39,8 +46,12 @@ import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopMap
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.map.mapPalette
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.trip.TripPlansPanel
+import org.openprt.app.ui.theme.LocalOpenPrtColors
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.ThemeMode
 
 /** Test tag of the box that holds the map, whichever map implementation fills it. */
 const val MAP_CONTAINER_TAG = "map"
@@ -61,7 +72,8 @@ private val SHEET_PEEK_HEIGHT = 240.dp
  * chosen), the sheet lists the ways there instead of the nearby departures; [onRetryPlan] plans
  * again.
  *
- * The key button in the top bar calls [onOpenApiKey] to change the TrueTime key.
+ * The key button in the top bar calls [onOpenApiKey] to change the TrueTime key; the theme
+ * button offers System / Light / Dark, marks [themeMode] and reports a pick to [onThemeModeChange].
  *
  * [mapContent] draws the map inside the container; tests replace it because the real MapLibre
  * map needs native code that Robolectric cannot load.
@@ -81,6 +93,8 @@ fun HomeScreen(
     onDepartureClick: (DepartureItem) -> Unit,
     onCloseDetails: () -> Unit,
     onOpenApiKey: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
     mapContent: @Composable (Modifier) -> Unit = { mapModifier ->
         StopMap(
@@ -92,6 +106,7 @@ fun HomeScreen(
             bus = detailsState?.bus?.position,
             destination = destinationState.destination?.location,
             onLongPress = destinationActions::onMapLongPress,
+            palette = mapPalette(dark = LocalOpenPrtColors.current.isDark),
             modifier = mapModifier
         )
     }
@@ -101,9 +116,16 @@ fun HomeScreen(
         modifier = modifier,
         sheetPeekHeight = SHEET_PEEK_HEIGHT,
         topBar = {
+            val brand = LocalOpenPrtColors.current
             CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = brand.appBar,
+                    titleContentColor = brand.onAppBar,
+                    actionIconContentColor = brand.onAppBar
+                ),
                 actions = {
+                    ThemeMenu(themeMode, onThemeModeChange)
                     IconButton(onClick = onOpenApiKey) {
                         Icon(
                             painter = painterResource(R.drawable.ic_key),
@@ -142,6 +164,8 @@ fun HomeScreen(
             }
             FloatingActionButton(
                 onClick = onRelocate,
+                containerColor = LocalOpenPrtColors.current.accent,
+                contentColor = LocalOpenPrtColors.current.onAccent,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             ) {
                 Icon(
@@ -151,6 +175,45 @@ fun HomeScreen(
             }
         }
     }
+}
+
+/** The top bar's theme button and its System / Light / Dark menu. */
+@Composable
+private fun ThemeMenu(themeMode: ThemeMode, onThemeModeChange: (ThemeMode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                painter = painterResource(R.drawable.ic_contrast),
+                contentDescription = stringResource(R.string.theme_menu)
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ThemeMode.entries.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(mode.labelRes())) },
+                    onClick = {
+                        expanded = false
+                        onThemeModeChange(mode)
+                    },
+                    trailingIcon = {
+                        if (mode == themeMode) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check),
+                                contentDescription = stringResource(R.string.theme_selected)
+                            )
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+private fun ThemeMode.labelRes(): Int = when (this) {
+    ThemeMode.SYSTEM -> R.string.theme_system
+    ThemeMode.LIGHT -> R.string.theme_light
+    ThemeMode.DARK -> R.string.theme_dark
 }
 
 @Composable
@@ -205,6 +268,21 @@ private fun stopsStatusText(locationState: LocationUiState, status: StopsStatus)
 @Preview
 @Composable
 private fun HomeScreenPreview() {
+    OpenPrtTheme {
+        HomeScreenPreviewContent()
+    }
+}
+
+@Preview
+@Composable
+private fun HomeScreenDarkPreview() {
+    OpenPrtTheme(ThemeMode.DARK) {
+        HomeScreenPreviewContent()
+    }
+}
+
+@Composable
+private fun HomeScreenPreviewContent() {
     HomeScreen(
         locationState = LocationUiState.PermissionDenied(),
         mapState = MapUiState(stopsStatus = StopsStatus.Ready),
@@ -218,6 +296,8 @@ private fun HomeScreenPreview() {
         onDepartureClick = {},
         onCloseDetails = {},
         onOpenApiKey = {},
+        themeMode = ThemeMode.SYSTEM,
+        onThemeModeChange = {},
         mapContent = { Surface(it, color = MaterialTheme.colorScheme.surfaceVariant) {} }
     )
 }

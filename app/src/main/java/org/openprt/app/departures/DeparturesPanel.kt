@@ -1,6 +1,7 @@
 package org.openprt.app.departures
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.data.truetime.TrueTimeError
+import org.openprt.app.ui.RouteBadge
 
 /**
  * The list of departures near the user, shown in the home screen's bottom sheet. A failed
@@ -81,12 +83,7 @@ private fun DepartureRow(departure: DepartureItem, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
-            Text(
-                text = departure.route,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(56.dp)
-            )
+            Box(modifier = Modifier.width(64.dp)) { RouteBadge(departure.route) }
         },
         headlineContent = {
             Text(stringResource(R.string.departures_destination, departure.destination))

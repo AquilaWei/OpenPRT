@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Simple bus front, drawn inside the 66dp adaptive-icon safe zone. -->
+<!-- Gold map pin holding a navy bus front, drawn inside the 66dp adaptive-icon safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#1F1F1F"
-        android:pathData="M38,32h32a6,6 0,0 1,6 6v30a4,4 0,0 1,-4 4h-2v4a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-4h-16v4a2,2 0,0 1,-2 2h-4a2,2 0,0 1,-2 -2v-4h-2a4,4 0,0 1,-4 -4v-30a6,6 0,0 1,6 -6z" />
+        android:fillColor="#FFC72C"
+        android:pathData="M54,22a24,24 0,0 1,24 24c0,17 -24,40 -24,40s-24,-23 -24,-40a24,24 0,0 1,24 -24z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,40h32v14h-32z" />
+        android:fillColor="#17365F"
+        android:pathData="M45,31h18a4,4 0,0 1,4 4v18a3,3 0,0 1,-3 3h-1v3a1.5,1.5 0,0 1,-1.5 1.5h-2a1.5,1.5 0,0 1,-1.5 -1.5v-3h-8v3a1.5,1.5 0,0 1,-1.5 1.5h-2a1.5,1.5 0,0 1,-1.5 -1.5v-3h-1a3,3 0,0 1,-3 -3v-18a4,4 0,0 1,4 -4z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M42,64m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+        android:fillColor="#FFC72C"
+        android:pathData="M45,36h18v9h-18z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M66,64m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+        android:fillColor="#FFC72C"
+        android:pathData="M48,51m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:fillColor="#FFC72C"
+        android:pathData="M60,51m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
 </vector>

@@ -34,6 +34,8 @@ import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.trip.TripPlanUiState
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.ThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class HomeScreenTest {
@@ -59,6 +61,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -82,6 +86,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -105,6 +111,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -129,6 +137,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -154,6 +164,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -179,6 +191,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -204,6 +218,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -229,6 +245,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -254,8 +272,66 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
+        }
+
+        composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_themeMenuDarkPicked_reportsDark() {
+        val picked = mutableListOf<ThemeMode>()
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = { picked += it },
+                mapContent = stubMap
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Theme").performClick()
+        composeRule.onNodeWithText("Dark").performClick()
+
+        assertEquals(listOf(ThemeMode.DARK), picked)
+    }
+
+    @Test
+    fun homeScreen_darkTheme_showsDeparturesSheet() {
+        composeRule.setContent {
+            OpenPrtTheme(ThemeMode.DARK) {
+                HomeScreen(
+                    LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                    MapUiState(stopsStatus = StopsStatus.Ready),
+                    DeparturesUiState(),
+                    detailsState = null,
+                    destinationState = DestinationUiState(),
+                    destinationActions = NoDestinationActions,
+                    tripPlanState = null,
+                    onRetryPlan = {},
+                    onRelocate = {},
+                    onDepartureClick = {},
+                    onCloseDetails = {},
+                    onOpenApiKey = {},
+                    themeMode = ThemeMode.DARK,
+                    onThemeModeChange = {},
+                    mapContent = stubMap
+                )
+            }
         }
 
         composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
@@ -278,6 +354,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = { opened++ },
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -303,6 +381,8 @@ class HomeScreenTest {
                 onDepartureClick = {},
                 onCloseDetails = {},
                 onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -361,6 +441,8 @@ class HomeScreenTest {
             onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
             onCloseDetails = { details = null },
             onOpenApiKey = {},
+            themeMode = ThemeMode.SYSTEM,
+            onThemeModeChange = {},
             mapContent = stubMap
         )
     }

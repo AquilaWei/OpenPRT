@@ -42,9 +42,6 @@ import org.openprt.app.details.BusPosition
 import org.openprt.app.details.RouteShape
 import org.openprt.app.geo.LatLng
 
-/** OpenFreeMap's OSM-based style: free, no API key; the style carries the OSM attribution. */
-private const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
-
 private const val STOPS_SOURCE = "stops"
 private const val USER_SOURCE = "user-location"
 private const val ROUTE_LINE_SOURCE = "route-line"
@@ -71,6 +68,9 @@ private val ROUTE_FIT_PADDING = 48.dp
  * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
  * reports the pressed spot through [onLongPress].
  *
+ * [palette] sets the map style and marker colors; a new palette (the theme changed) reloads the
+ * style, which drops every layer, so the markers are added and filled in again.
+ *
  * Needs the native MapLibre library, so it does not run under Robolectric; screen tests pass a
  * stand-in instead.
  */
@@ -83,6 +83,7 @@ fun StopMap(
     bus: BusPosition?,
     destination: LatLng?,
     onLongPress: (LatLng) -> Unit,
+    palette: MapPalette,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -100,8 +101,14 @@ fun StopMap(
                 currentOnLongPress(LatLng(point.latitude, point.longitude))
                 true
             }
-            map.setStyle(Style.Builder().fromUri(STYLE_URL)) { loaded ->
-                addMarkerLayers(loaded)
+        }
+    }
+    LaunchedEffect(mapView, palette) {
+        // Cleared first so nothing writes to the old style's sources while the new one loads.
+        style = null
+        mapView.getMapAsync { map ->
+            map.setStyle(Style.Builder().fromUri(palette.styleUrl)) { loaded ->
+                addMarkerLayers(loaded, palette)
                 style = loaded
             }
         }
@@ -197,7 +204,7 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
  * Layers are drawn in the order added: route line, stops, route stops, boarding stop,
  * destination, bus, user.
  */
-private fun addMarkerLayers(style: Style) {
+private fun addMarkerLayers(style: Style, palette: MapPalette) {
     listOf(
         ROUTE_LINE_SOURCE,
         STOPS_SOURCE,
@@ -209,7 +216,7 @@ private fun addMarkerLayers(style: Style) {
     ).forEach { style.addSource(GeoJsonSource(it)) }
     style.addLayer(
         LineLayer("route-line-layer", ROUTE_LINE_SOURCE).withProperties(
-            lineColor("#0B5394"),
+            lineColor(palette.routeLine),
             lineWidth(5f),
             lineCap(Property.LINE_CAP_ROUND),
             lineJoin(Property.LINE_JOIN_ROUND)
@@ -218,56 +225,47 @@ private fun addMarkerLayers(style: Style) {
     style.addLayer(
         CircleLayer("stops-layer", STOPS_SOURCE).withProperties(
             circleRadius(6f),
-            circleColor("#0B5394"),
-            circleStrokeColor("#FFFFFF"),
+            circleColor(palette.stop),
+            circleStrokeColor(palette.stopOutline),
             circleStrokeWidth(2f)
         )
     )
     style.addLayer(
         CircleLayer("route-stops-layer", ROUTE_STOPS_SOURCE).withProperties(
             circleRadius(4f),
-            circleColor("#FFFFFF"),
-            circleStrokeColor("#0B5394"),
+            circleColor(palette.routeStop),
+            circleStrokeColor(palette.routeStopOutline),
             circleStrokeWidth(2f)
         )
     )
-    // Larger and orange so the stop to walk to stands out from the rest of the route.
+    // Larger and gold so the stop to walk to stands out from the rest of the route.
     style.addLayer(
-        CircleLayer("boarding-stop-layer", BOARDING_STOP_SOURCE).withProperties(
-            circleRadius(10f),
-            circleColor("#E8710A"),
-            circleStrokeColor("#FFFFFF"),
-            circleStrokeWidth(3f)
-        )
+        largeMarkerLayer("boarding-stop-layer", BOARDING_STOP_SOURCE, palette.boardingStop, palette)
     )
     // Red, the usual map color for "where you are going".
     style.addLayer(
-        CircleLayer("destination-layer", DESTINATION_SOURCE).withProperties(
-            circleRadius(10f),
-            circleColor("#D93025"),
-            circleStrokeColor("#FFFFFF"),
-            circleStrokeWidth(3f)
-        )
+        largeMarkerLayer("destination-layer", DESTINATION_SOURCE, palette.destination, palette)
     )
     // Green and as large as the boarding stop so the bus is easy to spot on the route.
-    style.addLayer(
-        CircleLayer("bus-layer", BUS_SOURCE).withProperties(
-            circleRadius(10f),
-            circleColor("#188038"),
-            circleStrokeColor("#FFFFFF"),
-            circleStrokeWidth(3f)
-        )
-    )
+    style.addLayer(largeMarkerLayer("bus-layer", BUS_SOURCE, palette.bus, palette))
     // Added last so the user dot is drawn above the stops.
     style.addLayer(
         CircleLayer("user-location-layer", USER_SOURCE).withProperties(
             circleRadius(8f),
-            circleColor("#1A73E8"),
-            circleStrokeColor("#FFFFFF"),
+            circleColor(palette.user),
+            circleStrokeColor(palette.markerOutline),
             circleStrokeWidth(3f)
         )
     )
 }
+
+private fun largeMarkerLayer(id: String, source: String, color: String, palette: MapPalette) =
+    CircleLayer(id, source).withProperties(
+        circleRadius(10f),
+        circleColor(color),
+        circleStrokeColor(palette.markerOutline),
+        circleStrokeWidth(3f)
+    )
 
 private fun LatLng.toPoint(): Point = Point.fromLngLat(longitude, latitude)
 

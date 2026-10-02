@@ -10,6 +10,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.ThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class ApiKeyScreenTest {
@@ -19,6 +21,15 @@ class ApiKeyScreenTest {
     @Test
     fun apiKeyScreen_firstRun_welcomesUser() {
         composeRule.setContent { ApiKeyScreen(FIRST_RUN, RecordingActions()) }
+
+        composeRule.onNodeWithText("Welcome to OpenPRT").assertIsDisplayed()
+    }
+
+    @Test
+    fun apiKeyScreen_darkTheme_welcomesUser() {
+        composeRule.setContent {
+            OpenPrtTheme(ThemeMode.DARK) { ApiKeyScreen(FIRST_RUN, RecordingActions()) }
+        }
 
         composeRule.onNodeWithText("Welcome to OpenPRT").assertIsDisplayed()
     }

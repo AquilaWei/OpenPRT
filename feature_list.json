@@ -51,7 +51,7 @@
         "新 App 圖示：adaptive icon 前景 / 背景 + monochrome 圖層（Android 13 主題圖示），lint 無圖示相關警告",
         "實機驗收清單新增：系統切深色時 App 與地圖一起變深色、App 內手動切換有效、新圖示在桌面與主題圖示模式下清楚"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F24",
