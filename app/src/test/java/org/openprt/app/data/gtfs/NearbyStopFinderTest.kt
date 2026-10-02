@@ -58,7 +58,7 @@ class NearbyStopFinderTest {
 
     @Test
     fun findNearby_within400m_returnsStopsNearestFirst() = runTest {
-        dao.replaceAll(stops, emptyList())
+        dao.insertStops(stops)
 
         val result = finder.findNearby(center, 400.0)
 
@@ -67,7 +67,7 @@ class NearbyStopFinderTest {
 
     @Test
     fun findNearby_within400m_reportsHaversineDistances() = runTest {
-        dao.replaceAll(stops, emptyList())
+        dao.insertStops(stops)
 
         val roundedDistances = finder.findNearby(center, 400.0)
             .map { Math.round(it.distanceMeters * 10) / 10.0 }
@@ -77,12 +77,11 @@ class NearbyStopFinderTest {
 
     @Test
     fun findNearby_stopsAtSameCoordinates_areOrderedByStopId() = runTest {
-        dao.replaceAll(
+        dao.insertStops(
             listOf(
                 StopEntity("Z", "Z", "INBOUND", 40.444900, -79.945000, 0),
                 StopEntity("Y", "Y", "OUTBOUND", 40.444900, -79.945000, 0)
-            ),
-            emptyList()
+            )
         )
 
         val result = finder.findNearby(center, 400.0)
@@ -92,7 +91,7 @@ class NearbyStopFinderTest {
 
     @Test
     fun findNearby_noStopsInRadius_returnsEmptyList() = runTest {
-        dao.replaceAll(stops, emptyList())
+        dao.insertStops(stops)
 
         val result = finder.findNearby(LatLng(40.500000, -80.100000), 400.0)
 
@@ -108,7 +107,7 @@ class NearbyStopFinderTest {
 
     @Test
     fun getStopsInBox_returnsOnlyStopsInsideBox() = runTest {
-        dao.replaceAll(stops, emptyList())
+        dao.insertStops(stops)
 
         val result = dao.getStopsInBox(40.4404, 40.4476, -79.9498, -79.9402)
 

@@ -1,0 +1,5 @@
+trip_id,route_id,service_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,wheelchair_accessible,bikes_allowed
+T1,61C,WK,INBOUND-DOWNTOWN,,1,61C-283,shp-61C-02,1,1
+T2,61C,WK,INBOUND-DOWNTOWN,,1,61C-283,shp-61C-02,1,1
+T3,61C,SA,INBOUND-DOWNTOWN,,1,61C-283,shp-61C-02,1,1
+T4,61C,WK,INBOUND-DOWNTOWN,,1,61C-284,shp-61C-02,1,1

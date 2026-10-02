@@ -10,12 +10,17 @@ import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.openprt.app.geo.LatLng
 
 @RunWith(AndroidJUnit4::class)
 class NearbyStopRepositoryTest {
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
+
     private val server = MockWebServer()
     private lateinit var database: GtfsDatabase
     private lateinit var dao: GtfsDao
@@ -34,7 +39,14 @@ class NearbyStopRepositoryTest {
             )
             .build()
         dao = database.gtfsDao()
-        repository = NearbyStopRepository(dao, GtfsImporter(dao, feedUrl = server.url("/GTFS.zip")))
+        repository = NearbyStopRepository(
+            dao,
+            GtfsImporter(
+                database,
+                downloadDir = temporaryFolder.root,
+                feedUrl = server.url("/GTFS.zip")
+            )
+        )
     }
 
     @After
@@ -57,10 +69,7 @@ class NearbyStopRepositoryTest {
 
     @Test
     fun nearbyStops_databaseHasStops_doesNotDownload() = runTest {
-        dao.replaceAll(
-            listOf(StopEntity("2635", "2635", "FIFTH AVE", 40.445770, -79.951416, 0)),
-            emptyList()
-        )
+        dao.insertStops(listOf(StopEntity("2635", "2635", "FIFTH AVE", 40.445770, -79.951416, 0)))
 
         repository.nearbyStops(nearFifthAndBellefield, 400.0)
 

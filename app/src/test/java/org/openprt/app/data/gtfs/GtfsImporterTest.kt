@@ -13,11 +13,16 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class GtfsImporterTest {
+    @get:Rule
+    val temporaryFolder = TemporaryFolder()
+
     private val server = MockWebServer()
     private lateinit var database: GtfsDatabase
     private lateinit var dao: GtfsDao
@@ -45,7 +50,11 @@ class GtfsImporterTest {
             )
             .build()
         dao = database.gtfsDao()
-        importer = GtfsImporter(dao, feedUrl = server.url("/GTFS.zip"))
+        importer = GtfsImporter(
+            database,
+            downloadDir = temporaryFolder.root,
+            feedUrl = server.url("/GTFS.zip")
+        )
     }
 
     @After
@@ -82,7 +91,94 @@ class GtfsImporterTest {
 
         val result = importer.import()
 
-        assertEquals(GtfsImportResult.Success(stopCount = 3, routeCount = 3), result)
+        assertEquals(
+            GtfsImportResult.Success(
+                stopCount = 3,
+                routeCount = 3,
+                tripCount = 4,
+                stopTimeCount = 12
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun import_withFixture_storesStopTimesWithPastMidnightTimesAndBoardingRules() = runTest {
+        enqueueZip(fixtureFeedFiles)
+
+        importer.import()
+
+        assertEquals(
+            listOf(
+                StopTimeEntity("T4", 1, "8312", 88_800, 88_800, true, false),
+                StopTimeEntity("T4", 2, "2635", 89_400, 89_400, true, true),
+                StopTimeEntity("T4", 3, "10", 90_600, 90_600, false, true)
+            ),
+            dao.getStopTimesOfTrip("T4")
+        )
+    }
+
+    @Test
+    fun import_afterSuccess_deletesDownloadedZip() = runTest {
+        enqueueZip(fixtureFeedFiles)
+
+        importer.import()
+
+        assertEquals(emptyList<String>(), temporaryFolder.root.list()!!.toList())
+    }
+
+    @Test
+    fun import_whenStopTimesHaveABadTime_returnsMalformedFeedAndKeepsExistingTimetable() = runTest {
+        enqueueZip(fixtureFeedFiles)
+        importer.import()
+        enqueueZip(
+            fixtureFeedFiles + (
+                "stop_times.txt" to
+                    "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n" +
+                    "T1,07:00:00,07:00:00,8312,1\n" +
+                    "T1,7 am,7 am,2635,2\n"
+                )
+        )
+
+        val result = importer.import()
+
+        assertTrue(
+            result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+        )
+        assertEquals(12, dao.countStopTimes())
+        assertEquals(fixtureStops, dao.getAllStops())
+    }
+
+    @Test
+    fun import_withoutTripsFile_returnsMalformedFeedAndStoresNothing() = runTest {
+        enqueueZip(fixtureFeedFiles - "trips.txt")
+
+        val result = importer.import()
+
+        assertTrue(
+            result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+        )
+        assertEquals(emptyList<StopEntity>(), dao.getAllStops())
+    }
+
+    @Test
+    fun import_withoutEitherCalendarFile_returnsMalformedFeed() = runTest {
+        enqueueZip(fixtureFeedFiles - "calendar.txt" - "calendar_dates.txt")
+
+        val result = importer.import()
+
+        assertTrue(
+            result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+        )
+    }
+
+    @Test
+    fun import_withOnlyCalendarDates_succeeds() = runTest {
+        enqueueZip(fixtureFeedFiles - "calendar.txt")
+
+        val result = importer.import()
+
+        assertTrue(result is GtfsImportResult.Success)
     }
 
     @Test
@@ -131,7 +227,8 @@ class GtfsImporterTest {
         enqueueZip(fixtureFeedFiles)
         importer.import()
         val impatientImporter = GtfsImporter(
-            dao,
+            database,
+            downloadDir = temporaryFolder.root,
             httpClient = OkHttpClient.Builder().readTimeout(100, TimeUnit.MILLISECONDS).build(),
             feedUrl = server.url("/GTFS.zip")
         )

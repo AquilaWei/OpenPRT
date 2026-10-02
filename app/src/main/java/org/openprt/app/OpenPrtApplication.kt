@@ -7,8 +7,9 @@ import org.openprt.app.data.gtfs.NearbyStopRepository
 
 /** Holds the app-wide singletons; Room wants one database instance per process. */
 class OpenPrtApplication : Application() {
+    private val gtfsDatabase: GtfsDatabase by lazy { GtfsDatabase.create(this) }
+
     val nearbyStopRepository: NearbyStopRepository by lazy {
-        val dao = GtfsDatabase.create(this).gtfsDao()
-        NearbyStopRepository(dao, GtfsImporter(dao))
+        NearbyStopRepository(gtfsDatabase.gtfsDao(), GtfsImporter(gtfsDatabase, cacheDir))
     }
 }

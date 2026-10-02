@@ -16,7 +16,7 @@
 地圖用 **[MapLibre](https://maplibre.org/)** 搭配 **[OpenFreeMap](https://openfreemap.org/)** 的 OpenStreetMap 圖磚，免費、**不需要地圖 API key**。
 目的地搜尋用 **[Photon](https://photon.komoot.io/)**（OpenStreetMap 地理編碼），同樣免費、不需 key。
 
-> 第一次開啟時 App 會下載 GTFS 站牌資料（約 22 MB），之後才會在地圖上顯示附近站牌。
+> 第一次開啟時 App 會下載 GTFS 站牌與時刻表資料（下載約 22 MB，存進手機後約佔 **75 MB**），之後才會在地圖上顯示附近站牌。
 
 ## 需求
 

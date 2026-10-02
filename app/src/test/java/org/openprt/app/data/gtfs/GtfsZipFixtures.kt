@@ -6,7 +6,15 @@ import java.util.zip.ZipOutputStream
 
 /** Text files of the small fixture feed under test resources `gtfs/feed/`. */
 val fixtureFeedFiles: Map<String, String> =
-    listOf("agency.txt", "routes.txt", "stops.txt").associateWith { name ->
+    listOf(
+        "agency.txt",
+        "calendar.txt",
+        "calendar_dates.txt",
+        "routes.txt",
+        "stop_times.txt",
+        "stops.txt",
+        "trips.txt"
+    ).associateWith { name ->
         object {}.javaClass.getResource("/gtfs/feed/$name")!!.readText()
     }
 

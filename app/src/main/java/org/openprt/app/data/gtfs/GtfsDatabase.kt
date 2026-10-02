@@ -10,7 +10,9 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.Transaction
+import androidx.room.TypeConverter
+import androidx.room.TypeConverters
+import java.time.LocalDate
 
 // The latitude index serves the bounding-box query in getStopsInBox; one column is enough because
 // a 400 m latitude band across Pittsburgh holds only a few hundred stops.
@@ -33,21 +35,73 @@ data class RouteEntity(
     val color: String?
 )
 
+/** A row of trips.txt: one run of a vehicle along a route, on the days [serviceId] runs. */
+@Entity(tableName = "trips")
+data class TripEntity(
+    @PrimaryKey val tripId: String,
+    val routeId: String,
+    val serviceId: String,
+    val headsign: String?,
+    /** GTFS direction_id, 0 or 1; its meaning (inbound / outbound) differs per route. */
+    val directionId: Int?
+)
+
+/**
+ * A row of stop_times.txt. Times are seconds after the start of the trip's service day and can
+ * pass 24 hours for trips that run past midnight; [serviceTime] turns them into instants.
+ * [pickupAllowed] is false where riders cannot board (usually the last stop of a trip) and
+ * [dropOffAllowed] is false where they cannot get off (usually the first).
+ */
+// The primary key also serves "the stops of a trip, in order"; the stop index serves
+// "departures from a stop after a time".
+@Entity(
+    tableName = "stop_times",
+    primaryKeys = ["tripId", "stopSequence"],
+    indices = [Index("stopId", "departureSeconds")]
+)
+data class StopTimeEntity(
+    val tripId: String,
+    val stopSequence: Int,
+    val stopId: String,
+    val arrivalSeconds: Int,
+    val departureSeconds: Int,
+    val pickupAllowed: Boolean,
+    val dropOffAllowed: Boolean
+)
+
+/** A row of calendar.txt: the weekdays a service runs between two dates (both inclusive). */
+@Entity(tableName = "calendar")
+data class ServiceCalendarEntity(
+    @PrimaryKey val serviceId: String,
+    val monday: Boolean,
+    val tuesday: Boolean,
+    val wednesday: Boolean,
+    val thursday: Boolean,
+    val friday: Boolean,
+    val saturday: Boolean,
+    val sunday: Boolean,
+    val startDate: LocalDate,
+    val endDate: LocalDate
+)
+
+/**
+ * A row of calendar_dates.txt: on [date] the service runs ([added] true, GTFS exception_type 1)
+ * or does not ([added] false, exception_type 2), whatever calendar.txt says.
+ */
+@Entity(tableName = "calendar_dates", primaryKeys = ["serviceId", "date"])
+data class CalendarDateEntity(val serviceId: String, val date: LocalDate, val added: Boolean)
+
+/** One scheduled stop of a trip where riders can board, joined with its trip. */
+data class StopDepartureRow(
+    val tripId: String,
+    val routeId: String,
+    val headsign: String?,
+    val stopSequence: Int,
+    val departureSeconds: Int
+)
+
 @Dao
 interface GtfsDao {
-    /**
-     * Replaces all stops and routes in one transaction, so readers see either the old feed or
-     * the new one, and stops dropped from the new feed disappear. If any insert fails the old
-     * data stays.
-     */
-    @Transaction
-    suspend fun replaceAll(stops: List<StopEntity>, routes: List<RouteEntity>) {
-        deleteAllStops()
-        deleteAllRoutes()
-        insertStops(stops)
-        insertRoutes(routes)
-    }
-
     @Query("SELECT * FROM stops ORDER BY stopId")
     suspend fun getAllStops(): List<StopEntity>
 
@@ -73,21 +127,107 @@ interface GtfsDao {
     @Query("SELECT * FROM routes ORDER BY routeId")
     suspend fun getAllRoutes(): List<RouteEntity>
 
+    @Query("SELECT COUNT(*) FROM stop_times")
+    suspend fun countStopTimes(): Int
+
+    /** The stops of [tripId] in travel order; runs on the primary key. */
+    @Query("SELECT * FROM stop_times WHERE tripId = :tripId ORDER BY stopSequence")
+    suspend fun getStopTimesOfTrip(tripId: String): List<StopTimeEntity>
+
+    /** Calendar rows whose date range contains [date], whatever their weekdays. */
+    @Query("SELECT * FROM calendar WHERE :date BETWEEN startDate AND endDate")
+    suspend fun getCalendarsCovering(date: LocalDate): List<ServiceCalendarEntity>
+
+    @Query("SELECT * FROM calendar_dates WHERE date = :date")
+    suspend fun getCalendarDatesOn(date: LocalDate): List<CalendarDateEntity>
+
+    /**
+     * Boardable stop times at [stopId] at or after [afterSeconds] on trips of [serviceIds],
+     * earliest first. Runs on the (stopId, departureSeconds) index.
+     */
+    @Query(
+        "SELECT st.tripId, t.routeId, t.headsign, st.stopSequence, st.departureSeconds " +
+            "FROM stop_times st JOIN trips t ON t.tripId = st.tripId " +
+            "WHERE st.stopId = :stopId AND st.departureSeconds >= :afterSeconds " +
+            "AND st.pickupAllowed AND t.serviceId IN (:serviceIds) " +
+            "ORDER BY st.departureSeconds, t.routeId, st.tripId LIMIT :limit"
+    )
+    suspend fun getDeparturesAfter(
+        stopId: String,
+        afterSeconds: Int,
+        serviceIds: Collection<String>,
+        limit: Int
+    ): List<StopDepartureRow>
+
+    /** Empties every table; the importer calls it inside the transaction that refills them. */
+    suspend fun deleteAll() {
+        deleteAllStops()
+        deleteAllRoutes()
+        deleteAllTrips()
+        deleteAllStopTimes()
+        deleteAllCalendars()
+        deleteAllCalendarDates()
+    }
+
     @Query("DELETE FROM stops")
     suspend fun deleteAllStops()
 
     @Query("DELETE FROM routes")
     suspend fun deleteAllRoutes()
 
+    @Query("DELETE FROM trips")
+    suspend fun deleteAllTrips()
+
+    @Query("DELETE FROM stop_times")
+    suspend fun deleteAllStopTimes()
+
+    @Query("DELETE FROM calendar")
+    suspend fun deleteAllCalendars()
+
+    @Query("DELETE FROM calendar_dates")
+    suspend fun deleteAllCalendarDates()
+
     @Insert
     suspend fun insertStops(stops: List<StopEntity>)
 
     @Insert
     suspend fun insertRoutes(routes: List<RouteEntity>)
+
+    @Insert
+    suspend fun insertTrips(trips: List<TripEntity>)
+
+    @Insert
+    suspend fun insertStopTimes(stopTimes: List<StopTimeEntity>)
+
+    @Insert
+    suspend fun insertCalendars(calendars: List<ServiceCalendarEntity>)
+
+    @Insert
+    suspend fun insertCalendarDates(calendarDates: List<CalendarDateEntity>)
+}
+
+/** Stores dates as epoch days, so SQL comparisons on them follow calendar order. */
+class GtfsConverters {
+    @TypeConverter
+    fun fromEpochDay(epochDay: Long): LocalDate = LocalDate.ofEpochDay(epochDay)
+
+    @TypeConverter
+    fun toEpochDay(date: LocalDate): Long = date.toEpochDay()
 }
 
 /** Static PRT GTFS data on the device. Rebuilt from the feed, so it holds nothing user-made. */
-@Database(entities = [StopEntity::class, RouteEntity::class], version = 2)
+@Database(
+    entities = [
+        StopEntity::class,
+        RouteEntity::class,
+        TripEntity::class,
+        StopTimeEntity::class,
+        ServiceCalendarEntity::class,
+        CalendarDateEntity::class
+    ],
+    version = 3
+)
+@TypeConverters(GtfsConverters::class)
 abstract class GtfsDatabase : RoomDatabase() {
     abstract fun gtfsDao(): GtfsDao
 
