@@ -1,7 +1,9 @@
 package org.openprt.app.departures
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -13,6 +15,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.openprt.app.data.truetime.TrueTimeError
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.ThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class DeparturesPanelTest {
@@ -46,7 +50,7 @@ class DeparturesPanelTest {
     }
 
     @Test
-    fun departuresPanel_departure_showsDirectionStopAndWalkTime() {
+    fun departuresPanel_departure_showsDirectionLabel() {
         composeRule.setContent {
             DeparturesPanel(
                 DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED),
@@ -54,9 +58,75 @@ class DeparturesPanelTest {
             )
         }
 
-        composeRule
-            .onNodeWithText("OUTBOUND · Forbes Ave at Morewood Ave · 2 min walk")
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("Outbound").assertIsDisplayed()
+    }
+
+    @Test
+    fun departuresPanel_departure_showsStopAndWalkTime() {
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(listOf(TWO_DEPARTURES[0]), DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Forbes Ave at Morewood Ave").assertIsDisplayed()
+        composeRule.onNodeWithText("2 min walk").assertIsDisplayed()
+    }
+
+    @Test
+    fun departuresPanel_bothDirectionsOfARoute_shareOneRouteBadge() {
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(P1_BOTH_WAYS, DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
+        }
+
+        composeRule.onAllNodesWithText("P1").assertCountEquals(1)
+        composeRule.onNodeWithText("Inbound").assertIsDisplayed()
+        composeRule.onNodeWithText("Outbound").assertIsDisplayed()
+    }
+
+    @Test
+    fun departuresPanel_otherDirectionRowClicked_reportsThatDirection() {
+        val clicked = mutableListOf<DepartureItem>()
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(P1_BOTH_WAYS, DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = { clicked.add(it) }
+            )
+        }
+
+        composeRule.onNodeWithText("To Squirrel Hill").performClick()
+
+        assertEquals(listOf(P1_BOTH_WAYS[1]), clicked)
+    }
+
+    @Test
+    fun departuresPanel_onTimeDeparture_isMarkedLive() {
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(listOf(TWO_DEPARTURES[0]), DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Live").assertIsDisplayed()
+    }
+
+    @Test
+    fun departuresPanel_darkTheme_showsRouteNumbers() {
+        composeRule.setContent {
+            OpenPrtTheme(ThemeMode.DARK) {
+                DeparturesPanel(
+                    DeparturesUiState(TWO_DEPARTURES, DeparturesStatus.Ready, UPDATED),
+                    onDepartureClick = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("61C").assertIsDisplayed()
     }
 
     @Test
@@ -81,7 +151,7 @@ class DeparturesPanelTest {
             )
         }
 
-        composeRule.onNodeWithText("P1").performClick()
+        composeRule.onNodeWithText("To Downtown").performClick()
 
         assertEquals(listOf(TWO_DEPARTURES[1]), clicked)
     }
@@ -182,6 +252,17 @@ class DeparturesPanelTest {
                 true,
                 "7117",
                 "3210"
+            )
+        )
+
+        val P1_BOTH_WAYS = listOf(
+            TWO_DEPARTURES[1],
+            TWO_DEPARTURES[1].copy(
+                direction = "OUTBOUND",
+                destination = "Squirrel Hill",
+                minutesUntilDeparture = 15,
+                delayed = false,
+                vehicleId = "3344"
             )
         )
     }

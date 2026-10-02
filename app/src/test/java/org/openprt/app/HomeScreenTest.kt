@@ -395,17 +395,15 @@ class HomeScreenTest {
     fun homeScreen_departureClicked_showsItsDetails() {
         composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
 
-        composeRule.onNodeWithText("61C").performClick()
+        composeRule.onNodeWithText("To McKeesport").performClick()
 
-        composeRule.onNodeWithText(
-            "Board at Forbes Ave at Morewood · 2 min walk"
-        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Locating the bus…").assertIsDisplayed()
     }
 
     @Test
     fun homeScreen_backFromDetails_showsNearbyListAgain() {
         composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
-        composeRule.onNodeWithText("61C").performClick()
+        composeRule.onNodeWithText("To McKeesport").performClick()
 
         composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
 
@@ -417,7 +415,7 @@ class HomeScreenTest {
         // Relocating is the screen's only way to ask for a new fix (see MainActivity).
         var relocations = 0
         composeRule.setContent { NavigableHomeScreen(onRelocate = { relocations++ }) }
-        composeRule.onNodeWithText("61C").performClick()
+        composeRule.onNodeWithText("To McKeesport").performClick()
 
         composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
 

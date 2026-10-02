@@ -101,6 +101,56 @@ class ThemeContrastTest {
         assertMeetsAA(DarkColors.onSurfaceVariant, DarkColors.surfaceContainerLow)
     }
 
+    @Test
+    fun light_minutesPillText_meetsAA() {
+        assertMeetsAA(LightColors.onPrimaryContainer, LightColors.primaryContainer)
+    }
+
+    @Test
+    fun light_liveChipText_meetsAA() {
+        assertMeetsAA(LightColors.onTertiaryContainer, LightColors.tertiaryContainer)
+    }
+
+    @Test
+    fun light_delayedChipText_meetsAA() {
+        assertMeetsAA(LightColors.onErrorContainer, LightColors.errorContainer)
+    }
+
+    @Test
+    fun light_scheduledChipText_meetsAA() {
+        assertMeetsAA(LightColors.onSurfaceVariant, LightColors.surfaceVariant)
+    }
+
+    @Test
+    fun light_boardHereChipText_meetsAA() {
+        assertMeetsAA(LightColors.onSecondaryContainer, LightColors.secondaryContainer)
+    }
+
+    @Test
+    fun dark_minutesPillText_meetsAA() {
+        assertMeetsAA(DarkColors.onPrimaryContainer, DarkColors.primaryContainer)
+    }
+
+    @Test
+    fun dark_liveChipText_meetsAA() {
+        assertMeetsAA(DarkColors.onTertiaryContainer, DarkColors.tertiaryContainer)
+    }
+
+    @Test
+    fun dark_delayedChipText_meetsAA() {
+        assertMeetsAA(DarkColors.onErrorContainer, DarkColors.errorContainer)
+    }
+
+    @Test
+    fun dark_scheduledChipText_meetsAA() {
+        assertMeetsAA(DarkColors.onSurfaceVariant, DarkColors.surfaceVariant)
+    }
+
+    @Test
+    fun dark_boardHereChipText_meetsAA() {
+        assertMeetsAA(DarkColors.onSecondaryContainer, DarkColors.secondaryContainer)
+    }
+
     private fun assertMeetsAA(foreground: Color, background: Color) {
         val lighter = maxOf(foreground.luminance(), background.luminance())
         val darker = minOf(foreground.luminance(), background.luminance())

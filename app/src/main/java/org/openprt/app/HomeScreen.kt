@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.DeparturesPanel
 import org.openprt.app.departures.DeparturesUiState
+import org.openprt.app.departures.oppositeDirectionOf
 import org.openprt.app.destination.DestinationActions
 import org.openprt.app.destination.DestinationSearch
 import org.openprt.app.destination.DestinationUiState
@@ -58,6 +59,12 @@ const val MAP_CONTAINER_TAG = "map"
 
 /** How much of the departures sheet shows while collapsed: the title and about two rows. */
 private val SHEET_PEEK_HEIGHT = 240.dp
+
+/**
+ * Taller while a departure's details are shown, so the collapsed sheet shows the arrival time
+ * below the route and direction card.
+ */
+private val DETAILS_SHEET_PEEK_HEIGHT = 300.dp
 
 /**
  * Home screen: a map of the stops around the user, centered on the current location (or the
@@ -114,7 +121,13 @@ fun HomeScreen(
     BackHandler(enabled = detailsState != null, onBack = onCloseDetails)
     BottomSheetScaffold(
         modifier = modifier,
-        sheetPeekHeight = SHEET_PEEK_HEIGHT,
+        sheetPeekHeight = if (detailsState !=
+            null
+        ) {
+            DETAILS_SHEET_PEEK_HEIGHT
+        } else {
+            SHEET_PEEK_HEIGHT
+        },
         topBar = {
             val brand = LocalOpenPrtColors.current
             CenterAlignedTopAppBar(
@@ -137,8 +150,18 @@ fun HomeScreen(
         },
         sheetContent = {
             when {
-                detailsState != null -> DepartureDetailsPanel(detailsState, onBack = onCloseDetails)
+                detailsState != null -> DepartureDetailsPanel(
+                    detailsState,
+                    onBack = onCloseDetails,
+                    otherDirection = oppositeDirectionOf(
+                        detailsState.departure,
+                        departuresState.departures
+                    ),
+                    onSwitchDirection = onDepartureClick
+                )
+
                 tripPlanState != null -> TripPlansPanel(tripPlanState, onRetry = onRetryPlan)
+
                 else -> DeparturesPanel(departuresState, onDepartureClick)
             }
         }

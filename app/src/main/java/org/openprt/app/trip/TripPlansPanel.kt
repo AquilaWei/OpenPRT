@@ -3,13 +3,12 @@ package org.openprt.app.trip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,7 +25,11 @@ import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.departures.PanelText
 import org.openprt.app.planner.NoRouteReason
+import org.openprt.app.ui.IconText
+import org.openprt.app.ui.InfoCard
 import org.openprt.app.ui.RouteBadge
+import org.openprt.app.ui.StatusChip
+import org.openprt.app.ui.TimeStatus
 
 /**
  * The ways to the chosen destination, shown in the home screen's bottom sheet in place of the
@@ -73,68 +76,78 @@ private fun NoRouteReason.textRes(): Int = when (this) {
 private fun OptionList(options: List<TripOption>, zone: ZoneId) {
     val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
     // Bounded so the list scrolls inside the sheet instead of growing past the screen.
-    LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-        items(options) { option ->
-            OptionRow(option, time)
-            HorizontalDivider()
-        }
+    LazyColumn(
+        modifier = Modifier.heightIn(max = 400.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(options) { option -> OptionCard(option, time) }
     }
 }
 
+/** One way to go: total time and clock times on top, the legs, then the first bus. */
 @Composable
-private fun OptionRow(option: TripOption, time: DateTimeFormatter) {
-    ListItem(
-        leadingContent = {
+private fun OptionCard(option: TripOption, time: DateTimeFormatter) {
+    InfoCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = stringResource(R.string.trip_total_minutes, option.totalMinutes),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(64.dp)
+                modifier = Modifier.padding(end = 12.dp)
             )
-        },
-        headlineContent = {
-            Text(
-                stringResource(
-                    R.string.trip_times,
-                    time.format(option.departureTime),
-                    time.format(option.arrivalTime)
-                )
-            )
-        },
-        supportingContent = {
-            Column {
-                Legs(option.legs)
-                Text(transfersText(option.transfers))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(
-                        if (option.live) R.string.trip_first_bus_live else R.string.trip_first_bus,
-                        option.firstRoute,
-                        option.boardingStopName,
-                        time.format(option.boardingTime)
+                        R.string.trip_times,
+                        time.format(option.departureTime),
+                        time.format(option.arrivalTime)
                     ),
-                    // Green for live data, the same in both themes.
-                    color = if (option.live) {
-                        MaterialTheme.colorScheme.tertiary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    text = transfersText(option.transfers),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            StatusChip(if (option.live) TimeStatus.LIVE else TimeStatus.SCHEDULED)
         }
-    )
+        Legs(option.legs)
+        Text(
+            text = stringResource(
+                if (option.live) R.string.trip_first_bus_live else R.string.trip_first_bus,
+                option.firstRoute,
+                option.boardingStopName,
+                time.format(option.boardingTime)
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            // Green for live data, the same in both themes.
+            color = if (option.live) {
+                MaterialTheme.colorScheme.tertiary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+    }
 }
 
 /** Each leg is its own text so a long trip wraps between legs, not inside a route number. */
 @Composable
 private fun Legs(legs: List<LegSummary>) {
     FlowRow(
+        modifier = Modifier.padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         itemVerticalAlignment = Alignment.CenterVertically
     ) {
         legs.forEachIndexed { index, leg ->
             if (index > 0) Text("›")
             when (leg) {
-                is LegSummary.Walk -> Text(stringResource(R.string.trip_walk_minutes, leg.minutes))
+                is LegSummary.Walk ->
+                    IconText(
+                        R.drawable.ic_walk,
+                        stringResource(R.string.trip_walk_minutes, leg.minutes)
+                    )
 
                 is LegSummary.Ride ->
                     RouteBadge(leg.route, style = MaterialTheme.typography.labelLarge)
