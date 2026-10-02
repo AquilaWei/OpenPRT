@@ -11,8 +11,8 @@ import kotlinx.coroutines.launch
 import org.openprt.app.data.gtfs.GtfsImportError
 import org.openprt.app.data.gtfs.NearbyStopSource
 import org.openprt.app.data.gtfs.NearbyStopsResult
+import org.openprt.app.data.gtfs.trueTimeStopId
 import org.openprt.app.departures.WalkableStop
-import org.openprt.app.departures.trueTimeStopId
 import org.openprt.app.geo.LatLng
 import org.openprt.app.geo.haversineMeters
 

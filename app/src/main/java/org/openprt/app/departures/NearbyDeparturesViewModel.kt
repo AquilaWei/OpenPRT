@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import org.openprt.app.data.gtfs.StopEntity
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.TrueTimeError
@@ -22,13 +21,6 @@ fun interface PredictionSource {
     /** Predictions at 1..[TrueTimeClient.MAX_IDS_PER_CALL] TrueTime stop IDs. */
     suspend fun predictions(stopIds: List<String>): TrueTimeResult<List<Prediction>>
 }
-
-/**
- * The ID TrueTime uses for this stop. Assumed to be the GTFS `stop_code` (the number printed
- * on PRT stop signs), falling back to `stop_id` when the feed has no code.
- * Not yet checked against real TrueTime responses (no API key so far).
- */
-val StopEntity.trueTimeStopId: String get() = code ?: stopId
 
 /** One row of the departures list, with times already turned into whole minutes. */
 data class DepartureItem(

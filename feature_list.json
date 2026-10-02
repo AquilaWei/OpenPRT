@@ -11,7 +11,7 @@
         "資料庫沒有 GTFS 資料時回傳明確錯誤，不丟未分類例外（有測試）",
         "RideLeg 的上車站可以對照到 TrueTime stpid（stop_code，無 code 退回 stop_id），有測試"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F15",

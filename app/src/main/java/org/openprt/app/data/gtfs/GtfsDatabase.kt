@@ -26,6 +26,13 @@ data class StopEntity(
     val locationType: Int
 )
 
+/**
+ * The ID TrueTime uses for this stop: the GTFS `stop_code` (the number printed on PRT stop
+ * signs), falling back to `stop_id` when the feed has no code. Checked against real TrueTime
+ * responses on 2026-10-01.
+ */
+val StopEntity.trueTimeStopId: String get() = code ?: stopId
+
 @Entity(tableName = "routes")
 data class RouteEntity(
     @PrimaryKey val routeId: String,
@@ -158,6 +165,23 @@ interface GtfsDao {
         serviceIds: Collection<String>,
         limit: Int
     ): List<StopDepartureRow>
+
+    @Query("SELECT * FROM trips WHERE serviceId IN (:serviceIds)")
+    suspend fun getTripsOfServices(serviceIds: Collection<String>): List<TripEntity>
+
+    /**
+     * Every stop time of the trips of [serviceIds], grouped by trip and in travel order within
+     * each trip. Loads a whole service day (about 300,000 rows for PRT), so keep the result
+     * rather than asking again.
+     */
+    // The subquery lets SQLite look the trips up on the primary key; a join made it scan all of
+    // stop_times instead, five times slower on the real feed.
+    @Query(
+        "SELECT * FROM stop_times " +
+            "WHERE tripId IN (SELECT tripId FROM trips WHERE serviceId IN (:serviceIds)) " +
+            "ORDER BY tripId, stopSequence"
+    )
+    suspend fun getStopTimesOfServices(serviceIds: Collection<String>): List<StopTimeEntity>
 
     /** Empties every table; the importer calls it inside the transaction that refills them. */
     suspend fun deleteAll() {
