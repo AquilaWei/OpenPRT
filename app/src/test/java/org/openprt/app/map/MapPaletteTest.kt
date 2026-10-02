@@ -1,6 +1,9 @@
 package org.openprt.app.map
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapPaletteTest {
@@ -45,4 +48,27 @@ class MapPaletteTest {
     fun mapPalette_dark_marksBoardingStopGold() {
         assertEquals("#FFC72C", mapPalette(dark = true).boardingStop)
     }
+
+    // WCAG asks 3:1 for icons and other non-text graphics.
+    @Test
+    fun mapPalette_light_busGlyphStandsOutOnBusDisc() {
+        val palette = mapPalette(dark = false)
+
+        assertTrue(contrast(palette.busGlyph, palette.bus) >= 3.0)
+    }
+
+    @Test
+    fun mapPalette_dark_busGlyphStandsOutOnBusDisc() {
+        val palette = mapPalette(dark = true)
+
+        assertTrue(contrast(palette.busGlyph, palette.bus) >= 3.0)
+    }
+
+    private fun contrast(foreground: String, background: String): Double {
+        val lighter = maxOf(hex(foreground).luminance(), hex(background).luminance())
+        val darker = minOf(hex(foreground).luminance(), hex(background).luminance())
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private fun hex(color: String) = Color(0xFF000000 or color.removePrefix("#").toLong(16))
 }

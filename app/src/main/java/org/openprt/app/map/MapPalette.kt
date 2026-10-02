@@ -14,6 +14,8 @@ data class MapPalette(
     val boardingStop: String,
     val destination: String,
     val bus: String,
+    /** The bus glyph drawn on the [bus] disc. */
+    val busGlyph: String,
     val user: String,
     /** Ring around the large markers, so they stand out from the map below. */
     val markerOutline: String
@@ -42,6 +44,8 @@ fun mapPalette(dark: Boolean): MapPalette = if (dark) {
         boardingStop = "#FFC72C",
         destination = "#F28B82",
         bus = "#81C995",
+        // White would be too faint on the pale green disc.
+        busGlyph = "#0D3B1E",
         user = "#4C8DF6",
         markerOutline = "#FFFFFF"
     )
@@ -56,6 +60,7 @@ fun mapPalette(dark: Boolean): MapPalette = if (dark) {
         boardingStop = "#F2A900",
         destination = "#D93025",
         bus = "#188038",
+        busGlyph = "#FFFFFF",
         user = "#1A73E8",
         markerOutline = "#FFFFFF"
     )

@@ -22,6 +22,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
@@ -29,10 +30,16 @@ import org.maplibre.android.style.layers.PropertyFactory.circleColor
 import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconRotate
+import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
@@ -49,6 +56,8 @@ private const val ROUTE_STOPS_SOURCE = "route-stops"
 private const val BOARDING_STOP_SOURCE = "boarding-stop"
 private const val BUS_SOURCE = "bus"
 private const val DESTINATION_SOURCE = "destination"
+private const val BUS_BADGE_IMAGE = "bus-badge"
+private const val BUS_HEADING_IMAGE = "bus-heading"
 
 // Street level: a 400 m stop radius fills most of a phone screen.
 private const val FOLLOW_ZOOM = 16.0
@@ -62,7 +71,8 @@ private val ROUTE_FIT_PADDING = 48.dp
  *
  * While a [route] is shown, the camera is fitted to it instead and stops following [center];
  * the route's line, its stops and the highlighted boarding stop are drawn under the user dot.
- * The selected [bus], when reported, is drawn on top of the route; the camera does not follow it.
+ * The selected [bus], when reported, is drawn on top of the route as a bus badge with an arrow
+ * pointing where it is heading; the camera does not follow it.
  *
  * A [destination], when set, is drawn as a red dot and, while no route is shown, the camera fits
  * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
@@ -108,7 +118,7 @@ fun StopMap(
         style = null
         mapView.getMapAsync { map ->
             map.setStyle(Style.Builder().fromUri(palette.styleUrl)) { loaded ->
-                addMarkerLayers(loaded, palette)
+                addMarkerLayers(context, loaded, palette)
                 style = loaded
             }
         }
@@ -132,7 +142,9 @@ fun StopMap(
         loaded.setPoints(BOARDING_STOP_SOURCE, listOfNotNull(route?.boardingStop?.position))
     }
     LaunchedEffect(style, bus) {
-        style?.setPoints(BUS_SOURCE, listOfNotNull(bus?.location))
+        style?.getSourceAs<GeoJsonSource>(BUS_SOURCE)?.setGeoJson(
+            FeatureCollection.fromFeatures(listOfNotNull(bus?.toFeature()))
+        )
     }
     LaunchedEffect(style, destination) {
         style?.setPoints(DESTINATION_SOURCE, listOfNotNull(destination))
@@ -204,7 +216,7 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
  * Layers are drawn in the order added: route line, stops, route stops, boarding stop,
  * destination, bus, user.
  */
-private fun addMarkerLayers(style: Style, palette: MapPalette) {
+private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette) {
     listOf(
         ROUTE_LINE_SOURCE,
         STOPS_SOURCE,
@@ -246,8 +258,26 @@ private fun addMarkerLayers(style: Style, palette: MapPalette) {
     style.addLayer(
         largeMarkerLayer("destination-layer", DESTINATION_SOURCE, palette.destination, palette)
     )
-    // Green and as large as the boarding stop so the bus is easy to spot on the route.
-    style.addLayer(largeMarkerLayer("bus-layer", BUS_SOURCE, palette.bus, palette))
+    // A bus badge rather than another dot, so it reads as a bus; the arrow under it turns with
+    // the bus's heading while the badge stays upright.
+    style.addImage(BUS_HEADING_IMAGE, busHeadingBitmap(context, palette))
+    style.addImage(BUS_BADGE_IMAGE, busBadgeBitmap(context, palette))
+    style.addLayer(
+        SymbolLayer("bus-heading-layer", BUS_SOURCE).withProperties(
+            iconImage(BUS_HEADING_IMAGE),
+            iconRotate(Expression.get(HEADING_PROPERTY)),
+            iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+            iconAllowOverlap(true),
+            iconIgnorePlacement(true)
+        )
+    )
+    style.addLayer(
+        SymbolLayer("bus-layer", BUS_SOURCE).withProperties(
+            iconImage(BUS_BADGE_IMAGE),
+            iconAllowOverlap(true),
+            iconIgnorePlacement(true)
+        )
+    )
     // Added last so the user dot is drawn above the stops.
     style.addLayer(
         CircleLayer("user-location-layer", USER_SOURCE).withProperties(
