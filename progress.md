@@ -12,7 +12,7 @@
 
 ### 第二輪規劃（2026-10-02）：目前完成度
 
-**還沒完成**（F14、F15、F20、F21、F26 已於同日完成，接著是 F25）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
+**還沒完成**（F14、F15、F20、F21、F26、F25 已於同日完成，接著是 F24）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
 已能在畫面上列出方案（F15），**還不能在地圖上看方案、也不能從方案點進即時公車**（F16）。另外缺輕軌、離線處理、發佈流程，
 而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
 
@@ -419,7 +419,25 @@
 - 圖示由程式畫成 bitmap（`map/BusMarker.kt`），顏色取 `MapPalette.bus` / `busGlyph` / `markerOutline`，主題換了 style 重載時重新 `addImage`
 - `res/drawable/ic_bus.xml` 是 Material Symbols `directions_bus`（Apache 2.0），F25 的時間軸與 F24 的圖例沿用
 - `MapPalette.busGlyph`：淺色白（#188038 底）、深色深綠 `#0D3B1E`（#81C995 底，白色太淡）；測試要求圖形對比 ≥ 3:1（WCAG 非文字）
-- 新增 4 個測試（全部 407 個），verify 通過；**手機在安裝時斷線，0.1.18 還沒裝上去**
+- 新增 4 個測試（全部 407 個），verify 通過。手機當時斷線，之後和 F25 一起裝上（0.1.19），實機截圖確認公車徽章出現在路線上
+
+## 卡片化介面與方向切換（F25 決定）
+
+- 共用元件 `ui/Cards.kt`：`InfoCard`（surface 底 + outlineVariant 外框，兩種主題都分得開）、`MinutesPill`（primaryContainer）、
+  `StatusChip`（Live = tertiaryContainer 加圓點、Scheduled = surfaceVariant、Delayed = errorContainer）、`IconText`
+- 附近班次：`groupByRoute`（`departures/DepartureGroups.kt`）每條路線一張卡片，組間依最早班次、組內依方向名稱排序（方向位置固定，不會隨時間跳動）。
+  路線徽章放在固定 72dp 寬的欄位，各卡片的文字對齊。附近班次都是 TrueTime 預測，所以不是 Delayed 就標 Live
+- 方向切換：班次詳情的 `SingleChoiceSegmentedButtonRow`，兩個方向依名稱固定順序。反方向的班次取自附近班次（`oppositeDirectionOf`），
+  切換就是 `DepartureDetailsViewModel.open(反方向)`，所以上車站也換成該方向最近的站；附近沒有反方向時按鈕停用並顯示說明。
+  反方向名稱用 `oppositeDirectionName`（INBOUND↔OUTBOUND 等），不認得的方向名稱（例如 LOOP）只顯示一個方向標籤
+- 公車在站序上的位置：用 TrueTime 的 `pdist`（車輛沿 pattern 的距離）和各站的沿線距離比較（`RouteShape.progressOf`），
+  比原計畫的「最近的站」可靠（不會被平行道路或環狀路線誤導）。停在站上的公車算「還沒過」那一站。`stopsAway` 包含上車站本身
+- 時間軸：公車列插在已過的站之後，已過的站 alpha 0.45 並有 stateDescription「Passed」（測試用、也給 TalkBack）。
+  開啟位置：公車在上車站前 6 列內時從公車上一列開始，否則從上車站上兩列；`remember(shape, progress == null)`，公車移動時清單不跳
+- 班次詳情收合時 bottom sheet 高度 300dp（附近班次仍是 240dp），收合時看得到抵達分鐘數
+- 方案清單（F15）也換成卡片，加 Live / Scheduled 標籤
+- 實機（Galaxy S23，深色、大字型）截圖確認：卡片、方向切換（61C Inbound ↔ Outbound 後上車站與時間軸都換掉）、「N stops away」、公車在時間軸與地圖上
+- 新增 43 個測試（全部 450 個），verify 通過（lint 0 issue）
 
 ## 給下一個 session 的注意事項
 
@@ -458,6 +476,8 @@
   右上角鑰匙圖示可重新打開、Cancel 不影響已存的 key；重開 App 不再出現歡迎畫面
 - [ ] F15 選目的地後數秒內出現方案、時間合理（和 Google Maps / Transit App 比對一兩個行程）；量手機上第一次規劃的時間（JVM 約 1.4 秒，見 F14 段落）；
   有即時預測的首班車顯示「· Live」且時間與站牌看板一致；按 ✕ 清除目的地回到附近班次
+- [ ] F25 附近班次卡片清楚好讀、同一路線兩個方向在同一張卡片；班次詳情的 Inbound / Outbound 切換直覺、切換後上車站與時間正確；
+  「N stops away」與時間軸上的公車位置合理；淺色主題下卡片也分得清楚
 - [ ] F26 點一班車後，地圖上的公車是圓形公車圖示（不是綠點），旁邊小箭頭指向行進方向，淺色與深色主題都看得清楚
 - [ ] （新 F16）完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
@@ -573,3 +593,7 @@
   手機 adb 斷線，尚未安裝
   - 需要實機驗收（見清單 F26）
   - 下一步：F25 卡片化介面 + 方向切換
+- 2026-10-02：**F25 完成**（版號 0.1.19，tag `v0.1.19` 只在本機）。附近班次與班次詳情卡片化、方向切換、站序時間軸、方案清單卡片，見 F25 段落。
+  verify 通過（450 個測試），已裝到手機（含 F26）並截圖確認
+  - 需要實機驗收（見清單 F25、F26）
+  - 下一步：F24 站牌可點擊 + 地圖圖例（圖例用 `ic_bus` 與 `mapPalette`）
