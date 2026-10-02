@@ -12,7 +12,7 @@
 
 ### 第二輪規劃（2026-10-02）：目前完成度
 
-**還沒完成。** 目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）只做完底層
+**還沒完成**（F14 已於同日完成，接著是 F15）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）只做完底層
 （目的地選擇 F11、時刻表 F12、RAPTOR 引擎 F13），**畫面上還不能規劃路線**。另外缺輕軌、離線處理、發佈流程，
 而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
 
@@ -309,7 +309,7 @@
 - 時間全部是「服務日開始後的秒數」（和 GTFS 一樣可超過 24h），轉成 `Instant` 用 F12 的 `serviceTime`
 - 第一段步行設計成「剛好在公車發車時走到站」，所以 `Itinerary.departureSeconds` 可能晚於查詢時間；轉乘步行與最後步行從下車時開始
 - 不規劃純步行方案（起訖很近時也一定要搭車）；方案不會以兩段連續步行結尾（只從「搭車到達」的站算最後步行）
-- **轉乘沒有緩衝**：下車那一秒就能上下一班。真實 feed 上 Mt Lebanon → Pitt 出現「多轉一次只早 1 分鐘、轉乘時間 1 分鐘」的方案，
+- **轉乘沒有緩衝**（F14 已加上 60 秒，見 F14 段落）：下車那一秒就能上下一班。真實 feed 上 Mt Lebanon → Pitt 出現「多轉一次只早 1 分鐘、轉乘時間 1 分鐘」的方案，
   F14 實機看結果時若覺得不可靠，可在 `scanPattern` 上車判斷加最小轉乘秒數（同站與步行轉乘都要加）
 - **量測（暫時測試，未進 git，2026-10-02，JVM）**：真實 PRT feed 2026-10-01（週四）5588 班次 → 257 個 pattern，建網路 92 ms；
   Market Sq → CMU 24 ms（69 直達）、Squirrel Hill → North Shore 7 ms（61C + Blue Line）、Mt Lebanon → Pitt 4 ms（Red Line + 61A）。
@@ -319,6 +319,27 @@
     一天約 5600 班、30 萬筆 stop_times，建議在背景執行緒建好後依服務日快取
   - 跨午夜：凌晨查詢要另外用前一個服務日的網路（秒數 +86400）查一次，合併結果
   - 首段公車的即時時間要另外用 TrueTime 查（RideLeg 有 routeId / from.stopId；TrueTime stpid = stop_code，`TransitStop.stopId` 目前是 GTFS stop_id，要對照）
+
+## 規劃資料層（F14 決定）
+
+- `RoutePlanner` 加 `minTransferSeconds`（預設 `DEFAULT_MIN_TRANSFER_SECONDS = 60`）：每站另存 `boardable`（可以上車的時間）。
+  搭車到站 = 到站 + 60 秒；步行轉乘 = max(走到的時間, 下車 + 60 秒)，所以步行超過 60 秒時不再多加；
+  從起點走到的站沒有緩衝（「直達不受影響」）
+- `TransitStop` 加 `trueTimeStopId`（預設 = stopId）。`StopEntity.trueTimeStopId`（code ?: stop_id）從 `departures/` 移到 `GtfsDatabase.kt`，
+  F15 查首段即時預測用 `rideLeg.from.trueTimeStopId`
+- `data/gtfs/TransitNetworkSource.kt`：`fun interface TransitNetworkSource`（測試用計數 fake 包真實實作）與 `RoomTransitNetworkSource`。
+  沒有站牌（還沒匯入）回 null；當天沒有服務回「沒有班次的網路」（結果是 NoRoute NO_CONNECTION，F18 的「GTFS 過期」要另外判斷）。
+  只有一個站、或經過 stops.txt 沒有的站的班次會被略過，不讓整天規劃失敗
+- **查詢效能（真實 feed、JVM、2026-10-02）**：原本用 `trips JOIN stop_times` 會掃整個 1M 筆 stop_times，一天 31 萬筆要 4.5 秒；
+  改成 `stop_times WHERE tripId IN (SELECT … FROM trips WHERE serviceId IN …)` 走主鍵 + 另外查 trips，**第一次規劃約 1.4 秒**（含建網路 ~150 ms），
+  之後每次 3–7 ms。手機上會更慢，F15 量（可考慮在選目的地前預先建網路）
+- `data/gtfs/TripPlanRepository.kt`：`plan(origin, destination, departAt: Instant)` 回傳 `TripPlanResult`：`Found(plans)` / `NoRoute(reason)` / `NoTimetable`。
+  `TripPlan(serviceDate, itinerary)` 的秒數要用 `timeOf(seconds)` 轉 `Instant`（不能直接加在今天上）
+  - 依服務日快取 `RoutePlanner`，Mutex 保護（同時兩個請求只建一次）。每次請求只保留這次需要的服務日，所以最多兩個網路在記憶體
+  - 跨午夜：前一個服務日開始後 30 小時內（當地清晨 6 點前）也查前一天（真實 feed 最晚 26:43）。兩天結果合併後用同樣的 Pareto 規則（段數少優先，段數多的要嚴格更早到）
+  - 真實 feed 驗證：00:30 Mt Lebanon → Pitt 自動選到隔天早班車；Market Sq → CMU 00:30 用前一天的 61C 深夜班
+  - 搜尋在 `Dispatchers.Default` 執行；GTFS 更新後快取不會失效（F18 處理）
+- `OpenPrtApplication.tripPlanRepository` 已建好，F15 的 ViewModel 直接用
 
 ## 給下一個 session 的注意事項
 
@@ -348,7 +369,7 @@
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
   手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
   已裝過舊版的手機更新後會自動重新下載一次
-- [ ] （新 F15）選目的地後數秒內出現方案、時間合理；同時量手機上第一次建網路的時間
+- [ ] （新 F15）選目的地後數秒內出現方案、時間合理；同時量手機上第一次建網路的時間（JVM 約 1.4 秒，見 F14 段落）
 - [ ] （新 F16）完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
@@ -426,3 +447,8 @@
 - 2026-10-02：**第二輪規劃**。檢查結果：App 尚未完成（見「計畫概覽」）。`feature_list.json` 改寫成剩下的 F14–F19，
   verify 加上 `ANDROID_HOME` 預設值。等使用者審核與回答 questions（輕軌、GitHub repo / 發佈、介面語言、實機驗收時程）
   - 下一步：F14 從 Room 建規劃網路（見 F13 段落的「F14 要接的地方」）
+- 2026-10-02：**F14 完成**（版號 0.1.13，tag `v0.1.13` 只在本機）。從 Room 建規劃網路並依服務日快取、凌晨合併前一服務日深夜班次、
+  60 秒最小轉乘緩衝、`TripPlanRepository` 與 `NoTimetable` 錯誤、乘車段上車站帶 TrueTime stpid。新增 19 個測試（全部 290 個），verify 通過；
+  另用真實 PRT feed 暫時測試量了速度與結果（見 F14 段落，未進 git）
+  - 不需要實機驗收（資料層，全部自動化）；手機上的第一次規劃時間併入 F15 的驗收項目
+  - 下一步：F15 路線規劃方案清單 UI（`OpenPrtApplication.tripPlanRepository` 已可用）
