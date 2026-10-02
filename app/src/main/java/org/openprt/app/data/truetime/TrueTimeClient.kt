@@ -24,7 +24,8 @@ import okhttp3.coroutines.executeAsync
  *
  * Every call returns a [TrueTimeResult]; HTTP, network, API and parsing failures are
  * [TrueTimeResult.Failure], never exceptions. Only invalid arguments (e.g. too many IDs) throw
- * [IllegalArgumentException]. With a blank [apiKey] every call returns
+ * [IllegalArgumentException]. [apiKey] is read on every request, so a key the user enters later
+ * takes effect on the next call; while it is blank every call returns
  * [TrueTimeError.MissingApiKey] without touching the network.
  *
  * PRT serves several data feeds from one site and most endpoints refuse requests that do not
@@ -32,7 +33,7 @@ import okhttp3.coroutines.executeAsync
  * and would need its own client.
  */
 class TrueTimeClient(
-    private val apiKey: String,
+    private val apiKey: () -> String,
     private val dataFeed: String = BUS_DATA_FEED,
     private val httpClient: OkHttpClient = defaultHttpClient(),
     private val baseUrl: HttpUrl = DEFAULT_BASE_URL.toHttpUrl(),
@@ -122,13 +123,14 @@ class TrueTimeClient(
         serializer: KSerializer<D>,
         toModel: (D) -> T
     ): TrueTimeResult<List<T>> {
-        if (apiKey.isBlank()) return TrueTimeResult.Failure(TrueTimeError.MissingApiKey)
+        val key = apiKey()
+        if (key.isBlank()) return TrueTimeResult.Failure(TrueTimeError.MissingApiKey)
 
         val url =
             baseUrl
                 .newBuilder()
                 .addPathSegment(endpoint)
-                .addQueryParameter("key", apiKey)
+                .addQueryParameter("key", key)
                 .addQueryParameter("format", "json")
                 .addQueryParameter("rtpidatafeed", dataFeed)
                 .apply { params.forEach { (name, value) -> addQueryParameter(name, value) } }

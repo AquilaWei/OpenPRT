@@ -1,10 +1,11 @@
 package org.openprt.app.data.truetime
 
-import org.openprt.app.BuildConfig
+import org.openprt.app.data.settings.ApiKeySettings
 
 /**
- * A client using the PRT_API_KEY from local.properties. When the key was not set at build
- * time every call returns [TrueTimeError.MissingApiKey].
+ * A client using the key in [settings]: the one the user entered in the app, else the
+ * PRT_API_KEY from local.properties. Saving a new key takes effect on the next call; without any
+ * key every call returns [TrueTimeError.MissingApiKey].
  */
-fun TrueTimeClient.Companion.fromBuildConfig(): TrueTimeClient =
-    TrueTimeClient(apiKey = BuildConfig.PRT_API_KEY)
+fun TrueTimeClient.Companion.fromSettings(settings: ApiKeySettings): TrueTimeClient =
+    TrueTimeClient(apiKey = settings::currentKey)

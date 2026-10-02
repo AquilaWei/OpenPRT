@@ -58,6 +58,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -80,6 +81,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -102,6 +104,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -125,6 +128,7 @@ class HomeScreenTest {
                 onRelocate = { relocations++ },
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -149,6 +153,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -173,6 +178,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -197,6 +203,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -221,6 +228,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -245,11 +253,38 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
 
         composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_keyButtonClicked_opensApiKeySettings() {
+        var opened = 0
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                onRetryPlan = {},
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                onOpenApiKey = { opened++ },
+                mapContent = stubMap
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("TrueTime API key").performClick()
+
+        assertEquals(1, opened)
     }
 
     @Test
@@ -267,6 +302,7 @@ class HomeScreenTest {
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
                 mapContent = stubMap
             )
         }
@@ -324,6 +360,7 @@ class HomeScreenTest {
             onRelocate = onRelocate,
             onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
             onCloseDetails = { details = null },
+            onOpenApiKey = {},
             mapContent = stubMap
         )
     }

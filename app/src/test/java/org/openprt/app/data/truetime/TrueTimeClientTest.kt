@@ -19,7 +19,7 @@ class TrueTimeClientTest {
     @Before
     fun setUp() {
         server.start()
-        client = TrueTimeClient(apiKey = "test-key", baseUrl = server.url("/bustime/api/v3/"))
+        client = TrueTimeClient(apiKey = { "test-key" }, baseUrl = server.url("/bustime/api/v3/"))
     }
 
     @After
@@ -328,7 +328,7 @@ class TrueTimeClientTest {
     fun getRoutes_whenServerIsTooSlow_returnsTimeout() = runTest {
         val impatientClient =
             TrueTimeClient(
-                apiKey = "test-key",
+                apiKey = { "test-key" },
                 httpClient = OkHttpClient.Builder().readTimeout(
                     100,
                     TimeUnit.MILLISECONDS
@@ -358,7 +358,7 @@ class TrueTimeClientTest {
     @Test
     fun getRoutes_withoutApiKey_returnsMissingApiKey() = runTest {
         val keylessClient =
-            TrueTimeClient(apiKey = "", baseUrl = server.url("/bustime/api/v3/"))
+            TrueTimeClient(apiKey = { "" }, baseUrl = server.url("/bustime/api/v3/"))
 
         val result = keylessClient.getRoutes()
 
@@ -366,9 +366,22 @@ class TrueTimeClientTest {
     }
 
     @Test
+    fun request_keyEnteredAfterClientCreated_sendsNewKey() = runTest {
+        var key = ""
+        val keyedLaterClient =
+            TrueTimeClient(apiKey = { key }, baseUrl = server.url("/bustime/api/v3/"))
+        enqueueFixture("getroutes.json")
+
+        key = "entered-key"
+        keyedLaterClient.getRoutes()
+
+        assertEquals("entered-key", server.takeRequest().url.queryParameter("key"))
+    }
+
+    @Test
     fun getRoutes_withoutApiKey_sendsNoRequest() = runTest {
         val keylessClient =
-            TrueTimeClient(apiKey = "", baseUrl = server.url("/bustime/api/v3/"))
+            TrueTimeClient(apiKey = { "" }, baseUrl = server.url("/bustime/api/v3/"))
 
         keylessClient.getRoutes()
 

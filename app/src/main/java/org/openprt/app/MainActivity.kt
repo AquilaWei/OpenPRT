@@ -18,7 +18,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import java.time.Clock
 import org.openprt.app.data.truetime.TrueTimeClient
-import org.openprt.app.data.truetime.fromBuildConfig
+import org.openprt.app.data.truetime.fromSettings
+import org.openprt.app.data.truetime.keyChecker
 import org.openprt.app.departures.NearbyDeparturesViewModel
 import org.openprt.app.destination.DestinationViewModel
 import org.openprt.app.destination.PhotonGeocoder
@@ -31,18 +32,21 @@ import org.openprt.app.location.LocationViewModel
 import org.openprt.app.location.hasLocationPermission
 import org.openprt.app.map.MapViewModel
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.settings.ApiKeyScreen
+import org.openprt.app.settings.ApiKeyViewModel
 import org.openprt.app.trip.TripPlanViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val app = application as OpenPrtApplication
         // Lazy: after rotation the ViewModels already exist and need no new client.
-        val trueTime by lazy { TrueTimeClient.fromBuildConfig() }
+        val trueTime by lazy { TrueTimeClient.fromSettings(app.apiKeySettings) }
         val viewModelFactory = viewModelFactory {
             initializer { LocationViewModel(FusedLocationProvider(applicationContext)) }
             initializer {
-                MapViewModel((application as OpenPrtApplication).nearbyStopRepository)
+                MapViewModel(app.nearbyStopRepository)
             }
             initializer { NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC()) }
             initializer { DepartureDetailsViewModel(trueTime.asTripSource(), Clock.systemUTC()) }
@@ -53,11 +57,12 @@ class MainActivity : ComponentActivity() {
             }
             initializer {
                 TripPlanViewModel(
-                    (application as OpenPrtApplication).tripPlanRepository,
+                    app.tripPlanRepository,
                     trueTime::getPredictions,
                     Clock.systemUTC()
                 )
             }
+            initializer { ApiKeyViewModel(app.apiKeySettings, TrueTimeClient.keyChecker()) }
         }
         setContent {
             val locationViewModel: LocationViewModel = viewModel(factory = viewModelFactory)
@@ -73,14 +78,16 @@ class MainActivity : ComponentActivity() {
             val destinationState by destinationViewModel.state.collectAsStateWithLifecycle()
             val tripPlanViewModel: TripPlanViewModel = viewModel(factory = viewModelFactory)
             val tripPlanState by tripPlanViewModel.state.collectAsStateWithLifecycle()
+            val apiKeyViewModel: ApiKeyViewModel = viewModel(factory = viewModelFactory)
+            val apiKeyState by apiKeyViewModel.state.collectAsStateWithLifecycle()
             val permissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestMultiplePermissions()
             ) { grants -> locationViewModel.onPermissionResult(grants.values.any { it }) }
 
             // Runs once per ViewModel, or again after relocate(); after rotation the state is no
-            // longer AwaitingPermission.
-            LaunchedEffect(locationState) {
-                if (locationState == LocationUiState.AwaitingPermission) {
+            // longer AwaitingPermission. Waits for the key screen so the dialog does not cover it.
+            LaunchedEffect(locationState, apiKeyState.visible) {
+                if (locationState == LocationUiState.AwaitingPermission && !apiKeyState.visible) {
                     if (hasLocationPermission(applicationContext)) {
                         locationViewModel.onPermissionResult(granted = true)
                     } else {
@@ -129,19 +136,26 @@ class MainActivity : ComponentActivity() {
             }
 
             MaterialTheme {
-                HomeScreen(
-                    locationState = locationState,
-                    mapState = mapState,
-                    departuresState = departuresState,
-                    detailsState = detailsState,
-                    destinationState = destinationState,
-                    destinationActions = destinationViewModel,
-                    tripPlanState = tripPlanState,
-                    onRetryPlan = tripPlanViewModel::retry,
-                    onRelocate = locationViewModel::relocate,
-                    onDepartureClick = detailsViewModel::open,
-                    onCloseDetails = detailsViewModel::close
-                )
+                // Location, stops and departures keep loading underneath, so the home screen is
+                // ready when the key screen closes.
+                if (apiKeyState.visible) {
+                    ApiKeyScreen(apiKeyState, apiKeyViewModel)
+                } else {
+                    HomeScreen(
+                        locationState = locationState,
+                        mapState = mapState,
+                        departuresState = departuresState,
+                        detailsState = detailsState,
+                        destinationState = destinationState,
+                        destinationActions = destinationViewModel,
+                        tripPlanState = tripPlanState,
+                        onRetryPlan = tripPlanViewModel::retry,
+                        onRelocate = locationViewModel::relocate,
+                        onDepartureClick = detailsViewModel::open,
+                        onCloseDetails = detailsViewModel::close,
+                        onOpenApiKey = apiKeyViewModel::open
+                    )
+                }
             }
         }
     }

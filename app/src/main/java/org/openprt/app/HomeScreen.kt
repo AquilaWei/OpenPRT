@@ -11,6 +11,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,6 +61,8 @@ private val SHEET_PEEK_HEIGHT = 240.dp
  * chosen), the sheet lists the ways there instead of the nearby departures; [onRetryPlan] plans
  * again.
  *
+ * The key button in the top bar calls [onOpenApiKey] to change the TrueTime key.
+ *
  * [mapContent] draws the map inside the container; tests replace it because the real MapLibre
  * map needs native code that Robolectric cannot load.
  */
@@ -77,6 +80,7 @@ fun HomeScreen(
     onRelocate: () -> Unit,
     onDepartureClick: (DepartureItem) -> Unit,
     onCloseDetails: () -> Unit,
+    onOpenApiKey: () -> Unit,
     modifier: Modifier = Modifier,
     mapContent: @Composable (Modifier) -> Unit = { mapModifier ->
         StopMap(
@@ -97,7 +101,17 @@ fun HomeScreen(
         modifier = modifier,
         sheetPeekHeight = SHEET_PEEK_HEIGHT,
         topBar = {
-            CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) })
+            CenterAlignedTopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    IconButton(onClick = onOpenApiKey) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_key),
+                            contentDescription = stringResource(R.string.api_key_open)
+                        )
+                    }
+                }
+            )
         },
         sheetContent = {
             when {
@@ -203,6 +217,7 @@ private fun HomeScreenPreview() {
         onRelocate = {},
         onDepartureClick = {},
         onCloseDetails = {},
+        onOpenApiKey = {},
         mapContent = { Surface(it, color = MaterialTheme.colorScheme.surfaceVariant) {} }
     )
 }

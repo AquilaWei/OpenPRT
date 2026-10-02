@@ -17,7 +17,7 @@
     <string name="departures_minutes">%1$d min</string>
     <string name="departures_delayed">Delayed</string>
     <string name="departures_failed">Couldn\'t update departures.</string>
-    <string name="departures_failed_missing_key">Live departures need a TrueTime API key (PRT_API_KEY in local.properties).</string>
+    <string name="departures_failed_missing_key">Live departures need a TrueTime API key. Tap the key icon at the top to add one.</string>
     <string name="departures_last_updated">%1$s Showing departures from %2$s.</string>
     <string name="details_back">Back to nearby departures</string>
     <string name="details_board_at">Board at %1$s · %2$d min walk</string>
@@ -57,4 +57,21 @@
     <string name="trip_no_connection">No buses connect these places for the rest of today\'s timetable.</string>
     <string name="trip_no_timetable">The bus timetable hasn\'t finished downloading yet.</string>
     <string name="trip_retry">Try again</string>
+    <string name="api_key_welcome_title">Welcome to OpenPRT</string>
+    <string name="api_key_title">TrueTime API key</string>
+    <string name="api_key_why">Live bus times and positions come from PRT TrueTime, which needs a free personal API key. Without one you can still see stops, search places and plan trips from the timetable.</string>
+    <string name="api_key_steps">1. Sign up on PRT TrueTime and sign in.\n2. Under My Account, request a developer API key.\n3. Paste the key below.</string>
+    <string name="api_key_open_sign_up">Open PRT TrueTime</string>
+    <string name="api_key_replaces">A key is already set. A new one replaces it.</string>
+    <string name="api_key_label">API key</string>
+    <string name="api_key_save">Save key</string>
+    <string name="api_key_skip">Skip for now</string>
+    <string name="api_key_cancel">Cancel</string>
+    <string name="api_key_checking">Checking the key with TrueTime…</string>
+    <string name="api_key_rejected">TrueTime didn\'t accept this key.</string>
+    <string name="api_key_rejected_with_reason">TrueTime didn\'t accept this key: %1$s</string>
+    <string name="api_key_unreachable">Couldn\'t reach TrueTime to check the key. Check your connection and try again, or save it unchecked.</string>
+    <string name="api_key_save_anyway">Save without checking</string>
+    <string name="api_key_stored_locally">The key is stored only on this phone. Change it any time with the key icon on the map screen.</string>
+    <string name="api_key_open">TrueTime API key</string>
 </resources>

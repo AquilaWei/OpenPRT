@@ -27,6 +27,20 @@
       "passes": true
     },
     {
+      "id": "F20",
+      "description": "App 內設定 TrueTime API key：第一次啟動沒有 key 時先顯示引導畫面（說明用途、開啟 PRT 申請頁、輸入 key、可略過），輸入後先用 TrueTime 驗證再存到手機；之後可從主畫面上方的鑰匙按鈕更換。local.properties 的 PRT_API_KEY 改為開發用的預設值。",
+      "steps": [
+        "第一次啟動、沒有存過 key 且 BuildConfig 也沒有 key 時顯示引導畫面；有 key 或曾經略過時不顯示（ViewModel 測試）",
+        "輸入 key 按儲存時先呼叫 TrueTime 驗證：通過才存並關閉畫面；TrueTime 回 key 無效時顯示錯誤且不存；連不上時顯示錯誤並提供「不驗證直接儲存」（各一個測試）",
+        "存下的 key 在下一次 TrueTime 請求就生效，不需要重開 App（TrueTimeClient 每次請求讀目前的 key，有測試）",
+        "key 存在 App 私有儲存（SharedPreferences，allowBackup=false），重開 App 後仍在（Robolectric 測試）；App 內存的 key 優先於 BuildConfig",
+        "主畫面上方的鑰匙按鈕可以重新開啟設定畫面，取消時不改動已存的 key（Compose / ViewModel 測試）",
+        "README 改寫成「第一次啟動在 App 內輸入 key」，local.properties 僅供開發",
+        "實機驗收清單新增：首次啟動出現引導、輸入真實 key 後附近班次出現；輸入錯誤 key 顯示錯誤"
+      ],
+      "passes": true
+    },
+    {
       "id": "F16",
       "description": "行程方案地圖顯示：點選方案後在地圖上畫出步行段（虛線）與各乘車段折線（依 GTFS shapes 或站點連線）、上下車站牌；點乘車段進入該班車的即時詳情（沿用 F9/F10 的 DepartureDetailsViewModel）。",
       "steps": [
