@@ -12,7 +12,7 @@
 
 ### 第二輪規劃（2026-10-02）：目前完成度
 
-**還沒完成**（F14、F15 已於同日完成，接著是 F16）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
+**還沒完成**（F14、F15、F20 已於同日完成，接著是 F16）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
 已能在畫面上列出方案（F15），**還不能在地圖上看方案、也不能從方案點進即時公車**（F16）。另外缺輕軌、離線處理、發佈流程，
 而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
 
@@ -21,6 +21,7 @@
 
 | 功能 | 內容 | 對應第一輪 |
 |---|---|---|
+| F20 | App 內輸入 TrueTime API key（首次啟動引導 + 鑰匙按鈕） | 使用者實機測試時要求新增，排在 F16 前 |
 | F14 | 從 Room 建 TransitNetwork、服務日快取、跨午夜、轉乘緩衝、`TripPlanRepository` | 原 F14 的資料層（拆出來） |
 | F15 | 路線規劃方案清單 UI + 首段即時時間 | 原 F14 |
 | F16 | 方案地圖 + 點乘車段看即時公車 | 原 F15 |
@@ -364,11 +365,32 @@
 - 測試：`TripPlanViewModelTest`（16）、`TripOptionTest`（12）、`TripPlansPanelTest`（10）、`HomeScreenTest` +1。
   Compose 測試不比對時間字串（JDK 的 `FormatStyle.SHORT` 在 AM/PM 前用的空白字元會因版本不同）
 
+## App 內 API key（F20 決定）
+
+- 使用者 2026-10-02 實機測試時要求：不該要在電腦上寫 `local.properties` 才能用即時資料。新增 F20 排在 F16 前（feature_list.json 原有功能不變）
+- `data/settings/ApiKeySettings.kt`：SharedPreferences 檔 `truetime`（`api_key`、`onboarding_done`），manifest 已 `allowBackup=false`，不會備份。
+  沒用 EncryptedSharedPreferences（已 deprecated），也沒加 DataStore 依賴；key 只是個人的 TrueTime key，App 私有儲存就夠
+  - App 內存的 key 優先於 `BuildConfig.PRT_API_KEY`（`local.properties` 現在只是開發用預設值，有它就不顯示歡迎畫面）
+  - `needsOnboarding` = 沒有任何 key 且沒按過 Skip
+- `TrueTimeClient` 的 `apiKey` 改成 `() -> String`，**每次請求讀目前的 key**：存 key 後下一次請求就生效，不用重建 client 或重開 App。
+  `TrueTimeClient.fromSettings(settings)` 取代 `fromBuildConfig()`。附近班次最多 30 秒後才會用新 key 更新（沒有立即觸發）
+- `data/truetime/ApiKeyChecker.kt`：用一次 `getroutes` 驗證。Api 錯誤訊息含「key」→ Rejected（顯示 TrueTime 原文），
+  其他 Api 錯誤（例如配額）/ 網路 / 逾時 / HTTP → Unreachable，畫面提供「Save without checking」
+- `settings/ApiKeyViewModel.kt` + `ApiKeyScreen.kt`：首次啟動是「Welcome to OpenPRT」+「Skip for now」（略過會記住，下次不再出現）；
+  從主畫面右上角鑰匙圖示打開時是「TrueTime API key」+「Cancel」（取消不改已存的 key）。系統返回鍵 = Skip / Cancel。
+  「Open PRT TrueTime」用 `LocalUriHandler` 開 `https://truetime.rideprt.org/bustime/home.jsp`
+- `MainActivity`：key 畫面顯示時整個取代 `HomeScreen`，但定位 / 站牌 / 班次的 ViewModel 照常在背景載入；
+  **定位權限對話框等 key 畫面關掉才跳**，避免兩個畫面疊在一起
+- 實機（Galaxy S23，SM-S9180，Android 16）安裝後確認首次啟動出現歡迎畫面（截圖）；輸入真實 key 的流程待使用者驗收
+- 新增 37 個測試（全部 366 個）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
 - verify 指令：`ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk} ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug`
 - 需要網路或 API key 的測試：本機沒有就自動略過，CI 一定要跑
+- 裝到手機：`ANDROID_HOME=$HOME/Android/Sdk ./gradlew --no-daemon installDebug`。手機的 USB 要關掉網路共享、開 USB 偵錯；
+  本機（含主 checkout）目前**沒有 local.properties**，key 由使用者在 App 內輸入
 - 版號：功能寫完未經實機驗收用 PATCH；使用者驗收後才升 MINOR
 - CLAUDE.md、`.claude/`、`notes/` 不進 git
 
@@ -392,6 +414,9 @@
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
   手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
   已裝過舊版的手機更新後會自動重新下載一次
+- [ ] F20 首次啟動出現「Welcome to OpenPRT」（2026-10-02 已在 Galaxy S23 上看到）；「Open PRT TrueTime」打開申請網頁；
+  貼上真實 key 按 Save key 後回到地圖，30 秒內附近班次出現；輸入亂打的 key 顯示「TrueTime didn't accept this key: …」；
+  右上角鑰匙圖示可重新打開、Cancel 不影響已存的 key；重開 App 不再出現歡迎畫面
 - [ ] F15 選目的地後數秒內出現方案、時間合理（和 Google Maps / Transit App 比對一兩個行程）；量手機上第一次規劃的時間（JVM 約 1.4 秒，見 F14 段落）；
   有即時預測的首班車顯示「· Live」且時間與站牌看板一致；按 ✕ 清除目的地回到附近班次
 - [ ] （新 F16）完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
@@ -481,3 +506,8 @@
   清除目的地回到附近班次並取消規劃。新增 39 個測試（全部 329 個），verify 通過（lint 0 issue）
   - 需要實機驗收（見清單 F15）。debug APK 會帶入 local.properties 的 key
   - 下一步：F16 方案地圖（`TripOption.plan` 已保留完整 itinerary；乘車段折線可先用站點連線，GTFS shapes 尚未匯入）
+- 2026-10-02：使用者接上手機（Galaxy S23）安裝 0.1.14，要求「App 一開始要有引導讓我輸入 API key」。新增 **F20** 並完成（版號 0.1.15，tag `v0.1.15` 只在本機）：
+  首次啟動歡迎畫面、PRT 申請連結、輸入後用 TrueTime 驗證再存、可略過、主畫面鑰匙圖示可更換、key 存在 App 私有儲存且立即生效。
+  新增 37 個測試（全部 366 個），verify 通過（lint 0 issue）；已裝到手機並確認歡迎畫面出現
+  - 需要實機驗收（見清單 F20、F15 及更早的項目）
+  - 下一步：等使用者實機測試回饋；之後是 F16 方案地圖
