@@ -12,7 +12,7 @@
 
 ### 第二輪規劃（2026-10-02）：目前完成度
 
-**還沒完成**（F14、F15、F20 已於同日完成，接著是 F16）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
+**還沒完成**（F14、F15、F20、F21 已於同日完成，接著是 F24）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
 已能在畫面上列出方案（F15），**還不能在地圖上看方案、也不能從方案點進即時公車**（F16）。另外缺輕軌、離線處理、發佈流程，
 而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
 
@@ -388,6 +388,24 @@
 - 實機（Galaxy S23，SM-S9180，Android 16）安裝後確認首次啟動出現歡迎畫面（截圖）；輸入真實 key 的流程待使用者驗收
 - 新增 37 個測試（全部 366 個）
 
+## 外觀與深色主題（F21 決定）
+
+- 方向（使用者選的建議）：PRT 深藍 `#17365F` + 金黃 `#FFC72C`，中性色用藍灰（取代 Material 預設的紫粉色調）
+- `ui/theme/Color.kt`：完整寫死 light / dark `ColorScheme`（所有 surfaceContainer 也寫），`OpenPrtColors`（`LocalOpenPrtColors`）放
+  Material 沒有的品牌色：top bar（淺色是深藍、深色是一般深色表面）、金黃 accent（定位 FAB）。即時 = `tertiary`（綠），誤點 = `error`
+- `ui/theme/Theme.kt`：`OpenPrtTheme(mode)`、`ThemeMode`（SYSTEM / LIGHT / DARK）、`ThemeMode.isDark(systemDark)`
+- `data/settings/AppearanceSettings.kt`：SharedPreferences 檔 `appearance`，未知值讀成 SYSTEM。切換入口是 top bar 的半圓（contrast）圖示 → 下拉選單
+- `map/MapPalette.kt`：地圖樣式網址與所有標記顏色（字串，MapLibre 用），`mapPalette(dark)`；深色用 OpenFreeMap `dark` 樣式。
+  **F24 的圖例要用這份**。`StopMap` 新增 `palette` 參數，palette 變了就 `setStyle` 重新載入（會清掉圖層，所以重加圖層後由各 LaunchedEffect 重填資料）
+- `ui/RouteBadge.kt`：路線編號色塊（primary 底），用在附近班次、班次詳情、方案清單的每一段
+- 系統列：`MainActivity` 依主題呼叫 `enableEdgeToEdge`；首頁 top bar 在淺色也是深藍，所以狀態列圖示一律白色，只有 API key 畫面（淺色）用深色圖示。
+  視窗底色 `values` / `values-night` 的 `Theme.OpenPRT`，避免啟動時閃白（只跟系統深色模式，App 內手動選的不影響這一瞬間）
+- App 圖示：深藍底 + 金黃圖釘 + 深藍公車；`ic_launcher_monochrome`（evenOdd 挖空公車）給 Android 13 主題圖示
+- 對比測試 `ThemeContrastTest`：兩套主題 9 組前景 / 背景都 ≥ 4.5:1
+- 實機（Galaxy S23，系統深色模式）確認：深色地圖、金黃 FAB、路線色塊、即時班次正常；從選單切 Light 後 top bar 深藍、地圖換淺色、路線深藍、上車站金黃；
+  測完已把 App 設回 System default。**手機的系統深色模式沒有動**
+- 新增 37 個測試（全部 403 個），lint 0 issue
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -418,6 +436,8 @@
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
   手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
   已裝過舊版的手機更新後會自動重新下載一次
+- [ ] F21 系統切深色時 App 與地圖一起變深色；右上角半圓圖示選 Light / Dark 立即生效且重開後保留；
+  桌面上新圖示（金黃圖釘 + 公車）清楚，開「主題圖示」時顯示單色版本；深色下各畫面文字看得清楚
 - [ ] F20 首次啟動出現「Welcome to OpenPRT」（2026-10-02 已在 Galaxy S23 上看到）；「Open PRT TrueTime」打開申請網頁；
   貼上真實 key 按 Save key 後回到地圖，30 秒內附近班次出現；輸入亂打的 key 顯示「TrueTime didn't accept this key: …」；
   右上角鑰匙圖示可重新打開、Cancel 不影響已存的 key；重開 App 不再出現歡迎畫面
@@ -524,3 +544,7 @@
 - 2026-10-02：使用者回答新 questions：**四題都照建議**（起點可輸入地址、步行用 FOSSGIS Valhalla、PRT 深藍 + 金黃、跟隨系統 + 手動切換），
   答案記在 feature_list.json 的 `answer` 欄位。另外問「站牌能不能點、顏色代表什麼、有沒有圖例」：目前都沒有（只有長按設目的地），
   新增 **F24（站牌可點擊 + 圖例）** 排在 F21 後。順序：F21 → F24 → F22 → F16 → F23 → F17 → F18 → F19
+- 2026-10-02：**F21 完成**（版號 0.1.16，tag `v0.1.16` 只在本機）。PRT 深藍 + 金黃配色、淺色 / 深色主題（跟隨系統 + App 內切換並記住）、
+  地圖樣式與標記顏色隨主題、路線編號色塊、新 App 圖示（含單色主題圖示）。新增 37 個測試（全部 403 個），verify 通過（lint 0 issue）；
+  已裝到手機並截圖確認深色與淺色（見 F21 段落）。使用者已在 App 內存了 key（截圖中附近班次有即時資料）
+  - 下一步：F24 站牌可點擊 + 地圖圖例（顏色用 `mapPalette`）
