@@ -86,8 +86,8 @@ class TripPlansPanelTest {
             )
         }
 
-        composeRule.onNodeWithText("35 min").assertIsDisplayed()
-        composeRule.onNodeWithText("28 min").assertIsDisplayed()
+        composeRule.onNodeWithText("35 min trip").assertIsDisplayed()
+        composeRule.onNodeWithText("28 min trip").assertIsDisplayed()
     }
 
     @Test
@@ -201,7 +201,7 @@ class TripPlansPanelTest {
             TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), actions, zone = UTC)
         }
 
-        composeRule.onNodeWithText("35 min").performClick()
+        composeRule.onNodeWithText("35 min trip").performClick()
 
         assertEquals(listOf("select 61C"), actions.calls)
     }

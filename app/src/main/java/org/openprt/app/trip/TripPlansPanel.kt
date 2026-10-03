@@ -140,7 +140,7 @@ internal fun TripSummary(option: TripOption, time: DateTimeFormatter) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = stringResource(R.string.trip_total_minutes, option.totalMinutes),
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(end = 12.dp)
         )

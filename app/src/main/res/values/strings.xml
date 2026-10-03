@@ -62,7 +62,7 @@
     <string name="destination_clear">Clear destination</string>
     <string name="trip_title">Ways to get there</string>
     <string name="trip_planning">Planning your trip…</string>
-    <string name="trip_total_minutes">%1$d min</string>
+    <string name="trip_total_minutes">%1$d min trip</string>
     <string name="trip_times">%1$s – %2$s</string>
     <string name="trip_walk_minutes">Walk %1$d min</string>
     <string name="trip_direct">No transfers</string>
