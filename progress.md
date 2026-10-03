@@ -624,3 +624,12 @@
   - 需要實機驗收（見清單 F16）
   - 待辦小項：路線載入失敗時顯示原因；目的地名稱顯示地址（目前是 Photon 的名稱，如「Cathedral of Learning」）
   - 下一步：F24 站牌可點擊 + 地圖圖例
+- 2026-10-03：實機測試後的修正（版號 0.1.21–0.1.23，tag 只在本機）：
+  - 0.1.21：班次詳情失敗時顯示原因（`ui/trueTimeErrorReason`）；目的地標籤加門牌地址（`Place.address` 只在有門牌號時才有）；0 分鐘顯示「Now」
+  - 0.1.22：使用者在 Carnegie Mellon University 測到「-3 min、抵達早於出發」：首班車即時預測晚於時刻表時，抵達時間沒跟著延後。
+    改成延誤先被轉乘等候時間吸收，剩下的才延後抵達（`Itinerary.delayAtEnd`）；回歸測試在舊程式下確認失敗
+  - 0.1.23：搜「first baptist church」時 Oakland 那間排第 7：Photon 加 `lat`/`lon` 位置偏好（使用者位置，未知時 Downtown）；
+    選目的地時搜尋結果清單還開著，地圖縮放把清單高度也當成要避開的範圍，縮成整個郡 → 上方留白改變時（有目的地才算）重新縮放
+  - 已在 S23 上用 Carnegie Mellon University → First Baptist Church（71A，16 分鐘，Live）確認
+  - design-critique 結果的三個優先建議（方案卡片加「›」與 Live bus 位置、站名轉一般大小寫並整理車頭方向、縮小上方搜尋區）尚未做
+  - 下一步：上述三項建議或 F24，等使用者決定
