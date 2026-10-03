@@ -75,6 +75,23 @@ class DeparturesPanelTest {
     }
 
     @Test
+    fun departuresPanel_allCapsNames_showsThemTitleCased() {
+        val shouting = TWO_DEPARTURES[0].copy(
+            destination = "BRADDOCK HILLS SHOPPING CENTER",
+            stopName = "FORBES AVE + MOREWOOD (CARNEGIE MELLON)"
+        )
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(listOf(shouting), DeparturesStatus.Ready, UPDATED),
+                onDepartureClick = {}
+            )
+        }
+
+        composeRule.onNodeWithText("To Braddock Hills Shopping Center").assertIsDisplayed()
+        composeRule.onNodeWithText("Forbes Ave + Morewood (Carnegie Mellon)").assertIsDisplayed()
+    }
+
+    @Test
     fun departuresPanel_bothDirectionsOfARoute_shareOneRouteBadge() {
         composeRule.setContent {
             DeparturesPanel(

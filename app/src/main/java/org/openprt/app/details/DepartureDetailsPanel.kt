@@ -54,6 +54,8 @@ import org.openprt.app.ui.InfoCard
 import org.openprt.app.ui.RouteBadge
 import org.openprt.app.ui.StatusChip
 import org.openprt.app.ui.TimeStatus
+import org.openprt.app.ui.displayHeadsign
+import org.openprt.app.ui.displayName
 import org.openprt.app.ui.minutesText
 import org.openprt.app.ui.theme.LocalOpenPrtColors
 import org.openprt.app.ui.trueTimeErrorReason
@@ -114,7 +116,10 @@ private fun HeaderCard(
             }
             RouteBadge(departure.route, style = MaterialTheme.typography.titleLarge)
             Text(
-                text = stringResource(R.string.departures_destination, departure.destination),
+                text = stringResource(
+                    R.string.departures_destination,
+                    displayHeadsign(departure.destination)
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 12.dp)
@@ -190,7 +195,7 @@ private fun ArrivalCard(departure: DepartureItem, bus: LiveBus, zone: ZoneId) {
         }
         IconText(
             icon = R.drawable.ic_place,
-            text = stringResource(R.string.details_board_at, departure.stopName),
+            text = stringResource(R.string.details_board_at, displayName(departure.stopName)),
             modifier = Modifier.padding(top = 8.dp)
         )
         IconText(
@@ -405,7 +410,7 @@ private fun StopRow(row: TimelineRow.Stop, first: Boolean, last: Boolean) {
         }
         Column(modifier = Modifier.weight(1f).padding(vertical = 8.dp)) {
             Text(
-                text = row.stop.name,
+                text = displayName(row.stop.name),
                 fontWeight = if (row.boarding) FontWeight.Bold else FontWeight.Normal
             )
         }

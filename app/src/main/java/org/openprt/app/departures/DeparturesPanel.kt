@@ -34,6 +34,8 @@ import org.openprt.app.ui.MinutesPill
 import org.openprt.app.ui.RouteBadge
 import org.openprt.app.ui.StatusChip
 import org.openprt.app.ui.TimeStatus
+import org.openprt.app.ui.displayHeadsign
+import org.openprt.app.ui.displayName
 
 /**
  * The departures near the user, shown in the home screen's bottom sheet as one card per route
@@ -128,11 +130,14 @@ private fun DirectionRow(departure: DepartureItem, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = stringResource(R.string.departures_destination, departure.destination),
+                text = stringResource(
+                    R.string.departures_destination,
+                    displayHeadsign(departure.destination)
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            IconText(icon = R.drawable.ic_place, text = departure.stopName)
+            IconText(icon = R.drawable.ic_place, text = displayName(departure.stopName))
             IconText(
                 icon = R.drawable.ic_walk,
                 text = stringResource(R.string.departures_walk, departure.walkMinutes)

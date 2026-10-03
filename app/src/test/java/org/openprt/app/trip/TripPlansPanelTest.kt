@@ -198,7 +198,7 @@ class TripPlansPanelTest {
         }
 
         composeRule.onNodeWithText("Walk 4 min to Forbes Ave at Morewood").assertIsDisplayed()
-        composeRule.onNodeWithText("Toward DOWNTOWN").assertIsDisplayed()
+        composeRule.onNodeWithText("Toward Downtown").assertIsDisplayed()
         composeRule.onNodeWithText("Walk 2 min to your destination").assertIsDisplayed()
     }
 
@@ -275,7 +275,7 @@ class TripPlansPanelTest {
         val CMU = TransitStop("s8312", "Forbes Ave at Morewood", LatLng(40.4443, -79.9532), "8312")
         val STEEL_PLAZA = TransitStop("s10", "Steel Plaza", LatLng(40.4406, -79.9959), "10")
 
-        val RIDE = RideLeg("T1", "61C", "DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)
+        val RIDE = RideLeg("T1", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)
 
         // The option list reads only the summary fields; the selected option lists these legs.
         val PLAN = TripPlan(

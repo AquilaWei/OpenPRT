@@ -30,6 +30,7 @@ import org.openprt.app.ui.InfoCard
 import org.openprt.app.ui.RouteBadge
 import org.openprt.app.ui.StatusChip
 import org.openprt.app.ui.TimeStatus
+import org.openprt.app.ui.displayName
 
 /**
  * The ways to the chosen destination, shown in the home screen's bottom sheet in place of the
@@ -104,7 +105,7 @@ private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () 
             text = stringResource(
                 R.string.trip_first_bus,
                 option.firstRoute,
-                option.boardingStopName,
+                displayName(option.boardingStopName),
                 time.format(option.boardingTime)
             ),
             style = MaterialTheme.typography.bodyMedium,

@@ -30,6 +30,8 @@ import org.openprt.app.planner.WalkLeg
 import org.openprt.app.ui.IconText
 import org.openprt.app.ui.InfoCard
 import org.openprt.app.ui.RouteBadge
+import org.openprt.app.ui.displayHeadsign
+import org.openprt.app.ui.displayName
 
 /**
  * One chosen way to go, leg by leg: walks with their minutes and where they lead, and rides with
@@ -94,7 +96,7 @@ private fun WalkRow(walk: WalkLeg) {
         text = if (to == null) {
             stringResource(R.string.trip_walk_to_destination, walk.minutes())
         } else {
-            stringResource(R.string.trip_walk_to_stop, walk.minutes(), to.name)
+            stringResource(R.string.trip_walk_to_stop, walk.minutes(), displayName(to.name))
         },
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.padding(vertical = 8.dp)
@@ -119,7 +121,7 @@ private fun RideRow(
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 ride.headsign?.let {
                     Text(
-                        text = stringResource(R.string.trip_toward, it),
+                        text = stringResource(R.string.trip_toward, displayHeadsign(it)),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -127,7 +129,7 @@ private fun RideRow(
                 Text(
                     text = stringResource(
                         R.string.trip_board_at,
-                        ride.from.name,
+                        displayName(ride.from.name),
                         time.format(boarding)
                     ),
                     style = MaterialTheme.typography.bodyMedium
@@ -135,7 +137,7 @@ private fun RideRow(
                 Text(
                     text = stringResource(
                         R.string.trip_get_off_at,
-                        ride.to.name,
+                        displayName(ride.to.name),
                         time.format(plan.timeOf(ride.endSeconds))
                     ),
                     style = MaterialTheme.typography.bodyMedium
