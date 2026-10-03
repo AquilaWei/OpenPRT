@@ -35,8 +35,9 @@ sealed interface LegSummary {
 
 /**
  * One row of the plan list. When TrueTime predicts the first bus, [departureTime] and
- * [boardingTime] follow the prediction and [live] is true; [arrivalTime] always comes from the
- * timetable, since later legs have no live data.
+ * [boardingTime] follow the prediction and [live] is true. Later legs have no live data, so
+ * [arrivalTime] is the timetable's, pushed back only by as much of a late first bus as the
+ * waits at transfers cannot absorb.
  */
 data class TripOption(
     /** When to set off from the origin to reach the first bus. */
@@ -298,10 +299,13 @@ internal fun TripPlan.toOption(predictions: List<Prediction>, now: Instant): Tri
     val live = closestPrediction(predictions, firstRide, scheduledBoarding, now + walkToBus)
     val boardingTime = live?.predictedTime ?: scheduledBoarding
     val departureTime = boardingTime - walkToBus
+    // An early first bus does not make the later legs leave earlier, so only lateness counts.
+    val lateSeconds = Duration.between(scheduledBoarding, boardingTime).seconds.coerceAtLeast(0)
+    val expectedArrival = arrivalTime.plusSeconds(itinerary.delayAtEnd(lateSeconds))
     return TripOption(
         departureTime = departureTime,
-        arrivalTime = arrivalTime,
-        totalMinutes = Duration.between(departureTime, arrivalTime).roundedUpMinutes(),
+        arrivalTime = expectedArrival,
+        totalMinutes = Duration.between(departureTime, expectedArrival).roundedUpMinutes(),
         transfers = itinerary.transfers,
         legs = itinerary.legs.mapNotNull { leg ->
             when (leg) {
@@ -340,6 +344,22 @@ private fun closestPrediction(
     .filter { (_, offset) -> offset <= MAX_LIVE_OFFSET }
     .minByOrNull { (_, offset) -> offset }
     ?.first
+
+/**
+ * How late the trip ends when its first bus leaves [lateSeconds] late: each later ride starts
+ * on time if the delay fits in the wait before it, and otherwise the rest of the delay carries
+ * on, as if a later bus of that route ran the same timetable shifted back.
+ */
+private fun Itinerary.delayAtEnd(lateSeconds: Long): Long {
+    var delay = lateSeconds
+    legs.zipWithNext().forEach { (previous, next) ->
+        if (next is RideLeg && next != rides.first()) {
+            val wait = (next.startSeconds - previous.endSeconds).coerceAtLeast(0)
+            delay = (delay - wait).coerceAtLeast(0)
+        }
+    }
+    return delay
+}
 
 /** Minutes of walking right before [ride], rounded up; 0 after a ride or a wait. */
 private fun Itinerary.walkBefore(ride: RideLeg): Long {

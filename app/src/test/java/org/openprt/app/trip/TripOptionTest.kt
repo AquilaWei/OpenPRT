@@ -97,6 +97,49 @@ class TripOptionTest {
     }
 
     @Test
+    fun toOption_firstBusLaterThanTransferWait_pushesArrivalBackByTheRest() {
+        // 61C 10 min late (600 s); the wait for 71B is 280 s, so arrival moves 320 s.
+        val option = TRANSFER_PLAN.toOption(
+            listOf(prediction("61C", "8312", "2026-10-01T11:10:00Z")),
+            NOW
+        )
+
+        assertEquals(Instant.parse("2026-10-01T11:33:40Z"), option.arrivalTime)
+    }
+
+    @Test
+    fun toOption_directBusRunsLate_arrivesThatMuchLater() {
+        // Regression: a 14-minute-late bus showed arrival before departure (-3 min).
+        val option = DIRECT_PLAN.toOption(
+            listOf(prediction("61C", "8312", "2026-10-01T11:14:00Z")),
+            NOW
+        )
+
+        assertEquals(Instant.parse("2026-10-01T11:45:40Z"), option.arrivalTime)
+    }
+
+    @Test
+    fun toOption_directBusRunsLate_totalMinutesStayTheTripLength() {
+        val option = DIRECT_PLAN.toOption(
+            listOf(prediction("61C", "8312", "2026-10-01T11:14:00Z")),
+            NOW
+        )
+
+        // 240 s walk + 1800 s ride + 100 s walk.
+        assertEquals(36L, option.totalMinutes)
+    }
+
+    @Test
+    fun toOption_firstBusEarly_keepsTimetableArrival() {
+        val option = DIRECT_PLAN.toOption(
+            listOf(prediction("61C", "8312", "2026-10-01T10:58:00Z")),
+            NOW
+        )
+
+        assertEquals(Instant.parse("2026-10-01T11:31:40Z"), option.arrivalTime)
+    }
+
+    @Test
     fun toOption_predictionOfOtherRoute_isNotLive() {
         val option = TRANSFER_PLAN.toOption(
             listOf(prediction("71B", "8312", "2026-10-01T11:04:00Z")),
@@ -160,6 +203,18 @@ class TripOptionTest {
         val FIFTH_OPPOSITE =
             TransitStop("s2636", "Fifth Ave opp Craig", LatLng(40.4462, -79.9492), "2636")
         val STEEL_PLAZA = TransitStop("s10", "Steel Plaza", LatLng(40.4406, -79.9959), "10")
+
+        /** Walk 4 min to 61C at 07:00 local (11:00Z), ride 30 min, walk 100 s: arrive 11:31:40Z. */
+        val DIRECT_PLAN = TripPlan(
+            DATE,
+            Itinerary(
+                listOf(
+                    WalkLeg(null, CMU, 240.0, 24_960, 25_200),
+                    RideLeg("T1", "61C", "DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000),
+                    WalkLeg(STEEL_PLAZA, null, 120.0, 27_000, 27_100)
+                )
+            )
+        )
 
         val TRANSFER_PLAN = TripPlan(
             DATE,
