@@ -130,6 +130,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(locationState.location) {
                 locationState.location?.let(mapViewModel::onLocationChanged)
                 tripPlanViewModel.onLocationChanged(locationState.location)
+                destinationViewModel.onLocationChanged(locationState.location)
             }
 
             // A ride's live bus was found: show it like a nearby departure.

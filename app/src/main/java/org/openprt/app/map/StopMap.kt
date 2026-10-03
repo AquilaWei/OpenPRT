@@ -165,8 +165,16 @@ fun StopMap(
     LaunchedEffect(style, userLocation) {
         style?.setPoints(USER_SOURCE, listOfNotNull(userLocation))
     }
-    // Keyed on whether a route or trip is shown, so closing it moves back to the user.
-    LaunchedEffect(center, destination, route == null, trip == null) {
+    // Keyed on whether a route or trip is shown, so closing it moves back to the user. With a
+    // destination it is also keyed on the space kept clear at the top: picking a place closes
+    // the search results that covered the map, and the fit has to be redone without them.
+    LaunchedEffect(
+        center,
+        destination,
+        route == null,
+        trip == null,
+        fitPadding.top.takeIf { destination != null }
+    ) {
         if (center == null || route != null || trip != null) return@LaunchedEffect
         val update = if (destination == null || destination == center) {
             CameraUpdateFactory.newLatLngZoom(center.toMapLibre(), FOLLOW_ZOOM)

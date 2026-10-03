@@ -26,9 +26,10 @@ data class Place(
 fun interface Geocoder {
     /**
      * Places matching [query], best match first. [bounds] is a hint for the service to search
-     * that area; callers that need every result inside it still have to filter.
+     * that area; callers that need every result inside it still have to filter. Among places of
+     * the same name, those nearer [near] rank higher.
      */
-    suspend fun search(query: String, bounds: BoundingBox): GeocodeResult
+    suspend fun search(query: String, bounds: BoundingBox, near: LatLng): GeocodeResult
 }
 
 /** Outcome of a place search; failures are values so the screen can offer a retry. */
