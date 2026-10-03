@@ -29,6 +29,7 @@ import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleOpacity
 import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
@@ -67,6 +68,10 @@ private const val TRIP_ALIGHTING_SOURCE = "trip-alighting"
 private const val BUS_BADGE_IMAGE = "bus-badge"
 private const val BUS_HEADING_IMAGE = "bus-heading"
 
+// Wider than the bus badge (18 dp with its ring), so a bus on top of the rider leaves a rim.
+private const val USER_HALO_RADIUS = 26f
+private const val USER_HALO_OPACITY = 0.25f
+
 // Street level: a 400 m stop radius fills most of a phone screen.
 private const val FOLLOW_ZOOM = 16.0
 
@@ -79,8 +84,8 @@ private val ROUTE_FIT_PADDING = 48.dp
  *
  * While a [route] is shown, the camera is fitted to it instead and stops following [center];
  * the route's line, its stops and the highlighted boarding stop are drawn under the user dot.
- * The selected [bus], when reported, is drawn on top of the route as a bus badge with an arrow
- * pointing where it is heading; the camera does not follow it.
+ * The selected [bus], when reported, is drawn on top of everything, the user dot included, as a
+ * bus badge with an arrow pointing where it is heading; the camera does not follow it.
  *
  * A [destination], when set, is drawn as a red dot and, while no route is shown, the camera fits
  * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
@@ -270,7 +275,7 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
 
 /**
  * Layers are drawn in the order added: route line, stops, route stops, boarding stop,
- * destination, bus, user.
+ * destination, user, bus.
  */
 private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette) {
     listOf(
@@ -319,6 +324,23 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
     style.addLayer(
         largeMarkerLayer("destination-layer", DESTINATION_SOURCE, palette.destination, palette)
     )
+    // Above the stops but under the bus: when the bus reaches the rider, the bus is what they
+    // are watching. The halo is wider than the bus badge, so the rider still shows around it.
+    style.addLayer(
+        CircleLayer("user-halo-layer", USER_SOURCE).withProperties(
+            circleRadius(USER_HALO_RADIUS),
+            circleColor(palette.user),
+            circleOpacity(USER_HALO_OPACITY)
+        )
+    )
+    style.addLayer(
+        CircleLayer("user-location-layer", USER_SOURCE).withProperties(
+            circleRadius(8f),
+            circleColor(palette.user),
+            circleStrokeColor(palette.markerOutline),
+            circleStrokeWidth(3f)
+        )
+    )
     // A bus badge rather than another dot, so it reads as a bus; the arrow under it turns with
     // the bus's heading while the badge stays upright.
     style.addImage(BUS_HEADING_IMAGE, busHeadingBitmap(context, palette))
@@ -337,15 +359,6 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
             iconImage(BUS_BADGE_IMAGE),
             iconAllowOverlap(true),
             iconIgnorePlacement(true)
-        )
-    )
-    // Added last so the user dot is drawn above the stops.
-    style.addLayer(
-        CircleLayer("user-location-layer", USER_SOURCE).withProperties(
-            circleRadius(8f),
-            circleColor(palette.user),
-            circleStrokeColor(palette.markerOutline),
-            circleStrokeWidth(3f)
         )
     )
 }
