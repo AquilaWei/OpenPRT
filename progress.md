@@ -467,6 +467,8 @@
   本機（含主 checkout）目前**沒有 local.properties**，key 由使用者在 App 內輸入
 - 版號：功能寫完未經實機驗收用 PATCH；使用者驗收後才升 MINOR
 - CLAUDE.md、`.claude/`、`notes/` 不進 git
+- 使用者實機測試時所在的地址**不可寫進 repo**（測試資料、CHANGELOG、這份紀錄、commit 訊息）；範例一律用公開地標（CMU、Pitt 的 Cathedral of Learning）。
+  2026-10-03 曾用 `git filter-branch` 把誤 commit 的地址從歷史清掉
 
 ## 需要實機驗收的項目（累積清單）
 
@@ -500,6 +502,8 @@
 - [ ] F26 點一班車後，地圖上的公車是圓形公車圖示（不是綠點），旁邊小箭頭指向行進方向，淺色與深色主題都看得清楚
 - [ ] F16 完整流程：定位 → 選目的地 → 規劃 → 點方案看地圖（步行虛線、公車線、上下車站） → 按「Live bus」看即時公車 → 返回回到方案；
   快要開的班次（15 分鐘內）應該能打開即時詳情，較晚的班次顯示「時間取自時刻表」
+- [ ] 0.1.24 設計改進：站名與方向文字是一般大小寫（沒有「INBOUND-」）；方案卡片的「›」看得出可以點；
+  方案詳情不用拉面板就看得到「Live bus」；選好目的地後上方只剩一列「To: …」，點它可重新搜尋、✕ 清除
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -633,3 +637,10 @@
   - 已在 S23 上用 Carnegie Mellon University → First Baptist Church（71A，16 分鐘，Live）確認
   - design-critique 結果的三個優先建議（方案卡片加「›」與 Live bus 位置、站名轉一般大小寫並整理車頭方向、縮小上方搜尋區）尚未做
   - 下一步：上述三項建議或 F24，等使用者決定
+- 2026-10-03：**design-critique 三項建議完成**（版號 0.1.24，tag `v0.1.24` 只在本機）：
+  - 站名與車頭方向：`ui/DisplayNames.kt` 的 `displayName`（全大寫才轉；縮寫、序數、Mc、O' 另外處理）與 `displayHeadsign`（去掉 INBOUND- 等前綴），只在顯示層套用
+  - 方案卡片加 `ic_chevron_right`；方案詳情的 Live bus 移到路線編號那一列，上下車時間放右側一欄（`StopAndTime`）
+  - 搜尋區：無外框 `TextField`、提示「Where to?」；有目的地時改顯示 `DestinationBar`（點了重新搜尋），選好目的地時整塊約 72dp（原本約 148dp）
+  - verify 通過（512 個測試），新測試都確認在舊程式下會失敗；已裝到 S23 截圖確認
+  - 尚未處理的小問題：「18 min」行程總長與倒數分鐘長得像；公車圖示會蓋住使用者藍點
+  - 下一步：F24 站牌可點擊 + 地圖圖例
