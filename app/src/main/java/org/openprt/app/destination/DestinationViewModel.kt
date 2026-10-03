@@ -111,7 +111,7 @@ class DestinationViewModel(
     }
 
     override fun selectPlace(place: Place) {
-        setDestination(Destination(place.name, place.location))
+        setDestination(Destination(place.label, place.location))
     }
 
     override fun onMapLongPress(location: LatLng) {

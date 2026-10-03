@@ -79,12 +79,20 @@ fun MinutesPill(minutes: Long, modifier: Modifier = Modifier) {
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
     ) {
         Text(
-            text = stringResource(R.string.departures_minutes, minutes),
+            text = minutesText(minutes),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
+}
+
+/** Minutes until a bus comes, or "Now" when it is under a minute away, like PRT's signs. */
+@Composable
+fun minutesText(minutes: Long): String = if (minutes <= 0) {
+    stringResource(R.string.departures_now)
+} else {
+    stringResource(R.string.departures_minutes, minutes)
 }
 
 /** Where a time comes from, or that the bus is late. */

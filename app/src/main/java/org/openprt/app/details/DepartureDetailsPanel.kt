@@ -54,7 +54,9 @@ import org.openprt.app.ui.InfoCard
 import org.openprt.app.ui.RouteBadge
 import org.openprt.app.ui.StatusChip
 import org.openprt.app.ui.TimeStatus
+import org.openprt.app.ui.minutesText
 import org.openprt.app.ui.theme.LocalOpenPrtColors
+import org.openprt.app.ui.trueTimeErrorReason
 
 /**
  * Bottom-sheet content for one selected departure, as three cards: the route with a switch
@@ -86,7 +88,7 @@ fun DepartureDetailsPanel(
             RouteStatus.NotFound -> PanelNote(stringResource(R.string.details_route_not_found))
 
             is RouteStatus.Failed -> PanelNote(
-                stringResource(R.string.details_route_failed),
+                stringResource(R.string.details_route_failed, trueTimeErrorReason(route.error)),
                 error = true
             )
 
@@ -209,7 +211,7 @@ private fun ExpectedArrival(arrival: Arrival.Expected, progress: BusProgress?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = stringResource(R.string.departures_minutes, arrival.minutes),
+                text = minutesText(arrival.minutes),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold
             )
@@ -239,11 +241,16 @@ private fun ExpectedArrival(arrival: Arrival.Expected, progress: BusProgress?) {
 @Composable
 private fun UpdateText(bus: LiveBus, zone: ZoneId) {
     val time = bus.lastUpdated?.let { formatTime(it, zone) }
-    val (text, error) = when {
-        bus.error != null && time != null ->
-            stringResource(R.string.details_bus_failed_since, time) to true
+    val error = bus.error
+    val (text, failed) = when {
+        error != null && time != null -> stringResource(
+            R.string.details_bus_failed_since,
+            trueTimeErrorReason(error),
+            time
+        ) to true
 
-        bus.error != null -> stringResource(R.string.details_bus_failed) to true
+        error != null ->
+            stringResource(R.string.details_bus_failed, trueTimeErrorReason(error)) to true
 
         time != null -> stringResource(R.string.details_updated, time) to false
 
@@ -252,7 +259,7 @@ private fun UpdateText(bus: LiveBus, zone: ZoneId) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        color = if (error) {
+        color = if (failed) {
             MaterialTheme.colorScheme.error
         } else {
             MaterialTheme.colorScheme.onSurfaceVariant

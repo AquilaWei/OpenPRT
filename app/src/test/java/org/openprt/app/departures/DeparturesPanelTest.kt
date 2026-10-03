@@ -130,6 +130,22 @@ class DeparturesPanelTest {
     }
 
     @Test
+    fun departuresPanel_busUnderAMinuteAway_saysNow() {
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(
+                    listOf(TWO_DEPARTURES[0].copy(minutesUntilDeparture = 0)),
+                    DeparturesStatus.Ready,
+                    UPDATED
+                ),
+                onDepartureClick = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Now").assertIsDisplayed()
+    }
+
+    @Test
     fun departuresPanel_delayedDeparture_showsDelayedLabel() {
         composeRule.setContent {
             DeparturesPanel(

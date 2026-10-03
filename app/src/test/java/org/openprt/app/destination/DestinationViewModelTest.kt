@@ -203,6 +203,24 @@ class DestinationViewModelTest {
     }
 
     @Test
+    fun selectPlace_namedBuildingWithAddress_labelsDestinationWithBoth() = runTest(dispatcher) {
+        val cathedral = Place(
+            "Cathedral of Learning",
+            "4200 Fifth Avenue, Oakland, Pittsburgh",
+            LatLng(40.4443, -79.9532),
+            address = "4200 Fifth Avenue"
+        )
+        val viewModel = DestinationViewModel(FakeGeocoder())
+
+        viewModel.selectPlace(cathedral)
+
+        assertEquals(
+            "Cathedral of Learning · 4200 Fifth Avenue",
+            viewModel.state.value.destination?.name
+        )
+    }
+
+    @Test
     fun selectPlace_whileRequestInFlight_ignoresItsLateResult() = runTest(dispatcher) {
         val answer = CompletableDeferred<GeocodeResult>()
         val viewModel = DestinationViewModel(geocoder = { _, _ -> answer.await() })

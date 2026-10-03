@@ -51,12 +51,14 @@ class PhotonGeocoderTest {
                     Place(
                         "Carnegie Mellon Café",
                         "5000 Forbes Avenue, Squirrel Hill North, Pittsburgh",
-                        LatLng(40.4424191, -79.9397388)
+                        LatLng(40.4424191, -79.9397388),
+                        address = "5000 Forbes Avenue"
                     ),
                     Place(
                         "Carnegie Mellon University Bookstore",
                         "5032 Forbes Avenue, Squirrel Hill North, Pittsburgh",
-                        LatLng(40.4437584, -79.9423308)
+                        LatLng(40.4437584, -79.9423308),
+                        address = "5032 Forbes Avenue"
                     )
                 )
             ),

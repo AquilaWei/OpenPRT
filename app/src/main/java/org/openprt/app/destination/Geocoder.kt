@@ -10,8 +10,17 @@ data class Place(
     val name: String,
     /** Where it is (street, neighborhood, city), to tell same-named places apart; may be empty. */
     val description: String,
-    val location: LatLng
-)
+    val location: LatLng,
+    /**
+     * The house number and street of a place that has its own [name], so a building name such
+     * as "Cathedral of Learning" still shows which address it is; null when [name] is the
+     * address already or there is no house number.
+     */
+    val address: String? = null
+) {
+    /** How the chosen destination is labeled: the name, then the address when there is one. */
+    val label: String get() = listOfNotNull(name, address).joinToString(" · ")
+}
 
 /** Turns what the user typed into places; an interface so the ViewModel can use a fake. */
 fun interface Geocoder {

@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -223,6 +224,73 @@ class DepartureDetailsPanelTest {
     }
 
     @Test
+    fun detailsPanel_routeTimedOut_saysTrueTimeWasTooSlow() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(DEPARTURE, RouteStatus.Failed(TrueTimeError.Timeout)),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Couldn't load the route: TrueTime took too long to answer.",
+                substring = true
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_routeFailedOffline_saysNoInternet() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Failed(TrueTimeError.Network(IOException("offline")))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("no internet connection", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_routeRejectedByTrueTime_quotesItsMessage() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Failed(TrueTimeError.Api(listOf("Transaction limit exceeded")))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText("TrueTime says \"Transaction limit exceeded\"", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busUpdateFailedBeforeAnyData_saysWhy() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(error = TrueTimeError.Http(503))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Couldn't update the bus: TrueTime server error (HTTP 503).")
+            .assertIsDisplayed()
+    }
+
+    @Test
     fun detailsPanel_routeNotFound_saysBusStoppedReporting() {
         composeRule.setContent {
             DepartureDetailsPanel(
@@ -251,6 +319,22 @@ class DepartureDetailsPanelTest {
 
         composeRule.onNodeWithText("Arrives at your stop in").assertIsDisplayed()
         composeRule.onNodeWithText("7 min").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busUnderAMinuteAway_saysNow() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(arrival = Arrival.Expected(0, delayed = false))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Now").assertIsDisplayed()
     }
 
     @Test
@@ -324,7 +408,11 @@ class DepartureDetailsPanelTest {
         }
 
         composeRule
-            .onNodeWithText("Couldn't update the bus. Showing data from 12:40:15", substring = true)
+            .onNodeWithText(
+                "Couldn't update the bus: TrueTime took too long to answer. " +
+                    "Showing data from 12:40:15",
+                substring = true
+            )
             .assertIsDisplayed()
     }
 

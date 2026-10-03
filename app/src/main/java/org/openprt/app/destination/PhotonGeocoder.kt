@@ -121,5 +121,11 @@ private fun FeatureDto.toPlace(): Place? {
         properties.locality,
         properties.city
     ).distinct().joinToString(", ")
-    return Place(name, description, LatLng(geometry.coordinates[1], geometry.coordinates[0]))
+    return Place(
+        name,
+        description,
+        LatLng(geometry.coordinates[1], geometry.coordinates[0]),
+        // A street alone ("Forbes Avenue") says little more than the description does.
+        address = address.takeIf { properties.name != null && properties.houseNumber != null }
+    )
 }
