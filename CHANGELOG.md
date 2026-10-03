@@ -2,6 +2,13 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.23] - 2026-10-03
+
+### 修正
+
+- 搜尋地點時，離你近的排在前面：例如在 Carnegie Mellon 搜「first baptist church」，第一筆就是 Oakland 的那間，不再是郊區同名的教會（還不知道位置時以 Downtown 為準）
+- 從搜尋結果選好目的地後，地圖會縮放到剛好看得到你和目的地，不再縮成整個郡
+
 ## [0.1.22] - 2026-10-03
 
 ### 修正
