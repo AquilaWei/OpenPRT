@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.21] - 2026-10-03
+
+### 修正
+
+- 班次詳情載入路線或更新公車失敗時，會說明原因：沒有網路、TrueTime 回應太慢、TrueTime 伺服器錯誤，或 TrueTime 自己的錯誤訊息
+- 目的地若是有名稱的建築，會一起顯示門牌地址，例如「To: Cathedral of Learning · 4200 Fifth Avenue」
+- 不到一分鐘就到的公車顯示「Now」，不再顯示「0 min」
+
 ## [0.1.20] - 2026-10-02
 
 ### 新增
