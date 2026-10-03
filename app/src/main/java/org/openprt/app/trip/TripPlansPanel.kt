@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -95,27 +97,40 @@ private fun OptionList(options: List<TripOption>, onSelect: (TripOption) -> Unit
     }
 }
 
-/** One way to go: total time and clock times on top, the legs, then the first bus. */
+/**
+ * One way to go: total time and clock times on top, the legs, then the first bus. The chevron
+ * says the card opens; riders did not find out by themselves that it could be tapped.
+ */
 @Composable
 private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () -> Unit) {
     InfoCard(onClick = onClick) {
-        TripSummary(option, time)
-        Legs(option.legs)
-        Text(
-            text = stringResource(
-                R.string.trip_first_bus,
-                option.firstRoute,
-                displayName(option.boardingStopName),
-                time.format(option.boardingTime)
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            // Green for live data, the same in both themes.
-            color = if (option.live) {
-                MaterialTheme.colorScheme.tertiary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                TripSummary(option, time)
+                Legs(option.legs)
+                Text(
+                    text = stringResource(
+                        R.string.trip_first_bus,
+                        option.firstRoute,
+                        displayName(option.boardingStopName),
+                        time.format(option.boardingTime)
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    // Green for live data, the same in both themes.
+                    color = if (option.live) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
             }
-        )
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_right),
+                contentDescription = stringResource(R.string.trip_open_details),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
     }
 }
 

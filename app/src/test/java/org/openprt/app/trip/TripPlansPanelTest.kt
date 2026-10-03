@@ -1,7 +1,10 @@
 package org.openprt.app.trip
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -10,6 +13,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -180,6 +184,17 @@ class TripPlansPanelTest {
     }
 
     @Test
+    fun tripPlansPanel_twoOptions_eachShowsItOpens() {
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), RecordingActions(), zone = UTC)
+        }
+
+        composeRule
+            .onAllNodesWithContentDescription("Show this way on the map")
+            .assertCountEquals(2)
+    }
+
+    @Test
     fun tripPlansPanel_optionClicked_selectsIt() {
         val actions = RecordingActions()
         composeRule.setContent {
@@ -208,10 +223,19 @@ class TripPlansPanelTest {
             TripPlansPanel(SELECTED, RecordingActions(), zone = UTC)
         }
 
-        composeRule
-            .onNodeWithText("Board at Forbes Ave at Morewood", substring = true)
-            .assertIsDisplayed()
-        composeRule.onNodeWithText("Get off at Steel Plaza", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Board at Forbes Ave at Morewood").assertIsDisplayed()
+        composeRule.onNodeWithText("Get off at Steel Plaza").assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_optionSelected_showsLiveBusAboveTheStops() {
+        composeRule.setContent { TripPlansPanel(SELECTED, RecordingActions(), zone = UTC) }
+
+        val liveBus = composeRule.onNodeWithText("Live bus").getUnclippedBoundsInRoot()
+        val boardAt = composeRule
+            .onNodeWithText("Board at Forbes Ave at Morewood")
+            .getUnclippedBoundsInRoot()
+        assertTrue(liveBus.bottom <= boardAt.top)
     }
 
     @Test

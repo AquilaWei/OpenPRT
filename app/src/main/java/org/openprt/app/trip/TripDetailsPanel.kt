@@ -116,42 +116,35 @@ private fun RideRow(
     val firstRide = ride == plan.itinerary.rides.first()
     val boarding = if (firstRide) option.boardingTime else plan.timeOf(ride.startSeconds)
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        // The live-bus button sits beside the route number, where it is seen without dragging
+        // the sheet up.
         Row(verticalAlignment = Alignment.CenterVertically) {
             RouteBadge(ride.routeId, style = MaterialTheme.typography.titleLarge)
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                ride.headsign?.let {
-                    Text(
-                        text = stringResource(R.string.trip_toward, displayHeadsign(it)),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Text(
-                    text = stringResource(
-                        R.string.trip_board_at,
-                        displayName(ride.from.name),
-                        time.format(boarding)
-                    ),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = stringResource(
-                        R.string.trip_get_off_at,
-                        displayName(ride.to.name),
-                        time.format(plan.timeOf(ride.endSeconds))
-                    ),
-                    style = MaterialTheme.typography.bodyMedium
+            Text(
+                text = ride.headsign?.let {
+                    stringResource(R.string.trip_toward, displayHeadsign(it))
+                }.orEmpty(),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+            )
+            TextButton(onClick = onLiveBus) {
+                IconText(
+                    icon = R.drawable.ic_bus,
+                    text = stringResource(R.string.trip_live_bus),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
-        TextButton(onClick = onLiveBus, modifier = Modifier.align(Alignment.End)) {
-            IconText(
-                icon = R.drawable.ic_bus,
-                text = stringResource(R.string.trip_live_bus),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+        StopAndTime(
+            stringResource(R.string.trip_board_at, displayName(ride.from.name)),
+            time.format(boarding)
+        )
+        StopAndTime(
+            stringResource(R.string.trip_get_off_at, displayName(ride.to.name)),
+            time.format(plan.timeOf(ride.endSeconds))
+        )
         val note = when {
             lookup is RideLookup.Looking && lookup.ride == ride -> R.string.trip_finding_bus
 
@@ -167,5 +160,21 @@ private fun RideRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/**
+ * A stop on the left and its time in a column on the right, so a long name never pushes the time
+ * onto a line of its own.
+ */
+@Composable
+private fun StopAndTime(stop: String, clock: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        Text(
+            text = stop,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f).padding(end = 12.dp)
+        )
+        Text(text = clock, style = MaterialTheme.typography.titleSmall)
     }
 }
