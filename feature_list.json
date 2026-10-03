@@ -162,6 +162,18 @@
         "實機驗收清單：從 GitHub Release 下載 APK 安裝後可正常啟動"
       ],
       "passes": false
+    },
+    {
+      "id": "F27",
+      "description": "方案可指定時間：「Ways to get there」上方加 Leave now / Depart at / Arrive by 切換（預設 Leave now，即目前行為），Depart at / Arrive by 可選日期與時間（GTFS 時刻表有效範圍內）。Arrive by 用反向 RAPTOR 算出最晚出發、仍在期限內抵達的方案，卡片顯示「Leave by …」；出發點超過一小時後的方案不查 TrueTime、只用時刻表；即時首班車晚點可能超過期限時標示提醒。",
+      "steps": [
+        "RoutePlanner 測試：Arrive by 選最晚一班趕得上的車（不選更早一班）；期限前沒有車時回傳 NO_CONNECTION；轉乘保留最小緩衝；最後一段步行在期限內結束；多轉一次車但出發更晚的方案會保留",
+        "TripPlanRepository 測試：Arrive by 凌晨期限會找前一服務日的末班車；換日期查詢時 network 建置次數受控",
+        "TripPlanViewModel 測試：切換 Depart at / Arrive by 以對應時間重新規劃並清掉已選方案；超過一小時的未來不查 TrueTime；即時晚點超過期限時標示提醒",
+        "Compose 測試：模式切換、日期時間按鈕顯示、Arrive by 卡片的 Leave by 與遲到提醒；NO_CONNECTION 文字不再寫死「today」",
+        "實機驗收清單新增：Arrive by 指定日期時間到公開地標（如 CMU），與 Google Maps 的「抵達時間」結果比對"
+      ],
+      "passes": false
     }
   ],
   "verify": "ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk} ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug",
