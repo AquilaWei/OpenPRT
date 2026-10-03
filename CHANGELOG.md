@@ -2,6 +2,15 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.24] - 2026-10-03
+
+### 變更
+
+- 站名與目的地不再全部大寫：「FORBES AVE + MOREWOOD」改成「Forbes Ave + Morewood」；方案詳情的方向去掉代號，「Toward INBOUND-DOWNTOWN」改成「Toward Downtown」
+- 方案卡片右側加上「›」，看得出點了會打開；方案詳情的「Live bus」移到路線編號旁邊，不用把面板往上拉就看得到；上下車時間改放在右側同一欄
+- 上方搜尋區縮成一列：提示改成「Where to?」，選好目的地後直接顯示在搜尋框裡（點它可以重新搜尋，✕ 清除），地圖露出更多；
+  點進搜尋框時會提示也可以長按地圖選點
+
 ## [0.1.23] - 2026-10-03
 
 ### 修正
