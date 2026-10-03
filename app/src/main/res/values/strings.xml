@@ -49,7 +49,9 @@
     <string name="error_reason_timeout">TrueTime took too long to answer</string>
     <string name="error_reason_network">no internet connection</string>
     <string name="error_reason_malformed">TrueTime sent an answer the app can\'t read</string>
-    <string name="destination_hint">Where to? Search, or long-press the map</string>
+    <string name="destination_hint">Where to?</string>
+    <string name="destination_change">Change destination</string>
+    <string name="destination_long_press_hint">Or long-press the map to pick a spot.</string>
     <string name="destination_clear_query">Clear search</string>
     <string name="destination_searching">Searching…</string>
     <string name="destination_no_results">No matching places in the Pittsburgh area.</string>

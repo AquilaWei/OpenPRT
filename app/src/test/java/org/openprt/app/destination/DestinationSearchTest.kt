@@ -1,12 +1,20 @@
 package org.openprt.app.destination
 
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -145,6 +153,55 @@ class DestinationSearchTest {
         composeRule.onNodeWithContentDescription("Clear destination").performClick()
 
         assertEquals(1, clears)
+    }
+
+    @Test
+    fun destinationSearch_destinationChosen_staysOneLineTall() {
+        composeRule.setContent {
+            DestinationSearch(
+                DestinationUiState(destination = Destination(CMU.name, CMU.location)),
+                onQueryChanged = {},
+                onPlaceSelected = {},
+                onRetry = {},
+                onClearDestination = {},
+                modifier = Modifier.testTag("search")
+            )
+        }
+
+        val height = composeRule.onNodeWithTag("search").getUnclippedBoundsInRoot().height
+        assertTrue(height <= 80.dp)
+    }
+
+    @Test
+    fun destinationSearch_destinationChosen_hidesSearchField() {
+        composeRule.setContent {
+            DestinationSearch(
+                DestinationUiState(destination = Destination(CMU.name, CMU.location)),
+                onQueryChanged = {},
+                onPlaceSelected = {},
+                onRetry = {},
+                onClearDestination = {}
+            )
+        }
+
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+    }
+
+    @Test
+    fun destinationSearch_destinationClicked_showsSearchFieldAgain() {
+        composeRule.setContent {
+            DestinationSearch(
+                DestinationUiState(destination = Destination(CMU.name, CMU.location)),
+                onQueryChanged = {},
+                onPlaceSelected = {},
+                onRetry = {},
+                onClearDestination = {}
+            )
+        }
+
+        composeRule.onNodeWithText("To: Carnegie Mellon University").performClick()
+
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
     }
 
     private companion object {
