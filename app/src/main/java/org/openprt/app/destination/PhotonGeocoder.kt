@@ -35,7 +35,7 @@ class PhotonGeocoder(
 ) : Geocoder {
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun search(query: String, bounds: BoundingBox): GeocodeResult {
+    override suspend fun search(query: String, bounds: BoundingBox, near: LatLng): GeocodeResult {
         val url = baseUrl
             .newBuilder()
             .addQueryParameter("q", query)
@@ -46,6 +46,10 @@ class PhotonGeocoder(
                 "bbox",
                 with(bounds) { "$minLongitude,$minLatitude,$maxLongitude,$maxLatitude" }
             )
+            // Location bias: without it the suburbs' "First Baptist Church" outranked the one
+            // in Oakland for a rider at Carnegie Mellon.
+            .addQueryParameter("lat", near.latitude.toString())
+            .addQueryParameter("lon", near.longitude.toString())
             .build()
         val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
 
@@ -121,5 +125,11 @@ private fun FeatureDto.toPlace(): Place? {
         properties.locality,
         properties.city
     ).distinct().joinToString(", ")
-    return Place(name, description, LatLng(geometry.coordinates[1], geometry.coordinates[0]))
+    return Place(
+        name,
+        description,
+        LatLng(geometry.coordinates[1], geometry.coordinates[0]),
+        // A street alone ("Forbes Avenue") says little more than the description does.
+        address = address.takeIf { properties.name != null && properties.houseNumber != null }
+    )
 }

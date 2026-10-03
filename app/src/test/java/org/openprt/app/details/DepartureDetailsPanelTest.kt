@@ -1,11 +1,18 @@
 package org.openprt.app.details
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -16,6 +23,9 @@ import org.openprt.app.data.truetime.TrueTimeError
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.geo.LatLng
 import org.openprt.app.map.StopMarker
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.ThemeMode
+import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
 class DepartureDetailsPanelTest {
@@ -32,9 +42,131 @@ class DepartureDetailsPanelTest {
         }
 
         composeRule.onNodeWithText("61C").assertIsDisplayed()
+        composeRule.onNodeWithText("Board at Forbes Ave at Morewood").assertIsDisplayed()
+        composeRule.onNodeWithText("2 min walk").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_darkTheme_showsRoute() {
+        composeRule.setContent {
+            OpenPrtTheme(ThemeMode.DARK) {
+                DepartureDetailsPanel(
+                    DepartureDetailsUiState(DEPARTURE, RouteStatus.Ready(SHAPE)),
+                    onBack = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("61C").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_otherDirectionNearby_switchingReportsIt() {
+        val switched = mutableListOf<DepartureItem>()
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(DEPARTURE, RouteStatus.Loading),
+                onBack = {},
+                otherDirection = INBOUND,
+                onSwitchDirection = { switched.add(it) }
+            )
+        }
+
+        composeRule.onNodeWithText("Inbound").performClick()
+
+        assertEquals(listOf(INBOUND), switched)
+    }
+
+    @Test
+    fun detailsPanel_currentDirection_isSelected() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(DEPARTURE, RouteStatus.Loading),
+                onBack = {},
+                otherDirection = INBOUND
+            )
+        }
+
+        composeRule.onNode(hasText("Outbound") and hasClickAction()).assertIsSelected()
+    }
+
+    @Test
+    fun detailsPanel_noOtherDirectionNearby_otherDirectionIsDisabled() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(DEPARTURE, RouteStatus.Loading),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNode(hasText("Inbound") and hasClickAction()).assertIsNotEnabled()
+    }
+
+    @Test
+    fun detailsPanel_noOtherDirectionNearby_saysSo() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(DEPARTURE, RouteStatus.Loading),
+                onBack = {}
+            )
+        }
+
         composeRule
-            .onNodeWithText("Board at Forbes Ave at Morewood · 2 min walk")
+            .onNodeWithText("No Inbound buses you can catch nearby right now.")
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busOnRoute_marksItOnTheTimeline() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Ready(SHAPE),
+                    LiveBus(progress = BusProgress(passedStops = 1, stopsAway = 1))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Your bus is here").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busPastFirstStop_marksThatStopPassed() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Ready(SHAPE),
+                    LiveBus(progress = BusProgress(passedStops = 1, stopsAway = 1))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNode(hasText("Fifth Ave at Wood St") and hasStateDescription("Passed"))
+            .assertExists()
+    }
+
+    @Test
+    fun detailsPanel_busApproaching_saysHowManyStopsAway() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(
+                        progress = BusProgress(passedStops = 1, stopsAway = 3),
+                        arrival = Arrival.Expected(7, delayed = false)
+                    )
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("3 stops away").assertIsDisplayed()
     }
 
     @Test
@@ -64,6 +196,8 @@ class DepartureDetailsPanelTest {
         composeRule.onNodeWithText("Board here").assertIsDisplayed()
     }
 
+    // Tall enough for the header and arrival cards plus the whole three-stop timeline.
+    @Config(qualifiers = "w411dp-h900dp")
     @Test
     fun detailsPanel_routeReady_listsStopsFromBoardingStopOn() {
         composeRule.setContent {
@@ -87,6 +221,73 @@ class DepartureDetailsPanelTest {
         }
 
         composeRule.onNodeWithText("Couldn't load the route", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_routeTimedOut_saysTrueTimeWasTooSlow() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(DEPARTURE, RouteStatus.Failed(TrueTimeError.Timeout)),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Couldn't load the route: TrueTime took too long to answer.",
+                substring = true
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_routeFailedOffline_saysNoInternet() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Failed(TrueTimeError.Network(IOException("offline")))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("no internet connection", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_routeRejectedByTrueTime_quotesItsMessage() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Failed(TrueTimeError.Api(listOf("Transaction limit exceeded")))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText("TrueTime says \"Transaction limit exceeded\"", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busUpdateFailedBeforeAnyData_saysWhy() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(error = TrueTimeError.Http(503))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText("Couldn't update the bus: TrueTime server error (HTTP 503).")
+            .assertIsDisplayed()
     }
 
     @Test
@@ -116,7 +317,24 @@ class DepartureDetailsPanelTest {
             )
         }
 
-        composeRule.onNodeWithText("Arrives at your stop in 7 min").assertIsDisplayed()
+        composeRule.onNodeWithText("Arrives at your stop in").assertIsDisplayed()
+        composeRule.onNodeWithText("7 min").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_busUnderAMinuteAway_saysNow() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(arrival = Arrival.Expected(0, delayed = false))
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Now").assertIsDisplayed()
     }
 
     @Test
@@ -190,7 +408,11 @@ class DepartureDetailsPanelTest {
         }
 
         composeRule
-            .onNodeWithText("Couldn't update the bus. Showing data from 12:40:15", substring = true)
+            .onNodeWithText(
+                "Couldn't update the bus: TrueTime took too long to answer. " +
+                    "Showing data from 12:40:15",
+                substring = true
+            )
             .assertIsDisplayed()
     }
 
@@ -205,6 +427,13 @@ class DepartureDetailsPanelTest {
             delayed = false,
             stopId = "7117",
             vehicleId = "5601"
+        )
+
+        val INBOUND = DEPARTURE.copy(
+            direction = "INBOUND",
+            destination = "Downtown",
+            stopName = "Forbes Ave opp Morewood",
+            vehicleId = "5702"
         )
 
         val BOARDING = StopMarker("7117", "Forbes Ave at Morewood", LatLng(40.4445, -79.9429))
@@ -223,3 +452,6 @@ class DepartureDetailsPanelTest {
         val PITTSBURGH: ZoneId = ZoneId.of("America/New_York")
     }
 }
+
+private fun hasStateDescription(description: String) =
+    SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, description)

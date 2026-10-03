@@ -126,7 +126,8 @@ class DepartureDetailsViewModelTest {
                             "Forbes Ave at Morewood",
                             LatLng(40.444567, -79.942862)
                         ),
-                    boardingDistanceFeet = 18620.0
+                    boardingDistanceFeet = 18620.0,
+                    stopDistancesFeet = listOf(0.0, 18620.0)
                 )
             ),
             viewModel.state.value?.route
@@ -357,6 +358,22 @@ class DepartureDetailsViewModelTest {
     }
 
     @Test
+    fun autoRefresh_busBetweenStops_reportsStopsPassedAndStopsAway() = runTest(dispatcher) {
+        // BUS_5601 is 12345 ft along, between the stops at 0 ft and 18620 ft (boarding).
+        val viewModel = DepartureDetailsViewModel(FakeTripSource(), CLOCK)
+        viewModel.open(DEPARTURE)
+
+        val refreshing = launch { viewModel.autoRefresh() }
+        runCurrent()
+        refreshing.cancel()
+
+        assertEquals(
+            BusProgress(passedStops = 1, stopsAway = 1),
+            viewModel.state.value?.bus?.progress
+        )
+    }
+
+    @Test
     fun autoRefresh_busMoved_markerMovesWithIt() = runTest(dispatcher) {
         val source = FakeTripSource()
         val viewModel = DepartureDetailsViewModel(source, CLOCK)
@@ -502,6 +519,7 @@ class DepartureDetailsViewModelTest {
         assertEquals(
             LiveBus(
                 position = BusPosition(LatLng(40.43851, -79.92284), 145),
+                progress = BusProgress(passedStops = 1, stopsAway = 1),
                 arrival = Arrival.Expected(7, delayed = false),
                 lastUpdated = Instant.parse("2026-10-01T12:40:00Z"),
                 error = TrueTimeError.Timeout

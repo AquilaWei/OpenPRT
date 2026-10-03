@@ -1,3 +1,5 @@
 <resources>
-    <color name="ic_launcher_background">#FFB81C</color>
+    <!-- PRT navy; the Compose theme defines the same value in ui/theme/Color.kt. -->
+    <color name="ic_launcher_background">#17365F</color>
+    <color name="window_background">#F8F9FC</color>
 </resources>

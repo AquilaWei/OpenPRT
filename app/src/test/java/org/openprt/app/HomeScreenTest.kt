@@ -1,6 +1,7 @@
 package org.openprt.app
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +34,9 @@ import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.trip.TripPlanUiState
+import org.openprt.app.ui.theme.OpenPrtTheme
+import org.openprt.app.ui.theme.ThemeMode
 
 @RunWith(AndroidJUnit4::class)
 class HomeScreenTest {
@@ -40,7 +44,10 @@ class HomeScreenTest {
     val composeRule = createComposeRule()
 
     // The real MapLibre map needs native code that Robolectric cannot load.
-    private val stubMap: @Composable (Modifier) -> Unit = { Box(it) }
+    private val stubMap: @Composable (
+        Modifier,
+        PaddingValues
+    ) -> Unit = { modifier, _ -> Box(modifier) }
 
     @Test
     fun homeScreen_whenShown_displaysAppTitle() {
@@ -52,9 +59,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -72,9 +84,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -92,9 +109,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -113,9 +135,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = { relocations++ },
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -135,9 +162,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -157,9 +189,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -179,9 +216,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -201,9 +243,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -223,9 +270,14 @@ class HomeScreenTest {
                 detailsState = null,
                 destinationState = DestinationUiState(),
                 destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
                 onRelocate = {},
                 onDepartureClick = {},
                 onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
                 mapContent = stubMap
             )
         }
@@ -234,20 +286,128 @@ class HomeScreenTest {
     }
 
     @Test
+    fun homeScreen_themeMenuDarkPicked_reportsDark() {
+        val picked = mutableListOf<ThemeMode>()
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = { picked += it },
+                mapContent = stubMap
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Theme").performClick()
+        composeRule.onNodeWithText("Dark").performClick()
+
+        assertEquals(listOf(ThemeMode.DARK), picked)
+    }
+
+    @Test
+    fun homeScreen_darkTheme_showsDeparturesSheet() {
+        composeRule.setContent {
+            OpenPrtTheme(ThemeMode.DARK) {
+                HomeScreen(
+                    LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                    MapUiState(stopsStatus = StopsStatus.Ready),
+                    DeparturesUiState(),
+                    detailsState = null,
+                    destinationState = DestinationUiState(),
+                    destinationActions = NoDestinationActions,
+                    tripPlanState = null,
+                    tripPlanActions = NoTripPlanActions,
+                    onRelocate = {},
+                    onDepartureClick = {},
+                    onCloseDetails = {},
+                    onOpenApiKey = {},
+                    themeMode = ThemeMode.DARK,
+                    onThemeModeChange = {},
+                    mapContent = stubMap
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Nearby departures").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_keyButtonClicked_opensApiKeySettings() {
+        var opened = 0
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                onOpenApiKey = { opened++ },
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
+                mapContent = stubMap
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("TrueTime API key").performClick()
+
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun homeScreen_tripPlanSet_showsPlansInsteadOfDepartures() {
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(stopsStatus = StopsStatus.Ready),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = TripPlanUiState.Planning,
+                tripPlanActions = NoTripPlanActions,
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
+                mapContent = stubMap
+            )
+        }
+
+        composeRule.onNodeWithText("Planning your trip…").assertIsDisplayed()
+        composeRule.onNodeWithText("Nearby departures").assertDoesNotExist()
+    }
+
+    @Test
     fun homeScreen_departureClicked_showsItsDetails() {
         composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
 
-        composeRule.onNodeWithText("61C").performClick()
+        composeRule.onNodeWithText("To McKeesport").performClick()
 
-        composeRule.onNodeWithText(
-            "Board at Forbes Ave at Morewood · 2 min walk"
-        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Locating the bus…").assertIsDisplayed()
     }
 
     @Test
     fun homeScreen_backFromDetails_showsNearbyListAgain() {
         composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
-        composeRule.onNodeWithText("61C").performClick()
+        composeRule.onNodeWithText("To McKeesport").performClick()
 
         composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
 
@@ -259,7 +419,7 @@ class HomeScreenTest {
         // Relocating is the screen's only way to ask for a new fix (see MainActivity).
         var relocations = 0
         composeRule.setContent { NavigableHomeScreen(onRelocate = { relocations++ }) }
-        composeRule.onNodeWithText("61C").performClick()
+        composeRule.onNodeWithText("To McKeesport").performClick()
 
         composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
 
@@ -277,9 +437,14 @@ class HomeScreenTest {
             detailsState = details,
             destinationState = DestinationUiState(),
             destinationActions = NoDestinationActions,
+            tripPlanState = null,
+            tripPlanActions = NoTripPlanActions,
             onRelocate = onRelocate,
             onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
             onCloseDetails = { details = null },
+            onOpenApiKey = {},
+            themeMode = ThemeMode.SYSTEM,
+            onThemeModeChange = {},
             mapContent = stubMap
         )
     }

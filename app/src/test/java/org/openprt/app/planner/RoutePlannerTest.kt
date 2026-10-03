@@ -135,6 +135,55 @@ class RoutePlannerTest {
     }
 
     @Test
+    fun plan_nextBusLeavesUnderTheTransferBufferAfterArrival_takesALaterOne() {
+        val planner = plannerFor(
+            trip("T1", "R1", "A" to "08:00", "C" to "08:20"),
+            trip("T2", "R2", "C" to "08:20:30", "D" to "08:30"),
+            trip("T3", "R3", "C" to "08:25", "D" to "08:35")
+        )
+
+        val result = planner.plan(A.location, D.location, at("07:50"))
+
+        assertEquals(
+            listOf(
+                ride("T1", "R1", A, C, "08:00", "08:20"),
+                ride("T3", "R3", C, D, "08:25", "08:35")
+            ),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun plan_nextBusLeavesExactlyTheTransferBufferAfterArrival_takesIt() {
+        val planner = plannerFor(
+            trip("T1", "R1", "A" to "08:00", "C" to "08:20"),
+            trip("T2", "R2", "C" to "08:21", "D" to "08:30")
+        )
+
+        val result = planner.plan(A.location, D.location, at("07:50"))
+
+        assertEquals(
+            listOf(
+                ride("T1", "R1", A, C, "08:00", "08:20"),
+                ride("T2", "R2", C, D, "08:21", "08:30")
+            ),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun plan_busLeavesTheOriginStopAtTheRequestedTime_boardsItWithoutABuffer() {
+        val planner = plannerFor(trip("T1", "R1", "A" to "08:00", "C" to "08:20"))
+
+        val result = planner.plan(A.location, C.location, at("08:00"))
+
+        assertEquals(
+            listOf(ride("T1", "R1", A, C, "08:00", "08:20")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
     fun plan_cannotBoardWherePickupIsNotAllowed_findsNoConnection() {
         val planner = plannerFor(
             trip(
@@ -212,6 +261,11 @@ class RoutePlannerTest {
     @Test(expected = IllegalArgumentException::class)
     fun constructor_zeroRides_throws() {
         RoutePlanner(network(), maxRides = 0)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun constructor_negativeTransferBuffer_throws() {
+        RoutePlanner(network(), minTransferSeconds = -1)
     }
 
     private companion object {

@@ -71,6 +71,8 @@ sealed interface Arrival {
  */
 data class LiveBus(
     val position: BusPosition? = null,
+    /** Where the bus is along the route; null until both the bus and the route are known. */
+    val progress: BusProgress? = null,
     val arrival: Arrival = Arrival.Loading,
     val lastUpdated: Instant? = null,
     val error: TrueTimeError? = null
@@ -190,7 +192,7 @@ private fun LiveBus.next(
 ): LiveBus {
     val vehicle = (vehicles as? TrueTimeResult.Success)?.value
         ?.firstOrNull { it.id == departure.vehicleId }
-    val boardingFeet = ((route as? RouteStatus.Ready)?.shape)?.boardingDistanceFeet
+    val boardingFeet = (route as? RouteStatus.Ready)?.shape?.boardingDistanceFeet
     val passedStop =
         vehicle != null && boardingFeet != null && vehicle.distanceAlongPatternFeet > boardingFeet
     val newArrival = when {
@@ -207,12 +209,19 @@ private fun LiveBus.next(
     }
     val error = (vehicles as? TrueTimeResult.Failure)?.error
         ?: (predictions as? TrueTimeResult.Failure)?.error
+    val shape = (route as? RouteStatus.Ready)?.shape
     return LiveBus(
         position = when (vehicles) {
             is TrueTimeResult.Success ->
                 vehicle?.let { BusPosition(LatLng(it.latitude, it.longitude), it.headingDegrees) }
 
             is TrueTimeResult.Failure -> position
+        },
+        progress = when (vehicles) {
+            is TrueTimeResult.Success ->
+                vehicle?.let { shape?.progressOf(it.distanceAlongPatternFeet.toDouble()) }
+
+            is TrueTimeResult.Failure -> progress
         },
         arrival = newArrival,
         lastUpdated = if (error == null) now else lastUpdated,

@@ -26,6 +26,13 @@ data class StopEntity(
     val locationType: Int
 )
 
+/**
+ * The ID TrueTime uses for this stop: the GTFS `stop_code` (the number printed on PRT stop
+ * signs), falling back to `stop_id` when the feed has no code. Checked against real TrueTime
+ * responses on 2026-10-01.
+ */
+val StopEntity.trueTimeStopId: String get() = code ?: stopId
+
 @Entity(tableName = "routes")
 data class RouteEntity(
     @PrimaryKey val routeId: String,
@@ -134,6 +141,13 @@ interface GtfsDao {
     @Query("SELECT * FROM stop_times WHERE tripId = :tripId ORDER BY stopSequence")
     suspend fun getStopTimesOfTrip(tripId: String): List<StopTimeEntity>
 
+    /** The stops [tripId] serves, in travel order; a loop trip lists a stop once per visit. */
+    @Query(
+        "SELECT s.* FROM stop_times st JOIN stops s ON s.stopId = st.stopId " +
+            "WHERE st.tripId = :tripId ORDER BY st.stopSequence"
+    )
+    suspend fun getStopsOfTrip(tripId: String): List<StopEntity>
+
     /** Calendar rows whose date range contains [date], whatever their weekdays. */
     @Query("SELECT * FROM calendar WHERE :date BETWEEN startDate AND endDate")
     suspend fun getCalendarsCovering(date: LocalDate): List<ServiceCalendarEntity>
@@ -158,6 +172,23 @@ interface GtfsDao {
         serviceIds: Collection<String>,
         limit: Int
     ): List<StopDepartureRow>
+
+    @Query("SELECT * FROM trips WHERE serviceId IN (:serviceIds)")
+    suspend fun getTripsOfServices(serviceIds: Collection<String>): List<TripEntity>
+
+    /**
+     * Every stop time of the trips of [serviceIds], grouped by trip and in travel order within
+     * each trip. Loads a whole service day (about 300,000 rows for PRT), so keep the result
+     * rather than asking again.
+     */
+    // The subquery lets SQLite look the trips up on the primary key; a join made it scan all of
+    // stop_times instead, five times slower on the real feed.
+    @Query(
+        "SELECT * FROM stop_times " +
+            "WHERE tripId IN (SELECT tripId FROM trips WHERE serviceId IN (:serviceIds)) " +
+            "ORDER BY tripId, stopSequence"
+    )
+    suspend fun getStopTimesOfServices(serviceIds: Collection<String>): List<StopTimeEntity>
 
     /** Empties every table; the importer calls it inside the transaction that refills them. */
     suspend fun deleteAll() {

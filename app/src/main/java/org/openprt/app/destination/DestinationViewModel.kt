@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import org.openprt.app.geo.BoundingBox
 import org.openprt.app.geo.LatLng
 import org.openprt.app.geo.PITTSBURGH_AREA
+import org.openprt.app.location.DOWNTOWN_PITTSBURGH
 
 /** The end point of a trip to plan. */
 data class Destination(
@@ -67,7 +68,8 @@ data class DestinationUiState(
  *
  * Typing is debounced by [debounce], and a new keystroke cancels the search in flight, so only
  * the query the user paused on reaches the [geocoder]. Results outside [area] are dropped even if
- * the geocoder returns them, since there is no PRT service to plan a trip to.
+ * the geocoder returns them, since there is no PRT service to plan a trip to. Places near the
+ * user, reported through [onLocationChanged], rank first; until then, places near Downtown.
  */
 class DestinationViewModel(
     private val geocoder: Geocoder,
@@ -81,6 +83,8 @@ class DestinationViewModel(
     // Null stops the current search without starting another. collectLatest cancels the previous
     // request (or its debounce) whenever a new one arrives.
     private val searches = Channel<SearchRequest?>(Channel.CONFLATED)
+
+    private var near: LatLng = DOWNTOWN_PITTSBURGH
 
     init {
         viewModelScope.launch {
@@ -110,8 +114,13 @@ class DestinationViewModel(
         searches.trySend(SearchRequest(query.trim(), debounced = false))
     }
 
+    /** Reports the user's location, so searches favor places near it; null keeps the last one. */
+    fun onLocationChanged(location: LatLng?) {
+        if (location != null) near = location
+    }
+
     override fun selectPlace(place: Place) {
-        setDestination(Destination(place.name, place.location))
+        setDestination(Destination(place.label, place.location))
     }
 
     override fun onMapLongPress(location: LatLng) {
@@ -128,7 +137,7 @@ class DestinationViewModel(
     }
 
     private suspend fun search(query: String) {
-        val search = when (val result = geocoder.search(query, area)) {
+        val search = when (val result = geocoder.search(query, area, near)) {
             is GeocodeResult.Success ->
                 SearchStatus.Results(result.places.filter { it.location in area })
 

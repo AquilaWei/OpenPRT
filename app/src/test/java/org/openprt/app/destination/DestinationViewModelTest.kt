@@ -203,9 +203,50 @@ class DestinationViewModelTest {
     }
 
     @Test
+    fun onQueryChanged_beforeLocationIsKnown_searchesNearDowntown() = runTest(dispatcher) {
+        val geocoder = FakeGeocoder(GeocodeResult.Success(emptyList()))
+        val viewModel = DestinationViewModel(geocoder)
+
+        viewModel.onQueryChanged("first baptist church")
+        advanceUntilIdle()
+
+        assertEquals(listOf(LatLng(40.4406, -79.9959)), geocoder.nearPoints)
+    }
+
+    @Test
+    fun onQueryChanged_afterLocationIsKnown_searchesNearTheUser() = runTest(dispatcher) {
+        val geocoder = FakeGeocoder(GeocodeResult.Success(emptyList()))
+        val viewModel = DestinationViewModel(geocoder)
+        viewModel.onLocationChanged(LatLng(40.4433, -79.9436))
+
+        viewModel.onQueryChanged("first baptist church")
+        advanceUntilIdle()
+
+        assertEquals(listOf(LatLng(40.4433, -79.9436)), geocoder.nearPoints)
+    }
+
+    @Test
+    fun selectPlace_namedBuildingWithAddress_labelsDestinationWithBoth() = runTest(dispatcher) {
+        val cathedral = Place(
+            "Cathedral of Learning",
+            "4200 Fifth Avenue, Oakland, Pittsburgh",
+            LatLng(40.4443, -79.9532),
+            address = "4200 Fifth Avenue"
+        )
+        val viewModel = DestinationViewModel(FakeGeocoder())
+
+        viewModel.selectPlace(cathedral)
+
+        assertEquals(
+            "Cathedral of Learning · 4200 Fifth Avenue",
+            viewModel.state.value.destination?.name
+        )
+    }
+
+    @Test
     fun selectPlace_whileRequestInFlight_ignoresItsLateResult() = runTest(dispatcher) {
         val answer = CompletableDeferred<GeocodeResult>()
-        val viewModel = DestinationViewModel(geocoder = { _, _ -> answer.await() })
+        val viewModel = DestinationViewModel(geocoder = { _, _, _ -> answer.await() })
         viewModel.onQueryChanged("cmu")
         advanceUntilIdle()
 
@@ -231,10 +272,16 @@ class DestinationViewModelTest {
         private val remaining = ArrayDeque(results.toList())
         val queries = mutableListOf<String>()
         val bounds = mutableListOf<BoundingBox>()
+        val nearPoints = mutableListOf<LatLng>()
 
-        override suspend fun search(query: String, bounds: BoundingBox): GeocodeResult {
+        override suspend fun search(
+            query: String,
+            bounds: BoundingBox,
+            near: LatLng
+        ): GeocodeResult {
             queries += query
             this.bounds += bounds
+            nearPoints += near
             return if (remaining.size > 1) remaining.removeFirst() else remaining.first()
         }
     }

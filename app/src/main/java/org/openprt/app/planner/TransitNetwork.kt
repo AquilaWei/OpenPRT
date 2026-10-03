@@ -8,8 +8,16 @@ import org.openprt.app.geo.haversineMeters
 /** Farthest straight-line walk between two stops that the planner treats as a transfer. */
 const val DEFAULT_MAX_TRANSFER_WALK_METERS = 400.0
 
-/** A place where riders board or get off. */
-data class TransitStop(val stopId: String, val name: String, val location: LatLng)
+/**
+ * A place where riders board or get off. [stopId] is the GTFS stop_id the timetable uses;
+ * [trueTimeStopId] is the ID TrueTime knows the stop by, for live predictions.
+ */
+data class TransitStop(
+    val stopId: String,
+    val name: String,
+    val location: LatLng,
+    val trueTimeStopId: String = stopId
+)
 
 /**
  * One scheduled stop of a trip. Times are seconds after the start of the service day and can

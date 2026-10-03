@@ -1,14 +1,18 @@
 package org.openprt.app.departures
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,11 +28,19 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.data.truetime.TrueTimeError
+import org.openprt.app.ui.IconText
+import org.openprt.app.ui.InfoCard
+import org.openprt.app.ui.MinutesPill
+import org.openprt.app.ui.RouteBadge
+import org.openprt.app.ui.StatusChip
+import org.openprt.app.ui.TimeStatus
+import org.openprt.app.ui.displayHeadsign
+import org.openprt.app.ui.displayName
 
 /**
- * The list of departures near the user, shown in the home screen's bottom sheet. A failed
- * refresh keeps the previous list and says how old it is; times are shown in [zone].
- * Tapping a row reports it through [onDepartureClick].
+ * The departures near the user, shown in the home screen's bottom sheet as one card per route
+ * with a row for each direction. A failed refresh keeps the previous list and says how old it
+ * is; times are shown in [zone]. Tapping a row reports it through [onDepartureClick].
  */
 @Composable
 fun DeparturesPanel(
@@ -68,58 +80,79 @@ private fun DepartureList(
     onDepartureClick: (DepartureItem) -> Unit
 ) {
     // Bounded so the list scrolls inside the sheet instead of growing past the screen.
-    LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-        items(departures) { departure ->
-            DepartureRow(departure, onClick = { onDepartureClick(departure) })
-            HorizontalDivider()
+    LazyColumn(
+        modifier = Modifier.heightIn(max = 400.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(groupByRoute(departures), key = { it.route }) { group ->
+            RouteCard(group, onDepartureClick)
+        }
+    }
+}
+
+/** One route: its badge on the left, then a row for each direction it can be caught in. */
+@Composable
+private fun RouteCard(group: DepartureGroup, onDepartureClick: (DepartureItem) -> Unit) {
+    InfoCard {
+        Row {
+            // A fixed-width column keeps the rows of every card lined up.
+            Box(modifier = Modifier.width(72.dp).padding(top = 8.dp, end = 12.dp)) {
+                RouteBadge(group.route, style = MaterialTheme.typography.titleLarge)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                group.rows.forEachIndexed { index, departure ->
+                    if (index > 0) HorizontalDivider()
+                    DirectionRow(departure, onClick = { onDepartureClick(departure) })
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun DepartureRow(departure: DepartureItem, onClick: () -> Unit) {
-    ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
-        leadingContent = {
-            Text(
-                text = departure.route,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(56.dp)
+private fun DirectionRow(departure: DepartureItem, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            IconText(
+                icon = R.drawable.ic_arrow_forward,
+                text = directionLabel(departure.direction),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
             )
-        },
-        headlineContent = {
-            Text(stringResource(R.string.departures_destination, departure.destination))
-        },
-        supportingContent = {
             Text(
-                stringResource(
-                    R.string.departures_stop_and_walk,
-                    departure.direction,
-                    departure.stopName,
-                    departure.walkMinutes
-                )
+                text = stringResource(
+                    R.string.departures_destination,
+                    displayHeadsign(departure.destination)
+                ),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
-        },
-        trailingContent = {
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = stringResource(
-                        R.string.departures_minutes,
-                        departure.minutesUntilDeparture
-                    ),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                if (departure.delayed) {
-                    Text(
-                        text = stringResource(R.string.departures_delayed),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-            }
+            IconText(icon = R.drawable.ic_place, text = displayName(departure.stopName))
+            IconText(
+                icon = R.drawable.ic_walk,
+                text = stringResource(R.string.departures_walk, departure.walkMinutes)
+            )
         }
-    )
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(start = 8.dp)
+        ) {
+            MinutesPill(departure.minutesUntilDeparture)
+            // Every nearby departure is a TrueTime prediction, so it is live unless late.
+            StatusChip(if (departure.delayed) TimeStatus.DELAYED else TimeStatus.LIVE)
+        }
+    }
 }
 
 @Composable

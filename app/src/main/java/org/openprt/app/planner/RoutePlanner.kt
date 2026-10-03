@@ -11,6 +11,12 @@ const val DEFAULT_MAX_ACCESS_WALK_METERS = 800.0
 const val DEFAULT_MAX_RIDES = 3
 
 /**
+ * Least time between getting off one bus and leaving on the next, walk included, so a transfer
+ * does not hang on a bus that is a few seconds late.
+ */
+const val DEFAULT_MIN_TRANSFER_SECONDS = 60
+
+/**
  * Plans transit trips on a [TransitNetwork] with RAPTOR (Delling, Pajor & Werneck, 2012), on the
  * device and without network access.
  *
@@ -20,21 +26,28 @@ const val DEFAULT_MAX_RIDES = 3
  * arrive together the one with fewer transfers wins.
  *
  * Walks are straight lines at [walkingSpeedMetersPerSecond], rounded up to whole seconds.
- * Transfers need no buffer: a bus can be boarded at the second the previous one arrives.
+ * A transfer leaves at least [minTransferSeconds] after the previous ride arrives, or after the
+ * transfer walk if that takes longer. The first bus has no such buffer: the walk from the origin
+ * is timed to reach the stop as it leaves.
  *
- * @throws IllegalArgumentException if [walkingSpeedMetersPerSecond] or [maxRides] is not positive.
+ * @throws IllegalArgumentException if [walkingSpeedMetersPerSecond] or [maxRides] is not
+ *   positive, or [minTransferSeconds] is negative.
  */
 class RoutePlanner(
     private val network: TransitNetwork,
     private val walkingSpeedMetersPerSecond: Double = DEFAULT_WALKING_SPEED_METERS_PER_SECOND,
     private val maxAccessWalkMeters: Double = DEFAULT_MAX_ACCESS_WALK_METERS,
-    private val maxRides: Int = DEFAULT_MAX_RIDES
+    private val maxRides: Int = DEFAULT_MAX_RIDES,
+    private val minTransferSeconds: Int = DEFAULT_MIN_TRANSFER_SECONDS
 ) {
     init {
         require(walkingSpeedMetersPerSecond > 0) {
             "walkingSpeedMetersPerSecond must be positive: $walkingSpeedMetersPerSecond"
         }
         require(maxRides > 0) { "maxRides must be positive: $maxRides" }
+        require(minTransferSeconds >= 0) {
+            "minTransferSeconds must not be negative: $minTransferSeconds"
+        }
     }
 
     /**
@@ -83,6 +96,10 @@ class RoutePlanner(
         private val arrival = Array(maxRides + 1) { IntArray(stopCount) { UNREACHED } }
         private val labels = Array(maxRides + 1) { arrayOfNulls<Label>(stopCount) }
 
+        // boardable[k][s]: when a bus can be boarded at s after arriving as in arrival[k][s]; later
+        // than the arrival by the transfer buffer unless s was reached by the walk from the origin.
+        private val boardable = Array(maxRides + 1) { IntArray(stopCount) { UNREACHED } }
+
         // Kept apart from labels because a transfer walk can later replace a stop's label, and
         // walks from that stop still need the ride that got there.
         private val rides = Array(maxRides + 1) { arrayOfNulls<Label.Ride>(stopCount) }
@@ -95,6 +112,7 @@ class RoutePlanner(
             for (round in 1..maxRides) {
                 if (marked.isEmpty()) break
                 arrival[round - 1].copyInto(arrival[round])
+                boardable[round - 1].copyInto(boardable[round])
                 val reachedByRide = scanPatterns(round, marked)
                 recordDestination(round)
                 marked = walkTransfers(round, reachedByRide)
@@ -102,9 +120,16 @@ class RoutePlanner(
             return found
         }
 
-        private fun improve(round: Int, stop: Int, seconds: Int, label: Label): Boolean {
+        private fun improve(
+            round: Int,
+            stop: Int,
+            seconds: Int,
+            boardableSeconds: Int,
+            label: Label
+        ): Boolean {
             if (seconds >= minOf(best[stop], bestAtDestination)) return false
             arrival[round][stop] = seconds
+            boardable[round][stop] = boardableSeconds
             best[stop] = seconds
             labels[round][stop] = label
             return true
@@ -112,12 +137,8 @@ class RoutePlanner(
 
         private fun walkFromOrigin(): Set<Int> = access
             .filter {
-                improve(
-                    0,
-                    it.stop,
-                    departureSeconds + walkSeconds(it.distanceMeters),
-                    Label.Access(it.distanceMeters)
-                )
+                val seconds = departureSeconds + walkSeconds(it.distanceMeters)
+                improve(0, it.stop, seconds, seconds, Label.Access(it.distanceMeters))
             }
             .mapTo(LinkedHashSet()) { it.stop }
 
@@ -152,13 +173,14 @@ class RoutePlanner(
                 val onBoard = trip
                 if (onBoard != null && onBoard.stops[position].dropOffAllowed) {
                     val ride = Label.Ride(pattern, onBoard, board, position)
-                    if (improve(round, stop, ride.arrivalSeconds, ride)) {
+                    val ready = ride.arrivalSeconds + minTransferSeconds
+                    if (improve(round, stop, ride.arrivalSeconds, ready, ride)) {
                         rides[round][stop] = ride
                         reached += stop
                     }
                 }
                 // Board here if the previous round got here in time for an earlier trip.
-                val ready = arrival[round - 1][stop]
+                val ready = boardable[round - 1][stop]
                 if (ready == UNREACHED) continue
                 val candidate = pattern.earliestTrip(position, ready) ?: continue
                 if (onBoard == null ||
@@ -191,8 +213,9 @@ class RoutePlanner(
                 val arrived = checkNotNull(rides[round][from]).arrivalSeconds
                 for (to in network.transfers[from]) {
                     val seconds = arrived + walkSeconds(to.distanceMeters)
+                    val ready = maxOf(seconds, arrived + minTransferSeconds)
                     val label = Label.Transfer(from, to.distanceMeters)
-                    if (improve(round, to.stop, seconds, label)) marked += to.stop
+                    if (improve(round, to.stop, seconds, ready, label)) marked += to.stop
                 }
             }
             return marked

@@ -1,207 +1,247 @@
 {
   "features": [
     {
-      "id": "F1",
-      "description": "Android 專案骨架：Kotlin + Jetpack Compose 單一 app 模組，Gradle wrapper、version catalog、ktlint、Android Lint、JUnit 單元測試，GitHub Actions CI，README / CHANGELOG / .gitignore。",
-      "steps": [
-        "`./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug` 在乾淨 clone 上成功（verify 指令本身）",
-        "版號只寫在一個地方（gradle.properties 的 VERSION_NAME / VERSION_CODE），app 的 versionName 從那裡讀；初始版號 0.1.0",
-        "app 啟動畫面是一個 Compose 空白主畫面，有一個 Robolectric Compose 測試確認標題文字 \"OpenPRT\" 顯示",
-        ".gitignore 排除 build/、.gradle/、local.properties、CLAUDE.md、.claude/、notes/、*.apk",
-        ".github/workflows/ci.yml 在 push / PR 上跑與 verify 相同的指令",
-        "README 說明專案用途、需求（JDK、Android SDK 35）、建置指令；CHANGELOG 有 0.1.0 條目"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F2",
-      "description": "PRT TrueTime（Clever Devices BusTime v3）API 用戶端：getroutes、getdirections、getstops、getpredictions、getvehicles、getpatterns 的資料模型與解析；API key 由 local.properties 注入 BuildConfig，不進 git。",
-      "steps": [
-        "每個端點都有用 MockWebServer + 錄製好的 JSON fixture 的測試，驗證解析出的欄位值（例：prediction 的 rt、stpid、prdtm、dly）",
-        "API 回傳 bustime-response.error（例如 No data found）時，用戶端回傳明確的錯誤型別而不是丟出未分類例外或吞掉",
-        "HTTP 逾時 / 非 200 回應會以錯誤結果往上傳，各有一個測試",
-        "local.properties 沒有 PRT_API_KEY 時建置仍成功，呼叫 API 時回傳 MissingApiKey 錯誤（有測試）",
-        "README 寫明如何申請與設定 PRT_API_KEY"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F3",
-      "description": "GTFS 靜態資料匯入（站牌與路線）：下載 PRT GTFS zip，解析 stops.txt、routes.txt 存進 Room 資料庫，供附近站牌查詢使用。",
-      "steps": [
-        "GTFS CSV 解析器能處理引號、逗號、BOM 與缺欄位，各有單元測試（用小型 fixture）",
-        "用 fixture zip 匯入後，Room 中的 stops / routes 筆數與內容符合預期（Robolectric 或 in-memory Room 測試）",
-        "重複匯入同一份資料不會產生重複資料列",
-        "下載失敗時回傳錯誤，既有資料庫內容保持不變（有測試）"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F4",
-      "description": "附近站牌查詢：給定經緯度與半徑，回傳依步行直線距離排序的站牌清單（邊界框預篩 + haversine）。",
-      "steps": [
-        "haversine 距離函式對已知兩點（例：Downtown 到 Oakland）的結果誤差在 1% 內",
-        "給定 fixture 站牌，查詢 400 公尺內回傳的站牌 ID 與順序符合寫死的預期值",
-        "半徑內沒有站牌時回傳空清單",
-        "查詢使用資料庫邊界框條件，不是把所有站牌讀進記憶體再過濾（以 DAO 查詢測試驗證）"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F5",
-      "description": "定位：位置權限請求流程與 LocationProvider 抽象（實作用 FusedLocationProviderClient），拒絕權限時退回預設位置（Downtown Pittsburgh）並提示使用者。",
-      "steps": [
-        "LocationProvider 介面有 Fake 實作，ViewModel 測試驗證：授權時使用回報位置",
-        "拒絕權限時 ViewModel 狀態為 PermissionDenied 並使用預設座標（有測試）",
-        "定位逾時或失敗時狀態帶錯誤訊息，不會卡在 Loading（有測試）",
-        "實機驗收清單（progress.md）：首次啟動跳出權限對話框、允許後取得真實位置"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F6",
-      "description": "地圖主畫面：顯示地圖、使用者位置標記與附近站牌標記，地圖中心跟隨定位。",
-      "steps": [
-        "MapViewModel 依 Fake 位置與 Fake 站牌資料產生的標記清單（ID、座標）符合預期（單元測試）",
-        "位置更新超過一定距離（例如 100 公尺）才重新查詢附近站牌，有測試驗證不會每次微小移動都查詢",
-        "Compose 測試確認地圖容器與「重新定位」按鈕存在",
-        "實機驗收清單：地圖正確顯示匹茲堡、站牌標記位置與實際站牌吻合"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F7",
-      "description": "班次排序邏輯（純 Kotlin）：結合附近站牌的步行時間與 TrueTime 預測抵達時間，排出「最合適」的班次（趕得上、等待時間最短），同一路線同方向只保留最佳站牌。",
-      "steps": [
-        "步行時間以距離 / 步行速度（預設 1.2 m/s）計算，有測試",
-        "步行時間大於公車抵達時間（趕不上）的班次被排除，有測試",
-        "同一路線同方向出現在多個站牌時，只保留可最早上車的那筆，有測試",
-        "排序結果對一組寫死的輸入產生寫死的輸出順序",
-        "時間計算使用注入的 Clock，測試不依賴系統時間"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F8",
-      "description": "附近班次列表 UI：在地圖下方（bottom sheet）顯示排序後的班次（路線、方向、站牌、步行時間、預估抵達分鐘數、誤點標示），每 30 秒自動更新。",
-      "steps": [
-        "ViewModel 測試：以虛擬時間推進 30 秒會觸發一次新的 predictions 請求",
-        "畫面離開前景（lifecycle STOPPED）時停止自動更新（有測試）",
-        "API 失敗時顯示錯誤狀態與上次成功資料的時間，不清空列表（有測試）",
-        "Compose 測試：給定兩筆班次，列表顯示對應路線編號與「x 分」文字",
-        "沒有附近班次時顯示空狀態文字（Compose 測試）"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F9",
-      "description": "班次詳情：點擊班次後在地圖上畫出該路線 pattern 折線與沿線站牌，標出使用者的上車站。",
-      "steps": [
-        "點擊列表項目會導覽到詳情狀態，ViewModel 用該班次的 pid 呼叫 getpatterns（有測試）",
-        "pattern 點轉換成折線座標與站牌標記清單，結果符合 fixture 預期（單元測試）",
-        "返回後回到附近班次列表且不重新請求定位（有測試）",
-        "實機驗收清單：折線沿實際道路、上車站牌有醒目標示"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F10",
-      "description": "即時公車位置與抵達預估：詳情畫面顯示該班車（vid）最新位置，每 15 秒更新，並顯示到上車站的預估抵達時間與資料更新時間。",
-      "steps": [
-        "ViewModel 以虛擬時間每 15 秒呼叫一次 getvehicles 與 getpredictions（有測試）",
-        "車輛位置更新後標記座標隨之更新（有測試）",
-        "車輛已過站或預測消失時顯示「已離站」狀態（有測試）",
-        "顯示的預估抵達分鐘數由 prdtm 與注入 Clock 計算，有測試",
-        "實機驗收清單：公車標記移動與實際車輛位置一致"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F11",
-      "description": "目的地選擇：搜尋地點（地理編碼）或在地圖上長按選點，作為路線規劃的終點。",
-      "steps": [
-        "Geocoder 抽象有 Fake 實作；輸入關鍵字後 debounce 300ms 才查詢（虛擬時間測試）",
-        "搜尋結果限制在匹茲堡地區邊界內（有測試）",
-        "長按地圖產生的目的地座標被設為終點狀態（ViewModel 測試）",
-        "地理編碼失敗時顯示錯誤並允許重試（有測試）"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F12",
-      "description": "GTFS 時刻表資料匯入：trips、stop_times、calendar、calendar_dates 存入 Room，提供路線規劃所需的時刻查詢（含服務日判斷）。",
-      "steps": [
-        "fixture GTFS 匯入後，可查詢某站某服務日某時間後的發車清單，結果符合寫死預期",
-        "calendar_dates 的例外（加開 / 停駛）正確覆蓋 calendar（各一個測試）",
-        "超過 24:00:00 的 GTFS 時間（例 25:10:00）正確轉成隔日時間（有測試）",
-        "完整 PRT GTFS 匯入時間與資料庫大小記錄在 progress.md（實機或模擬器量測）"
-      ],
-      "passes": true
-    },
-    {
-      "id": "F13",
-      "description": "路線規劃引擎（RAPTOR，純 Kotlin，於裝置上執行）：給定起點座標、終點座標與出發時間，回傳最多 3 個行程方案（步行 + 乘車 + 轉乘），以抵達時間與轉乘次數取 Pareto 最佳。",
-      "steps": [
-        "小型手工 fixture 網路上，直達案例回傳單一乘車段，起訖站與時間符合寫死預期",
-        "需要一次轉乘的案例回傳兩段乘車與正確轉乘站",
-        "抵達時間相同時偏好轉乘較少的方案（有測試）",
-        "起訖點步行可達範圍內沒有站牌時回傳 NoRoute 錯誤（有測試）",
-        "演算法與 Android 無依賴，可在 JVM 單元測試中執行"
-      ],
-      "passes": true
-    },
-    {
       "id": "F14",
-      "description": "路線規劃結果 UI：顯示方案清單（總時間、出發 / 抵達時間、轉乘次數、各段路線編號與步行時間），首段公車若有 TrueTime 即時預測則以即時時間顯示。",
+      "description": "從 Room 建立路線規劃網路：查出某服務日的 active trips 與其 stop_times，建成 F13 的 TransitNetwork（背景執行緒、依服務日快取），凌晨查詢合併前一服務日（秒數 +86400）的結果，並加上最小轉乘緩衝。提供一個 TripPlanRepository.plan(origin, destination, departAt) 介面給 UI 用。",
       "steps": [
-        "ViewModel 測試：選定目的地後呼叫規劃器並顯示方案清單狀態",
-        "首段乘車有即時預測時，顯示時間採用預測值並標示「即時」（有測試）",
-        "Compose 測試：方案項目顯示路線編號、轉乘次數與總分鐘數",
-        "規劃無結果時顯示空狀態與建議（有測試）"
+        "用 fixture GTFS 匯入 in-memory Room 後，TripPlanRepository 對寫死的起訖點與時間回傳的方案（路線、上下車站、時間）符合寫死預期",
+        "同一服務日連續規劃兩次只建一次網路（以計數 Fake 或查詢次數驗證），換服務日會重建",
+        "凌晨（例 00:30）查詢能找到前一服務日 24:00 之後的深夜班次（fixture 的 T4 25:10），有測試",
+        "轉乘緩衝：下車後 < 最小轉乘秒數（預設 60 秒）的班次不會被當成轉乘，有測試；直達不受影響",
+        "資料庫沒有 GTFS 資料時回傳明確錯誤，不丟未分類例外（有測試）",
+        "RideLeg 的上車站可以對照到 TrueTime stpid（stop_code，無 code 退回 stop_id），有測試"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F15",
-      "description": "行程方案地圖顯示：點選方案後在地圖上畫出步行段（虛線）與各乘車段折線、上下車站牌，並可點進乘車段查看即時公車位置（沿用 F10）。",
+      "description": "路線規劃結果 UI：選定目的地後自動規劃，在 bottom sheet 顯示方案清單（總分鐘數、出發 / 抵達時間、轉乘次數、各段路線編號與步行分鐘）；首段公車若有 TrueTime 即時預測則改用即時時間並標示「即時」。",
       "steps": [
-        "方案轉換成地圖圖層清單（步行段 / 乘車段 / 站牌標記）的結果符合 fixture 預期（單元測試）",
-        "點擊乘車段導覽到該班車的即時詳情（ViewModel 測試）",
-        "實機驗收清單：完整走一次「定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車」"
+        "ViewModel 測試：目的地從 null 變成有值時以目前位置與注入 Clock 的時間呼叫 TripPlanRepository，狀態依序為 Planning → Results",
+        "清除目的地時回到附近班次列表並取消進行中的規劃（有測試）",
+        "首段乘車有對應路線與上車站的即時預測時，顯示的出發時間採用預測值並標示 live（有測試）；預測查詢失敗時退回時刻表時間，不讓整個規劃失敗（有測試）",
+        "Compose 測試：給定兩個方案，列表顯示路線編號、轉乘次數與總分鐘數文字",
+        "NoRoute 的三種原因各顯示對應的空狀態文字（Compose 或 ViewModel 測試）",
+        "實機驗收清單（progress.md）新增：選目的地後數秒內出現方案、時間合理"
+      ],
+      "passes": true
+    },
+    {
+      "id": "F20",
+      "description": "App 內設定 TrueTime API key：第一次啟動沒有 key 時先顯示引導畫面（說明用途、開啟 PRT 申請頁、輸入 key、可略過），輸入後先用 TrueTime 驗證再存到手機；之後可從主畫面上方的鑰匙按鈕更換。local.properties 的 PRT_API_KEY 改為開發用的預設值。",
+      "steps": [
+        "第一次啟動、沒有存過 key 且 BuildConfig 也沒有 key 時顯示引導畫面；有 key 或曾經略過時不顯示（ViewModel 測試）",
+        "輸入 key 按儲存時先呼叫 TrueTime 驗證：通過才存並關閉畫面；TrueTime 回 key 無效時顯示錯誤且不存；連不上時顯示錯誤並提供「不驗證直接儲存」（各一個測試）",
+        "存下的 key 在下一次 TrueTime 請求就生效，不需要重開 App（TrueTimeClient 每次請求讀目前的 key，有測試）",
+        "key 存在 App 私有儲存（SharedPreferences，allowBackup=false），重開 App 後仍在（Robolectric 測試）；App 內存的 key 優先於 BuildConfig",
+        "主畫面上方的鑰匙按鈕可以重新開啟設定畫面，取消時不改動已存的 key（Compose / ViewModel 測試）",
+        "README 改寫成「第一次啟動在 App 內輸入 key」，local.properties 僅供開發",
+        "實機驗收清單新增：首次啟動出現引導、輸入真實 key 後附近班次出現；輸入錯誤 key 顯示錯誤"
+      ],
+      "passes": true
+    },
+    {
+      "id": "F21",
+      "description": "重新設計外觀並支援淺色 / 深色主題：自訂 Material 3 色彩（預設方向：PRT 品牌的深藍 + 金黃，待使用者確認），淺色與深色兩套 color scheme；預設跟隨系統，設定頁可選「系統 / 淺色 / 深色」；地圖樣式與站牌、路線、公車等圖層顏色隨主題切換（OpenFreeMap liberty / dark）；重新設計 App 圖示（adaptive + monochrome）與畫面內圖示。",
+      "steps": [
+        "OpenPrtTheme 提供 light / dark 兩套 ColorScheme，MainActivity 與所有畫面改用它；Compose 測試在深色下渲染主要畫面不出錯",
+        "主題設定（系統 / 淺色 / 深色）存在 App 私有儲存、重開後保留，有測試；從主畫面的設定入口可切換，切換後立即生效",
+        "地圖圖層顏色與樣式網址由主題決定的純 Kotlin 函式，light / dark 結果符合寫死預期（單元測試）",
+        "淺色與深色下主要文字、按鈕、即時 / 誤點標示對背景的對比 ≥ 4.5:1（測試以寫死色碼計算）",
+        "新 App 圖示：adaptive icon 前景 / 背景 + monochrome 圖層（Android 13 主題圖示），lint 無圖示相關警告",
+        "實機驗收清單新增：系統切深色時 App 與地圖一起變深色、App 內手動切換有效、新圖示在桌面與主題圖示模式下清楚"
+      ],
+      "passes": true
+    },
+    {
+      "id": "F26",
+      "description": "地圖上的公車改用公車圖示：班次詳情中選定的公車由綠色圓點改成公車圖示，依 TrueTime 回報的行車方向（hdg）旋轉，顏色隨淺色 / 深色主題切換，讓人一眼看出那是公車。",
+      "steps": [
+        "BusPosition 轉成帶 heading 屬性的 GeoJSON Feature 的純函式（單元測試：座標與 heading 正確）",
+        "新增公車圖示 vector drawable，地圖的 bus 圖層改用 SymbolLayer，圖示依主題色上色並依 heading 旋轉、允許重疊",
+        "淺色與深色主題都能看清楚公車圖示（MapPalette 測試涵蓋公車顏色）",
+        "實機驗收清單新增：班次詳情的地圖上看到公車圖示並朝行進方向"
+      ],
+      "passes": true
+    },
+    {
+      "id": "F25",
+      "description": "附近班次與班次詳情改成卡片式介面並能切換方向：附近班次每條路線一張卡片，兩個方向各一列（方向標籤、目的地、倒數分鐘膠囊、即時 / 延誤標籤、站名與步行分鐘）；班次詳情分成標題卡（含 Inbound / Outbound 方向切換）、抵達卡（大字分鐘、狀態標籤、公車還有幾站）與站序時間軸（上車站、公車位置、已過站淡化）；行程方案面板也改用相同卡片風格。",
+      "steps": [
+        "附近班次依路線分組（DepartureGroup），組內依方向、組間依最早班次排序（單元測試）",
+        "Compose 測試：同一路線兩個方向出現在同一張卡片，點某一列回報該方向的班次",
+        "班次詳情的方向切換：有反方向班次時可切換並改顯示該方向的上車站與下一班（ViewModel 與 Compose 測試）；附近沒有反方向時按鈕停用並說明",
+        "公車在站序上的位置（最近的站）與還有幾站的計算（純函式單元測試）",
+        "站序時間軸 Compose 測試：標出上車站與公車位置，已過站顯示為已過",
+        "新增的卡片與標籤配色在淺色與深色主題都通過對比測試（≥ 4.5）",
+        "實機驗收清單新增：卡片清楚易讀、方向切換直覺、時間軸看得懂"
+      ],
+      "passes": true
+    },
+    {
+      "id": "F16",
+      "description": "行程方案地圖顯示：點選方案後在地圖上畫出步行段（虛線）與各乘車段折線（依 GTFS shapes 或站點連線）、上下車站牌；點乘車段進入該班車的即時詳情（沿用 F9/F10 的 DepartureDetailsViewModel）。",
+      "steps": [
+        "方案轉換成地圖圖層資料（步行段座標 / 乘車段座標 / 上下車站標記）的純 Kotlin 函式，結果符合 fixture 寫死預期（單元測試）",
+        "點擊方案進入方案詳情狀態，返回回到方案清單且不重新規劃（ViewModel 測試）",
+        "點擊乘車段時，若 TrueTime 有該路線在上車站的預測，以對應的 vid 開啟即時詳情（ViewModel 測試）；沒有即時資料時顯示「僅時刻表」提示（有測試）",
+        "Compose 測試：方案詳情列出每一段（步行分鐘 / 路線與上下車站）",
+        "實機驗收清單新增：完整走一次「定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車」"
+      ],
+      "passes": true
+    },
+    {
+      "id": "F24",
+      "description": "地圖站牌可以點擊並加上圖例：點附近站牌（或路線上的站牌）時 bottom sheet 顯示該站名稱、站牌編號與接下來的班次（TrueTime 即時，沒有 key 或失敗時用 GTFS 時刻表），點班次可進入既有的班次詳情；地圖角落有「圖例」按鈕，列出各種顏色 / 圖示代表的意思（你的位置、站牌、上車站、目的地、公車、路線），淺色與深色主題都正確。",
+      "steps": [
+        "點擊判斷：給定點擊座標與站牌清單，回傳觸控範圍內最近的站牌（純 Kotlin，單元測試）；範圍外回傳 null，不影響長按選目的地",
+        "StopDeparturesViewModel：選了站牌後查該站 TrueTime predictions（每 30 秒更新、背景停止），失敗或沒有 key 時改顯示時刻表班次並標示 scheduled（各一個測試）",
+        "點站牌班次列表中的一班進入班次詳情（沿用 DepartureDetailsViewModel），返回回到站牌列表（有測試）",
+        "Compose 測試：站牌面板顯示站名、站牌編號與班次；圖例列出每一種地圖標記的說明文字",
+        "圖例的顏色與地圖圖層使用同一份主題色定義（測試比對兩者一致）",
+        "實機驗收清單新增：點站牌出現該站班次、圖例說明與地圖上看到的一致"
       ],
       "passes": false
     },
     {
-      "id": "F16",
-      "description": "可靠性與離線狀態：無網路、API key 失效、API 配額用盡、GTFS 資料過期時的提示；GTFS 每週背景更新（WorkManager）。",
+      "id": "F22",
+      "description": "起點也可以輸入地址：目的地搜尋框上方加「From」欄位，預設「My location」，可用同一套 Photon 搜尋或長按地圖（選起點模式）設定；路線規劃用選定的起點；可一鍵對調起訖點。",
       "steps": [
-        "無網路時列表顯示離線提示並保留上次資料（有測試）",
-        "TrueTime 回傳 key 無效或超過配額時顯示對應訊息（各一個測試）",
-        "GTFS 資料超過 7 天時排程背景更新，WorkManager 測試驗證排程條件（需要網路、充電中可選）",
-        "更新失敗不影響現有資料（有測試）"
+        "起點預設為目前位置；選了地址後規劃改用該地址座標，不再隨定位改變（TripPlanViewModel 測試）",
+        "清除起點回到 My location 並以目前位置重新規劃（有測試）",
+        "對調按鈕交換起訖點並重新規劃；起點是 My location 時對調後目的地變成目前位置座標（有測試）",
+        "Compose 測試：From 欄位顯示 My location / 選定地點名稱，搜尋結果點選後填入",
+        "實機驗收清單新增：輸入兩個地址規劃出方案"
+      ],
+      "passes": false
+    },
+    {
+      "id": "F23",
+      "description": "步行段沿街道的實際路線：方案顯示時對各步行段向 OpenStreetMap 步行路線服務（預設 FOSSGIS Valhalla，pedestrian，待使用者確認）查詢路徑，地圖以虛線沿街道畫出並更新步行分鐘；服務失敗或逾時時退回直線，不影響方案。",
+      "steps": [
+        "WalkRouter 介面 + Valhalla 實作，MockWebServer fixture（真實錄製一筆）解析出折線座標與秒數（單元測試）",
+        "失敗 / 逾時（預設 5 秒）回傳直線結果，方案仍顯示（有測試）",
+        "同一段步行（起訖座標相同）只查一次（快取，有測試）；請求帶 User-Agent，遵守服務使用政策（progress.md 記錄）",
+        "地圖步行段改畫路線服務的折線（F16 的圖層資料函式測試更新）",
+        "實機驗收清單新增：步行虛線沿著人行道 / 街道，而不是穿過建築物"
       ],
       "passes": false
     },
     {
       "id": "F17",
-      "description": "發佈流程：CI 在 tag vX.Y.Z 時建置簽章 release APK，附 SHA256 與取自 CHANGELOG 的 release notes；README 加上下載方式與版本 badge。",
+      "description": "輕軌（T 線，TrueTime feed \"Light Rail\"）支援：附近班次與班次詳情同時查詢公車與輕軌兩個 data feed 並合併結果。",
       "steps": [
-        "release workflow 只在 tag 推送且測試全過時執行",
-        "簽章金鑰從 GitHub Secrets 讀取，repo 內沒有任何金鑰檔（檢查 git ls-files）",
-        "產出 APK 與 .sha256 檔作為 release 附件",
+        "附近班次對兩個 feed 各發一次 predictions，合併後交給 DepartureRanker；有測試驗證輕軌班次出現在列表",
+        "其中一個 feed 失敗或回 No data found 時，另一個 feed 的結果仍然顯示（各一個測試）",
+        "點輕軌班次時，詳情的 getvehicles / getpatterns / getpredictions 使用 Light Rail feed（有測試）",
+        "每 30 秒的 API 呼叫次數變化記錄在 progress.md，確認仍在每日額度內"
+      ],
+      "passes": false
+    },
+    {
+      "id": "F18",
+      "description": "可靠性與離線狀態：無網路、API key 失效、API 配額用盡、GTFS 資料過期 / 空資料庫時的提示；GTFS 每週背景更新（WorkManager），與首次啟動匯入共用同一個 importer 與鎖。",
+      "steps": [
+        "無網路時附近班次與詳情顯示離線提示並保留上次資料（有測試）",
+        "TrueTime 回傳 key 無效、超過配額時各顯示對應訊息（從 TrueTimeError.Api.messages 判斷，各一個測試）",
+        "記錄 GTFS 匯入時間；超過 7 天時排程背景更新，WorkManager 測試（work-testing）驗證排程與「需要網路」條件",
+        "背景更新失敗時現有資料不變（有測試）；與前景首次匯入同時觸發時只下載一次（有測試）",
+        "路線規劃快取在 GTFS 更新後失效（有測試）"
+      ],
+      "passes": false
+    },
+    {
+      "id": "F19",
+      "description": "發佈流程：GitHub Actions 在 tag vX.Y.Z 時跑完整檢查、建置簽章 release APK（ABI split 或 universal，壓低大小），附 SHA256 與取自 CHANGELOG 的 release notes；README 加下載方式與版本 badge。",
+      "steps": [
+        "release workflow 只在推送 v* tag 時觸發，且先跑與 verify 相同的檢查",
+        "簽章金鑰與 PRT_API_KEY 從 GitHub Secrets 讀取，git ls-files 中沒有 keystore / key 檔",
+        "./gradlew assembleRelease 在沒有簽章 secret 的本機也能建置（未簽章），不讓 verify 失敗",
+        "產出 APK 與 .sha256 檔；release notes 取自 CHANGELOG 對應版本段落（有腳本測試或 workflow dry-run 驗證擷取結果）",
         "README 版本 badge 與 gradle.properties 版號一致",
-        "實機驗收清單：從 Release 下載 APK 安裝後可正常啟動"
+        "實機驗收清單：從 GitHub Release 下載 APK 安裝後可正常啟動"
+      ],
+      "passes": false
+    },
+    {
+      "id": "F27",
+      "description": "方案可指定時間：「Ways to get there」上方加 Leave now / Depart at / Arrive by 切換（預設 Leave now，即目前行為），Depart at / Arrive by 可選日期與時間（GTFS 時刻表有效範圍內）。Arrive by 用反向 RAPTOR 算出最晚出發、仍在期限內抵達的方案，卡片顯示「Leave by …」；出發點超過一小時後的方案不查 TrueTime、只用時刻表；即時首班車晚點可能超過期限時標示提醒。",
+      "steps": [
+        "RoutePlanner 測試：Arrive by 選最晚一班趕得上的車（不選更早一班）；期限前沒有車時回傳 NO_CONNECTION；轉乘保留最小緩衝；最後一段步行在期限內結束；多轉一次車但出發更晚的方案會保留",
+        "TripPlanRepository 測試：Arrive by 凌晨期限會找前一服務日的末班車；換日期查詢時 network 建置次數受控",
+        "TripPlanViewModel 測試：切換 Depart at / Arrive by 以對應時間重新規劃並清掉已選方案；超過一小時的未來不查 TrueTime；即時晚點超過期限時標示提醒",
+        "Compose 測試：模式切換、日期時間按鈕顯示、Arrive by 卡片的 Leave by 與遲到提醒；NO_CONNECTION 文字不再寫死「today」",
+        "實機驗收清單新增：Arrive by 指定日期時間到公開地標（如 CMU），與 Google Maps 的「抵達時間」結果比對"
       ],
       "passes": false
     }
   ],
-  "verify": "./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug",
+  "verify": "ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk} ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug",
   "questions": [
-    "地圖 SDK：建議用 Google Maps Compose（體驗最好，需要 Google Cloud 帳號與 Maps SDK API key，有免費額度）；或 MapLibre + OpenStreetMap 圖磚（免費、無帳號，但需自選圖磚來源）。要用哪個？",
-    "路線規劃：建議在裝置上用 GTFS 自行實作 RAPTOR（F12–F13，免費、可離線，但工作量最大）；替代方案是 Google Directions API 的 transit 模式（快很多、需付費 key，且 iOS 可共用）或自架 OpenTripPlanner 伺服器。要哪一種？",
-    "PRT TrueTime API key：你是否已在 PRT TrueTime 開發者頁面申請（舊網域 truetime.portauthority.org，需註冊帳號）？之後的 session 需要你自己把 key 寫進 local.properties 的 PRT_API_KEY，才能做實際連線驗收。",
-    "iOS 之後要做：要不要現在就把資料層 / 演算法放進 Kotlin Multiplatform shared 模組，讓 iOS 可重用？建議先用純 Kotlin 模組（不含 Android 依賴）寫 F2、F4、F7、F13，日後再轉 KMP，成本最低。",
-    "介面語言：只做英文，還是英文 + 繁體中文雙語？",
-    "最低支援 Android 版本：建議 minSdk 26（Android 8.0），可以嗎？"
+    {
+      "question": "輕軌 T 線目前完全不會出現在附近班次。要把輕軌支援（F17）納入這一輪嗎？",
+      "options": [
+        "要，放在 F17（建議）",
+        "先不要，刪掉 F17",
+        "放到最後再做"
+      ]
+    },
+    {
+      "question": "發佈流程（F19）需要 GitHub repo，目前專案沒有任何 remote、CI 也從沒跑過。要怎麼處理？",
+      "options": [
+        "我會自己建 GitHub repo 並設定 secrets，F19 照做（建議）",
+        "先不發佈，只在本機 build APK，刪掉 F19",
+        "請 session 幫我用 gh 建私人 repo（會先確認）"
+      ]
+    },
+    {
+      "question": "介面語言：目前只有英文。要加繁體中文嗎？",
+      "options": [
+        "只要英文（建議，使用者在匹茲堡）",
+        "英文 + 繁體中文，加一個 i18n 功能",
+        "只要繁體中文"
+      ]
+    },
+    {
+      "question": "實機驗收清單 F5–F12 都還沒勾（地圖、附近班次、即時公車、搜尋）。依規範驗收後才升 MINOR 版號。你想什麼時候測？",
+      "options": [
+        "現在就用 0.1.12 的 debug APK 先測，回報問題（建議）",
+        "等 F14–F16 路線規劃做完一起測",
+        "等 F19 發佈版再測"
+      ]
+    },
+    {
+      "question": "路線規劃的起點要不要也能輸入地址？",
+      "options": [
+        "可以輸入起點地址（建議）",
+        "只用目前位置"
+      ],
+      "answer": "可以輸入起點地址（建議）"
+    },
+    {
+      "question": "步行段要不要顯示沿街道的實際路線（會把起訖座標送到 OSM 步行路線服務）？",
+      "options": [
+        "用免費 OSM 路線服務 FOSSGIS Valhalla（建議）",
+        "維持直線估算"
+      ],
+      "answer": "用免費 OSM 路線服務 FOSSGIS Valhalla（建議）"
+    },
+    {
+      "question": "重新設計的視覺方向？",
+      "options": [
+        "PRT 品牌色：深藍 + 金黃（建議）",
+        "Material You 跟隨桌布",
+        "黑白灰簡約 + 單一強調色"
+      ],
+      "answer": "PRT 品牌色：深藍 + 金黃（建議）"
+    },
+    {
+      "question": "淺色 / 深色怎麼切換？",
+      "options": [
+        "跟隨系統 + App 內可手動切換（建議）",
+        "只跟隨系統"
+      ],
+      "answer": "跟隨系統 + App 內可手動切換（建議）"
+    }
   ]
 }

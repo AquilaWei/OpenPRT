@@ -10,7 +10,37 @@
 
 ## 計畫概覽
 
-功能清單在 `feature_list.json`，依序實作，一次一個 session。
+### 第二輪規劃（2026-10-02）：目前完成度
+
+**還沒完成**（F14、F15、F20、F21、F26、F25、F16 已於同日完成，接著是 F24）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
+已能在畫面上列出方案（F15），**還不能在地圖上看方案、也不能從方案點進即時公車**（F16）。另外缺輕軌、離線處理、發佈流程，
+而且 F5 以後的實機驗收一項都還沒勾。2026-10-02 在本 worktree 跑 verify 全過（271 個測試）。
+
+`feature_list.json` 已改寫成**只列剩下的功能**，編號接續第一輪（F1–F13 已完成，不再列出），
+所以下面各段落對 F1–F13 的說明仍然有效。第一輪原本的 F14–F17 重新拆成：
+
+| 功能 | 內容 | 對應第一輪 |
+|---|---|---|
+| F20 | App 內輸入 TrueTime API key（首次啟動引導 + 鑰匙按鈕） | 使用者實機測試時要求新增，排在 F16 前 |
+| F21 | 外觀重新設計 + 淺色 / 深色主題（含地圖樣式與 App 圖示） | 使用者 2026-10-02 要求，排在 F16 前（F16 的地圖圖層要用主題色） |
+| F26 | 地圖上的公車改成公車圖示（依行車方向的箭頭） | 使用者 2026-10-02 實機試用後要求「車子的點改成公車圖示」，排在 F24 前 |
+| F25 | 附近班次與班次詳情卡片化 + 方向（Inbound / Outbound）切換 + 站序時間軸 | 使用者 2026-10-02 回報「看不出怎麼切換方向、純文字單調」，排在 F24 前 |
+| F24 | 地圖站牌可點擊（顯示該站班次）+ 地圖圖例 | 使用者 2026-10-02 問「站牌能點嗎、顏色代表什麼」後新增，排在 F21 後 |
+| F22 | 起點也能輸入地址（From 欄位、對調起訖） | 使用者 2026-10-02 要求 |
+| F23 | 步行段沿街道的實際路線（OSM 步行路線服務，失敗退回直線） | 使用者 2026-10-02 要求，排在 F16 後（畫在 F16 的方案地圖上） |
+| F14 | 從 Room 建 TransitNetwork、服務日快取、跨午夜、轉乘緩衝、`TripPlanRepository` | 原 F14 的資料層（拆出來） |
+| F15 | 路線規劃方案清單 UI + 首段即時時間 | 原 F14 |
+| F16 | 方案地圖 + 點乘車段看即時公車 | 原 F15 |
+| F17 | 輕軌 T 線（`Light Rail` feed）合併到附近班次與詳情 | 新增（F2 段落記下的缺口） |
+| F18 | 離線 / key 無效 / 配額 / GTFS 過期提示 + WorkManager 每週更新 | 原 F16 |
+| F19 | tag 觸發的簽章 release APK、SHA256、README badge | 原 F17 |
+
+- F17 / F19 是否保留、是否加繁體中文介面，等使用者回答 questions；回答前照表順序做 F14–F16 不受影響
+- verify 指令前面加了 `ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk}`：新的 worktree 沒有 `local.properties`，
+  也沒有設 `ANDROID_HOME`，不加會找不到 SDK。沒有 `PRT_API_KEY` 也能建置（呼叫時回 MissingApiKey）
+- iOS 不在這一輪範圍內
+
+### 第一輪計畫（2026-10-01，F1–F13 已完成）
 
 | 階段 | 功能 | 內容 |
 |---|---|---|
@@ -18,11 +48,7 @@
 | 資料 | F2–F4 | TrueTime API 用戶端、GTFS 站牌匯入、附近站牌查詢 |
 | 附近班次 | F5–F8 | 定位、地圖主畫面、班次排序、班次列表自動更新 |
 | 班次詳情 | F9–F10 | 路線折線與站牌、即時公車位置與 ETA |
-| 路線規劃 | F11–F15 | 目的地選擇、GTFS 時刻表、RAPTOR 規劃器、方案 UI、方案地圖 |
-| 收尾 | F16–F17 | 離線 / 錯誤狀態、GTFS 背景更新、發佈流程 |
-
-F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答（見 `feature_list.json` 的 questions）；
-如果改用 Google Directions API 或 OpenTripPlanner，F12–F13 要改寫成對應的 API 用戶端功能。
+| 路線規劃 | F11–F13 | 目的地選擇、GTFS 時刻表、RAPTOR 規劃器 |
 
 ## 資料來源
 
@@ -290,7 +316,7 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - 時間全部是「服務日開始後的秒數」（和 GTFS 一樣可超過 24h），轉成 `Instant` 用 F12 的 `serviceTime`
 - 第一段步行設計成「剛好在公車發車時走到站」，所以 `Itinerary.departureSeconds` 可能晚於查詢時間；轉乘步行與最後步行從下車時開始
 - 不規劃純步行方案（起訖很近時也一定要搭車）；方案不會以兩段連續步行結尾（只從「搭車到達」的站算最後步行）
-- **轉乘沒有緩衝**：下車那一秒就能上下一班。真實 feed 上 Mt Lebanon → Pitt 出現「多轉一次只早 1 分鐘、轉乘時間 1 分鐘」的方案，
+- **轉乘沒有緩衝**（F14 已加上 60 秒，見 F14 段落）：下車那一秒就能上下一班。真實 feed 上 Mt Lebanon → Pitt 出現「多轉一次只早 1 分鐘、轉乘時間 1 分鐘」的方案，
   F14 實機看結果時若覺得不可靠，可在 `scanPattern` 上車判斷加最小轉乘秒數（同站與步行轉乘都要加）
 - **量測（暫時測試，未進 git，2026-10-02，JVM）**：真實 PRT feed 2026-10-01（週四）5588 班次 → 257 個 pattern，建網路 92 ms；
   Market Sq → CMU 24 ms（69 直達）、Squirrel Hill → North Shore 7 ms（61C + Blue Line）、Mt Lebanon → Pitt 4 ms（Red Line + 61A）。
@@ -301,13 +327,148 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   - 跨午夜：凌晨查詢要另外用前一個服務日的網路（秒數 +86400）查一次，合併結果
   - 首段公車的即時時間要另外用 TrueTime 查（RideLeg 有 routeId / from.stopId；TrueTime stpid = stop_code，`TransitStop.stopId` 目前是 GTFS stop_id，要對照）
 
+## 規劃資料層（F14 決定）
+
+- `RoutePlanner` 加 `minTransferSeconds`（預設 `DEFAULT_MIN_TRANSFER_SECONDS = 60`）：每站另存 `boardable`（可以上車的時間）。
+  搭車到站 = 到站 + 60 秒；步行轉乘 = max(走到的時間, 下車 + 60 秒)，所以步行超過 60 秒時不再多加；
+  從起點走到的站沒有緩衝（「直達不受影響」）
+- `TransitStop` 加 `trueTimeStopId`（預設 = stopId）。`StopEntity.trueTimeStopId`（code ?: stop_id）從 `departures/` 移到 `GtfsDatabase.kt`，
+  F15 查首段即時預測用 `rideLeg.from.trueTimeStopId`
+- `data/gtfs/TransitNetworkSource.kt`：`fun interface TransitNetworkSource`（測試用計數 fake 包真實實作）與 `RoomTransitNetworkSource`。
+  沒有站牌（還沒匯入）回 null；當天沒有服務回「沒有班次的網路」（結果是 NoRoute NO_CONNECTION，F18 的「GTFS 過期」要另外判斷）。
+  只有一個站、或經過 stops.txt 沒有的站的班次會被略過，不讓整天規劃失敗
+- **查詢效能（真實 feed、JVM、2026-10-02）**：原本用 `trips JOIN stop_times` 會掃整個 1M 筆 stop_times，一天 31 萬筆要 4.5 秒；
+  改成 `stop_times WHERE tripId IN (SELECT … FROM trips WHERE serviceId IN …)` 走主鍵 + 另外查 trips，**第一次規劃約 1.4 秒**（含建網路 ~150 ms），
+  之後每次 3–7 ms。手機上會更慢，F15 量（可考慮在選目的地前預先建網路）
+- `data/gtfs/TripPlanRepository.kt`：`plan(origin, destination, departAt: Instant)` 回傳 `TripPlanResult`：`Found(plans)` / `NoRoute(reason)` / `NoTimetable`。
+  `TripPlan(serviceDate, itinerary)` 的秒數要用 `timeOf(seconds)` 轉 `Instant`（不能直接加在今天上）
+  - 依服務日快取 `RoutePlanner`，Mutex 保護（同時兩個請求只建一次）。每次請求只保留這次需要的服務日，所以最多兩個網路在記憶體
+  - 跨午夜：前一個服務日開始後 30 小時內（當地清晨 6 點前）也查前一天（真實 feed 最晚 26:43）。兩天結果合併後用同樣的 Pareto 規則（段數少優先，段數多的要嚴格更早到）
+  - 真實 feed 驗證：00:30 Mt Lebanon → Pitt 自動選到隔天早班車；Market Sq → CMU 00:30 用前一天的 61C 深夜班
+  - 搜尋在 `Dispatchers.Default` 執行；GTFS 更新後快取不會失效（F18 處理）
+- `OpenPrtApplication.tripPlanRepository` 已建好，F15 的 ViewModel 直接用
+
+## 規劃方案清單（F15 決定）
+
+- 程式在 `app/src/main/java/org/openprt/app/trip/`：`TripPlanViewModel.kt`（狀態、`TripOption`、`toOption`）與 `TripPlansPanel.kt`（Compose）
+- `TripPlanRepository` 實作新的 `fun interface TripPlanSource`（在 `TripPlanRepository.kt`），ViewModel 測試用 fake
+- 狀態 `TripPlanUiState?`：null = 沒有目的地（sheet 顯示附近班次）；`Planning` / `Results(options)` / `NoRoute(reason)` / `NoTimetable`（有「Try again」按鈕 → `retry()`）
+- **何時規劃**：`MainActivity` 把 `destinationState.destination?.location` 與 `locationState.location` 分別交給 `onDestinationChanged` / `onLocationChanged`。
+  只有「目的地改變」或「目的地已設、位置從 null 變成已知」（第一次定位、按重新定位後）才規劃；**走動時不重新規劃**，方案清單不會一直跳。
+  出發時間 = 注入的 `Clock` 的現在。清除或換目的地時 `cancel` 進行中的 job（都在 Main，取消後不會再寫入狀態）
+- 定位被拒 / 失敗時用的是 Downtown 預設座標當起點（`LocationUiState` 的 location），沒有另外提示
+- **即時首班車**：方案到了以後一次 `getpredictions`（所有方案首段上車站的 `trueTimeStopId` 去重，最多 3 個站，一次呼叫）。
+  配對規則：同路線（`Prediction.route == RideLeg.routeId`，PRT 的 GTFS route_id 等於 TrueTime rt）、同站、
+  使用者「現在出發走得到」（預測 ≥ 現在 + 首段步行時間）、與時刻表上車時間相差 ≤ 15 分鐘，取最接近時刻表的一筆。
+  採用時：上車時間 = 預測、出發時間 = 預測 − 首段步行；**抵達時間仍是時刻表**（後面幾段沒有即時資料），總分鐘數 = 抵達 − 出發，
+  所以公車誤點時總分鐘數會變短，若實機覺得誤導，直達方案可改成抵達也加上誤點分鐘。
+  預測失敗（含沒有 key）時退回時刻表，不讓規劃失敗；No data found 視為沒有預測。即時時間**只在規劃當下查一次**，不會自動更新
+- 輕軌首段：TrueTime 公車 feed 沒有輕軌站，配不到 → 顯示 scheduled（F17 再處理）
+- 列表：每列 = 總分鐘數（粗體）、「出發 – 抵達」、各段（Walk n min › 61C › …，FlowRow 讓長行程換行）、轉乘次數（`plurals`）、
+  「61C leaves <站> at <時間> · Live / (scheduled)」。步行分鐘無條件進位，0 秒的步行（起點就在站牌）不列
+- 地圖這一版沒有變（仍顯示附近站牌與目的地紅點），F16 才畫方案；點方案目前沒有反應。`TripOption.plan` 保留給 F16
+- 第一次規劃的耗時（JVM 1.4 秒）期間顯示「Planning your trip…」；手機上的時間列入實機驗收
+- 測試：`TripPlanViewModelTest`（16）、`TripOptionTest`（12）、`TripPlansPanelTest`（10）、`HomeScreenTest` +1。
+  Compose 測試不比對時間字串（JDK 的 `FormatStyle.SHORT` 在 AM/PM 前用的空白字元會因版本不同）
+
+## App 內 API key（F20 決定）
+
+- 使用者 2026-10-02 實機測試時要求：不該要在電腦上寫 `local.properties` 才能用即時資料。新增 F20 排在 F16 前（feature_list.json 原有功能不變）
+- `data/settings/ApiKeySettings.kt`：SharedPreferences 檔 `truetime`（`api_key`、`onboarding_done`），manifest 已 `allowBackup=false`，不會備份。
+  沒用 EncryptedSharedPreferences（已 deprecated），也沒加 DataStore 依賴；key 只是個人的 TrueTime key，App 私有儲存就夠
+  - App 內存的 key 優先於 `BuildConfig.PRT_API_KEY`（`local.properties` 現在只是開發用預設值，有它就不顯示歡迎畫面）
+  - `needsOnboarding` = 沒有任何 key 且沒按過 Skip
+- `TrueTimeClient` 的 `apiKey` 改成 `() -> String`，**每次請求讀目前的 key**：存 key 後下一次請求就生效，不用重建 client 或重開 App。
+  `TrueTimeClient.fromSettings(settings)` 取代 `fromBuildConfig()`。附近班次最多 30 秒後才會用新 key 更新（沒有立即觸發）
+- `data/truetime/ApiKeyChecker.kt`：用一次 `getroutes` 驗證。Api 錯誤訊息含「key」→ Rejected（顯示 TrueTime 原文），
+  其他 Api 錯誤（例如配額）/ 網路 / 逾時 / HTTP → Unreachable，畫面提供「Save without checking」
+- `settings/ApiKeyViewModel.kt` + `ApiKeyScreen.kt`：首次啟動是「Welcome to OpenPRT」+「Skip for now」（略過會記住，下次不再出現）；
+  從主畫面右上角鑰匙圖示打開時是「TrueTime API key」+「Cancel」（取消不改已存的 key）。系統返回鍵 = Skip / Cancel。
+  「Open PRT TrueTime」用 `LocalUriHandler` 開 `https://truetime.rideprt.org/bustime/home.jsp`
+- `MainActivity`：key 畫面顯示時整個取代 `HomeScreen`，但定位 / 站牌 / 班次的 ViewModel 照常在背景載入；
+  **定位權限對話框等 key 畫面關掉才跳**，避免兩個畫面疊在一起
+- 實機（Galaxy S23，SM-S9180，Android 16）安裝後確認首次啟動出現歡迎畫面（截圖）；輸入真實 key 的流程待使用者驗收
+- 新增 37 個測試（全部 366 個）
+
+## 外觀與深色主題（F21 決定）
+
+- 方向（使用者選的建議）：PRT 深藍 `#17365F` + 金黃 `#FFC72C`，中性色用藍灰（取代 Material 預設的紫粉色調）
+- `ui/theme/Color.kt`：完整寫死 light / dark `ColorScheme`（所有 surfaceContainer 也寫），`OpenPrtColors`（`LocalOpenPrtColors`）放
+  Material 沒有的品牌色：top bar（淺色是深藍、深色是一般深色表面）、金黃 accent（定位 FAB）。即時 = `tertiary`（綠），誤點 = `error`
+- `ui/theme/Theme.kt`：`OpenPrtTheme(mode)`、`ThemeMode`（SYSTEM / LIGHT / DARK）、`ThemeMode.isDark(systemDark)`
+- `data/settings/AppearanceSettings.kt`：SharedPreferences 檔 `appearance`，未知值讀成 SYSTEM。切換入口是 top bar 的半圓（contrast）圖示 → 下拉選單
+- `map/MapPalette.kt`：地圖樣式網址與所有標記顏色（字串，MapLibre 用），`mapPalette(dark)`；深色用 OpenFreeMap `dark` 樣式。
+  **F24 的圖例要用這份**。
+  **深色地圖改用 `fiord`（0.1.17）**：使用者實機回報 `dark` 樣式太暗（背景 rgb(12,12,12)、道路 #181818，幾乎分不出來）；
+  `fiord` 背景 `#45516E`、道路 hsl(224,22%,45%)、路名 hsl(223,31%,61%)，實機截圖確認道路、建築、路名都看得清楚。
+  路線與站牌在深色改成 `#D5E3FF`（比 fiord 的道路亮很多），站牌外圈 `#111318``StopMap` 新增 `palette` 參數，palette 變了就 `setStyle` 重新載入（會清掉圖層，所以重加圖層後由各 LaunchedEffect 重填資料）
+- `ui/RouteBadge.kt`：路線編號色塊（primary 底），用在附近班次、班次詳情、方案清單的每一段
+- 系統列：`MainActivity` 依主題呼叫 `enableEdgeToEdge`；首頁 top bar 在淺色也是深藍，所以狀態列圖示一律白色，只有 API key 畫面（淺色）用深色圖示。
+  視窗底色 `values` / `values-night` 的 `Theme.OpenPRT`，避免啟動時閃白（只跟系統深色模式，App 內手動選的不影響這一瞬間）
+- App 圖示：深藍底 + 金黃圖釘 + 深藍公車；`ic_launcher_monochrome`（evenOdd 挖空公車）給 Android 13 主題圖示
+- 對比測試 `ThemeContrastTest`：兩套主題 9 組前景 / 背景都 ≥ 4.5:1
+- 實機（Galaxy S23，系統深色模式）確認：深色地圖、金黃 FAB、路線色塊、即時班次正常；從選單切 Light 後 top bar 深藍、地圖換淺色、路線深藍、上車站金黃；
+  測完已把 App 設回 System default。**手機的系統深色模式沒有動**
+- 新增 37 個測試（全部 403 個），lint 0 issue
+
+## 公車圖示（F26 決定）
+
+- 公車用兩個 SymbolLayer 疊在同一個 `bus` source：下層 `bus-heading-layer` 是公車色的小三角形，
+  依 Feature 的 `heading` 屬性（TrueTime `hdg`，北為 0、順時針）旋轉、對齊地圖；上層 `bus-layer` 是圓形公車徽章（白外圈 + 公車圖形），**保持正立**
+  （整個公車圖形跟著轉，往南時會倒過來，較難辨認）
+- 圖示由程式畫成 bitmap（`map/BusMarker.kt`），顏色取 `MapPalette.bus` / `busGlyph` / `markerOutline`，主題換了 style 重載時重新 `addImage`
+- `res/drawable/ic_bus.xml` 是 Material Symbols `directions_bus`（Apache 2.0），F25 的時間軸與 F24 的圖例沿用
+- `MapPalette.busGlyph`：淺色白（#188038 底）、深色深綠 `#0D3B1E`（#81C995 底，白色太淡）；測試要求圖形對比 ≥ 3:1（WCAG 非文字）
+- 新增 4 個測試（全部 407 個），verify 通過。手機當時斷線，之後和 F25 一起裝上（0.1.19），實機截圖確認公車徽章出現在路線上
+
+## 卡片化介面與方向切換（F25 決定）
+
+- 共用元件 `ui/Cards.kt`：`InfoCard`（surface 底 + outlineVariant 外框，兩種主題都分得開）、`MinutesPill`（primaryContainer）、
+  `StatusChip`（Live = tertiaryContainer 加圓點、Scheduled = surfaceVariant、Delayed = errorContainer）、`IconText`
+- 附近班次：`groupByRoute`（`departures/DepartureGroups.kt`）每條路線一張卡片，組間依最早班次、組內依方向名稱排序（方向位置固定，不會隨時間跳動）。
+  路線徽章放在固定 72dp 寬的欄位，各卡片的文字對齊。附近班次都是 TrueTime 預測，所以不是 Delayed 就標 Live
+- 方向切換：班次詳情的 `SingleChoiceSegmentedButtonRow`，兩個方向依名稱固定順序。反方向的班次取自附近班次（`oppositeDirectionOf`），
+  切換就是 `DepartureDetailsViewModel.open(反方向)`，所以上車站也換成該方向最近的站；附近沒有反方向時按鈕停用並顯示說明。
+  反方向名稱用 `oppositeDirectionName`（INBOUND↔OUTBOUND 等），不認得的方向名稱（例如 LOOP）只顯示一個方向標籤
+- 公車在站序上的位置：用 TrueTime 的 `pdist`（車輛沿 pattern 的距離）和各站的沿線距離比較（`RouteShape.progressOf`），
+  比原計畫的「最近的站」可靠（不會被平行道路或環狀路線誤導）。停在站上的公車算「還沒過」那一站。`stopsAway` 包含上車站本身
+- 時間軸：公車列插在已過的站之後，已過的站 alpha 0.45 並有 stateDescription「Passed」（測試用、也給 TalkBack）。
+  開啟位置：公車在上車站前 6 列內時從公車上一列開始，否則從上車站上兩列；`remember(shape, progress == null)`，公車移動時清單不跳
+- 班次詳情收合時 bottom sheet 高度 300dp（附近班次仍是 240dp），收合時看得到抵達分鐘數
+- 方案清單（F15）也換成卡片，加 Live / Scheduled 標籤
+- 實機（Galaxy S23，深色、大字型）截圖確認：卡片、方向切換（61C Inbound ↔ Outbound 後上車站與時間軸都換掉）、「N stops away」、公車在時間軸與地圖上
+- 新增 43 個測試（全部 450 個），verify 通過（lint 0 issue）
+
+## 方案地圖（F16 決定）
+
+- 使用者 2026-10-02 實機測試搜尋「Carnegie Mellon University」後回報「找到路線但方案點不開、不能顯示在地圖上」，F16 移到 F24 前面
+- 公車段的線：GTFS shapes 沒有匯入，改用該 trip 在上車站與下車站之間經過的站牌連線（`GtfsDao.getStopsOfTrip` JOIN stops，
+  `RoomRideStopsSource` + `sliceBetween`；環狀路線若先經過下車站，取上車後的下一次）。只新增查詢，不改 schema，所以不需要 migration
+- `TripMapLayers`（`trip/TripMapLayers.kt`）：步行段（藍色虛線，`palette.user`）、公車段（路線色）、上車站（金色大點）、下車站（白點）。
+  選方案時先畫直線，讀到站牌後換成沿站牌的線；相機只依第一個與最後一個點決定，所以換線時不會跳動
+- `TripPlanViewModel` 實作 `TripPlanActions`（select / closeSelection / openRide / onRideOpened / retry）。
+  方案從規劃時的起點畫，不是使用者現在的位置；返回清單不重新規劃
+- 「Live bus」：查該段上車站的 TrueTime 預測，挑同路線、趕得上、與時刻表差 15 分鐘內最接近的一班（與 F15 共用 `closestPrediction`），
+  組成 `DepartureItem` 交給 `DepartureDetailsViewModel.open`（MainActivity 的 LaunchedEffect），之後呼叫 `onRideOpened` 回到 Idle；
+  沒有預測或 TrueTime 失敗都顯示「時間取自時刻表」。從班次詳情按返回會回到方案詳情
+- 地圖相機：`StopMap(overlayPadding)` 以 HomeScreen 量到的搜尋框高度當上方留白，修正目的地紅點被搜尋框蓋住。
+  **地圖只到 bottom sheet 上緣**（BottomSheetScaffold 的內容不在 sheet 下方），所以底部不用留白；一開始加了 sheet 高度，畫面縮到看不到東西
+- 方案詳情時 sheet 收合高度也用 300dp
+- 方案卡片的「Live」只留右上標籤；`trip_first_bus_live` 字串移除
+- 實機（Galaxy S23）確認：搜尋 Carnegie Mellon University → 點方案 → 地圖畫出 64 路線與上車站；6:33 的班次按「Live bus」顯示僅時刻表
+- 新增 26 個測試（全部 476 個），verify 通過（lint 0 issue）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
-- verify 指令：`./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug`，F1 完成前會失敗屬正常
+- verify 指令：`ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk} ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug`
 - 需要網路或 API key 的測試：本機沒有就自動略過，CI 一定要跑
+- 裝到手機：`ANDROID_HOME=$HOME/Android/Sdk ./gradlew --no-daemon installDebug`。手機的 USB 要關掉網路共享、開 USB 偵錯；
+  本機（含主 checkout）目前**沒有 local.properties**，key 由使用者在 App 內輸入
 - 版號：功能寫完未經實機驗收用 PATCH；使用者驗收後才升 MINOR
 - CLAUDE.md、`.claude/`、`notes/` 不進 git
+- 使用者實機測試時所在的地址**不可寫進 repo**（測試資料、CHANGELOG、這份紀錄、commit 訊息）；範例一律用公開地標（CMU、Pitt 的 Cathedral of Learning）。
+  2026-10-03 曾用 `git filter-branch` 把誤 commit 的地址從歷史清掉
 
 ## 需要實機驗收的項目（累積清單）
 
@@ -329,8 +490,22 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
 - [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
   手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
   已裝過舊版的手機更新後會自動重新下載一次
-- [ ] F15 完整流程：定位 → 選目的地 → 規劃 → 看地圖 → 看即時公車
-- [ ] F17 從 Release 下載 APK 安裝並啟動
+- [ ] F21 系統切深色時 App 與地圖一起變深色；右上角半圓圖示選 Light / Dark 立即生效且重開後保留；
+  桌面上新圖示（金黃圖釘 + 公車）清楚，開「主題圖示」時顯示單色版本；深色下各畫面文字看得清楚
+- [ ] F20 首次啟動出現「Welcome to OpenPRT」（2026-10-02 已在 Galaxy S23 上看到）；「Open PRT TrueTime」打開申請網頁；
+  貼上真實 key 按 Save key 後回到地圖，30 秒內附近班次出現；輸入亂打的 key 顯示「TrueTime didn't accept this key: …」；
+  右上角鑰匙圖示可重新打開、Cancel 不影響已存的 key；重開 App 不再出現歡迎畫面
+- [ ] F15 選目的地後數秒內出現方案、時間合理（和 Google Maps / Transit App 比對一兩個行程）；量手機上第一次規劃的時間（JVM 約 1.4 秒，見 F14 段落）；
+  有即時預測的首班車顯示「· Live」且時間與站牌看板一致；按 ✕ 清除目的地回到附近班次
+- [ ] F25 附近班次卡片清楚好讀、同一路線兩個方向在同一張卡片；班次詳情的 Inbound / Outbound 切換直覺、切換後上車站與時間正確；
+  「N stops away」與時間軸上的公車位置合理；淺色主題下卡片也分得清楚
+- [ ] F26 點一班車後，地圖上的公車是圓形公車圖示（不是綠點），旁邊小箭頭指向行進方向，淺色與深色主題都看得清楚
+- [ ] F16 完整流程：定位 → 選目的地 → 規劃 → 點方案看地圖（步行虛線、公車線、上下車站） → 按「Live bus」看即時公車 → 返回回到方案；
+  快要開的班次（15 分鐘內）應該能打開即時詳情，較晚的班次顯示「時間取自時刻表」
+- [ ] 0.1.24 設計改進：站名與方向文字是一般大小寫（沒有「INBOUND-」）；方案卡片的「›」看得出可以點；
+  方案詳情不用拉面板就看得到「Live bus」；選好目的地後上方只剩一列「To: …」，點它可重新搜尋、✕ 清除
+- [ ] 0.1.25：方案卡片顯示「N min trip」；班次詳情中公車開到身邊時公車圖示在藍點上方、藍點光暈仍看得到
+- [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
 
@@ -403,3 +578,76 @@ F11–F15 的做法取決於使用者對「路線規劃方案」問題的回答�
   另用真實 PRT feed 暫時測試過結果與速度（見 F13 段落）
   - 不需要實機驗收（純邏輯，全部自動化）；畫面上還看不到，F14 才接上
   - 下一步：F14 路線規劃結果 UI。要先從 Room 建 `TransitNetwork`（見 F13 段落的「F14 要接的地方」）
+- 2026-10-02：**第二輪規劃**。檢查結果：App 尚未完成（見「計畫概覽」）。`feature_list.json` 改寫成剩下的 F14–F19，
+  verify 加上 `ANDROID_HOME` 預設值。等使用者審核與回答 questions（輕軌、GitHub repo / 發佈、介面語言、實機驗收時程）
+  - 下一步：F14 從 Room 建規劃網路（見 F13 段落的「F14 要接的地方」）
+- 2026-10-02：**F14 完成**（版號 0.1.13，tag `v0.1.13` 只在本機）。從 Room 建規劃網路並依服務日快取、凌晨合併前一服務日深夜班次、
+  60 秒最小轉乘緩衝、`TripPlanRepository` 與 `NoTimetable` 錯誤、乘車段上車站帶 TrueTime stpid。新增 19 個測試（全部 290 個），verify 通過；
+  另用真實 PRT feed 暫時測試量了速度與結果（見 F14 段落，未進 git）
+  - 不需要實機驗收（資料層，全部自動化）；手機上的第一次規劃時間併入 F15 的驗收項目
+  - 下一步：F15 路線規劃方案清單 UI（`OpenPrtApplication.tripPlanRepository` 已可用）
+- 2026-10-02：**F15 完成**（版號 0.1.14，tag `v0.1.14` 只在本機）。選目的地後自動規劃，bottom sheet 列出方案（總分鐘數、出發 / 抵達、轉乘次數、
+  各段路線與步行分鐘），首班車有 TrueTime 預測時改用即時時間並標示 Live、預測失敗退回時刻表；三種 NoRoute 與 NoTimetable 各有說明，
+  清除目的地回到附近班次並取消規劃。新增 39 個測試（全部 329 個），verify 通過（lint 0 issue）
+  - 需要實機驗收（見清單 F15）。debug APK 會帶入 local.properties 的 key
+  - 下一步：F16 方案地圖（`TripOption.plan` 已保留完整 itinerary；乘車段折線可先用站點連線，GTFS shapes 尚未匯入）
+- 2026-10-02：使用者接上手機（Galaxy S23）安裝 0.1.14，要求「App 一開始要有引導讓我輸入 API key」。新增 **F20** 並完成（版號 0.1.15，tag `v0.1.15` 只在本機）：
+  首次啟動歡迎畫面、PRT 申請連結、輸入後用 TrueTime 驗證再存、可略過、主畫面鑰匙圖示可更換、key 存在 App 私有儲存且立即生效。
+  新增 37 個測試（全部 366 個），verify 通過（lint 0 issue）；已裝到手機並確認歡迎畫面出現
+  - 需要實機驗收（見清單 F20、F15 及更早的項目）
+  - 下一步：等使用者實機測試回饋；之後是 F16 方案地圖
+- 2026-10-02：使用者問「能不能輸入地址規劃公車 + 步行路線」與「UI / 圖示重新設計、要有淺色與深色版」。
+  現況：目的地搜尋已可輸入地址並列出公車方案（F11 + F15），但起點只能是目前位置、步行只是直線估算、方案還不能畫在地圖上（F16）；
+  外觀是 Material 預設紫色、只有淺色。新增 **F21（重新設計 + 深色主題）、F22（起點地址）、F23（步行街道路線）**，
+  順序 F21 → F22 → F16 → F23 → F17 → F18 → F19。feature_list.json 的 questions 加了四題（起點、步行路線服務、視覺方向、深色切換方式），
+  使用者尚未回答，各功能描述裡寫的是建議預設
+  - 下一步：等使用者回答新 questions 後開始 F21（若未回答，F21 照建議預設：PRT 深藍 + 金黃、跟隨系統 + 手動切換）
+- 2026-10-02：使用者回答新 questions：**四題都照建議**（起點可輸入地址、步行用 FOSSGIS Valhalla、PRT 深藍 + 金黃、跟隨系統 + 手動切換），
+  答案記在 feature_list.json 的 `answer` 欄位。另外問「站牌能不能點、顏色代表什麼、有沒有圖例」：目前都沒有（只有長按設目的地），
+  新增 **F24（站牌可點擊 + 圖例）** 排在 F21 後。順序：F21 → F24 → F22 → F16 → F23 → F17 → F18 → F19
+- 2026-10-02：**F21 完成**（版號 0.1.16，tag `v0.1.16` 只在本機）。PRT 深藍 + 金黃配色、淺色 / 深色主題（跟隨系統 + App 內切換並記住）、
+  地圖樣式與標記顏色隨主題、路線編號色塊、新 App 圖示（含單色主題圖示）。新增 37 個測試（全部 403 個），verify 通過（lint 0 issue）；
+  已裝到手機並截圖確認深色與淺色（見 F21 段落）。使用者已在 App 內存了 key（截圖中附近班次有即時資料）
+  - 下一步：F24 站牌可點擊 + 地圖圖例（顏色用 `mapPalette`）
+- 2026-10-02：使用者回報「暗的模式太暗，地圖完全看不清楚」。深色地圖從 OpenFreeMap `dark` 改成 `fiord`，路線 / 站牌改更亮的淡藍（`fix:`，版號 0.1.17，tag `v0.1.17` 只在本機）。
+  verify 通過，已裝到手機並截圖確認
+- 2026-10-02：使用者實機試用後回報「方向切換看不出來、抵達時間與站序只有文字太單調，應該做成一塊塊卡片」與「公車的點改成公車圖示」，
+  並問有沒有 UI 設計可用的 skill（有：`design:design-critique`、`design:accessibility-review`）。新增 **F26（公車圖示）、F25（卡片化 + 方向切換）**，
+  順序 F26 → F25 → F24 → F22 → F16 → F23 → F17 → F18 → F19
+- 2026-10-02：**F26 完成**（版號 0.1.18，tag `v0.1.18` 只在本機）。公車徽章 + 行進方向箭頭，見 F26 段落。verify 通過（407 個測試）；
+  手機 adb 斷線，尚未安裝
+  - 需要實機驗收（見清單 F26）
+  - 下一步：F25 卡片化介面 + 方向切換
+- 2026-10-02：**F25 完成**（版號 0.1.19，tag `v0.1.19` 只在本機）。附近班次與班次詳情卡片化、方向切換、站序時間軸、方案清單卡片，見 F25 段落。
+  verify 通過（450 個測試），已裝到手機（含 F26）並截圖確認
+  - 需要實機驗收（見清單 F25、F26）
+  - 下一步：F24 站牌可點擊 + 地圖圖例（圖例用 `ic_bus` 與 `mapPalette`）
+- 2026-10-02：使用者實機問「為什麼無法 load the route」：連開 64、61D 兩個方向都正常，無法重現（錯誤代表 getvehicles 或 getpatterns 失敗，15 秒後自動重試）。
+  畫面目前不顯示失敗原因，建議之後改成顯示（未做）
+- 2026-10-02：**F16 完成**（版號 0.1.20，tag `v0.1.20` 只在本機），排到 F24 前。方案點開後地圖畫出行程、逐段列出、Live bus 打開即時詳情，
+  順便修正目的地被搜尋框蓋住與 Live 重複。verify 通過（476 個測試），已裝到手機並截圖確認
+  - 需要實機驗收（見清單 F16）
+  - 待辦小項：路線載入失敗時顯示原因；目的地名稱顯示地址（目前是 Photon 的名稱，如「Cathedral of Learning」）
+  - 下一步：F24 站牌可點擊 + 地圖圖例
+- 2026-10-03：實機測試後的修正（版號 0.1.21–0.1.23，tag 只在本機）：
+  - 0.1.21：班次詳情失敗時顯示原因（`ui/trueTimeErrorReason`）；目的地標籤加門牌地址（`Place.address` 只在有門牌號時才有）；0 分鐘顯示「Now」
+  - 0.1.22：使用者在 Carnegie Mellon University 測到「-3 min、抵達早於出發」：首班車即時預測晚於時刻表時，抵達時間沒跟著延後。
+    改成延誤先被轉乘等候時間吸收，剩下的才延後抵達（`Itinerary.delayAtEnd`）；回歸測試在舊程式下確認失敗
+  - 0.1.23：搜「first baptist church」時 Oakland 那間排第 7：Photon 加 `lat`/`lon` 位置偏好（使用者位置，未知時 Downtown）；
+    選目的地時搜尋結果清單還開著，地圖縮放把清單高度也當成要避開的範圍，縮成整個郡 → 上方留白改變時（有目的地才算）重新縮放
+  - 已在 S23 上用 Carnegie Mellon University → First Baptist Church（71A，16 分鐘，Live）確認
+  - design-critique 結果的三個優先建議（方案卡片加「›」與 Live bus 位置、站名轉一般大小寫並整理車頭方向、縮小上方搜尋區）尚未做
+  - 下一步：上述三項建議或 F24，等使用者決定
+- 2026-10-03：**design-critique 三項建議完成**（版號 0.1.24，tag `v0.1.24` 只在本機）：
+  - 站名與車頭方向：`ui/DisplayNames.kt` 的 `displayName`（全大寫才轉；縮寫、序數、Mc、O' 另外處理）與 `displayHeadsign`（去掉 INBOUND- 等前綴），只在顯示層套用
+  - 方案卡片加 `ic_chevron_right`；方案詳情的 Live bus 移到路線編號那一列，上下車時間放右側一欄（`StopAndTime`）
+  - 搜尋區：無外框 `TextField`、提示「Where to?」；有目的地時改顯示 `DestinationBar`（點了重新搜尋），選好目的地時整塊約 72dp（原本約 148dp）
+  - verify 通過（512 個測試），新測試都確認在舊程式下會失敗；已裝到 S23 截圖確認
+  - 尚未處理的小問題：「18 min」行程總長與倒數分鐘長得像；公車圖示會蓋住使用者藍點（0.1.25 已修）
+  - 下一步：F24 站牌可點擊 + 地圖圖例
+- 2026-10-03：小問題修正（版號 0.1.25，tag `v0.1.25` 只在本機）：
+  - 行程總長改成「N min trip」、字級降為 titleLarge（`TripSummary`），測試在舊程式下確認失敗
+  - 地圖圖層改為使用者在公車之下，並加半透明光暈 `user-halo-layer`（26dp，比公車圖示 18dp 大）；地圖渲染無法自動測，列入實機驗收
+  - 使用者提出「指定出發 / 抵達時間規劃」，記成 **F27**（feature_list.json 最後一項，反向 RAPTOR 的設計見 plan）
+  - verify 通過，已裝到 S23 截圖確認
+  - 下一步：F24 站牌可點擊 + 地圖圖例

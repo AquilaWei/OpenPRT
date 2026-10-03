@@ -38,7 +38,7 @@ class PhotonGeocoderTest {
         // Recorded from photon.komoot.io on 2026-10-01 for "carnegie mellon".
         enqueueFixture("search_carnegie_mellon.json")
 
-        val result = geocoder.search("carnegie mellon", PITTSBURGH_AREA)
+        val result = geocoder.search("carnegie mellon", PITTSBURGH_AREA, OAKLAND)
 
         assertEquals(
             GeocodeResult.Success(
@@ -51,12 +51,14 @@ class PhotonGeocoderTest {
                     Place(
                         "Carnegie Mellon Café",
                         "5000 Forbes Avenue, Squirrel Hill North, Pittsburgh",
-                        LatLng(40.4424191, -79.9397388)
+                        LatLng(40.4424191, -79.9397388),
+                        address = "5000 Forbes Avenue"
                     ),
                     Place(
                         "Carnegie Mellon University Bookstore",
                         "5032 Forbes Avenue, Squirrel Hill North, Pittsburgh",
-                        LatLng(40.4437584, -79.9423308)
+                        LatLng(40.4437584, -79.9423308),
+                        address = "5032 Forbes Avenue"
                     )
                 )
             ),
@@ -68,7 +70,7 @@ class PhotonGeocoderTest {
     fun search_sendsQueryAndAreaAsPhotonBbox() = runTest {
         enqueueFixture("search_5000_forbes.json")
 
-        geocoder.search("5000 forbes ave", PITTSBURGH_AREA)
+        geocoder.search("5000 forbes ave", PITTSBURGH_AREA, OAKLAND)
 
         val url = server.takeRequest().url
         assertEquals("/api/", url.encodedPath)
@@ -77,10 +79,23 @@ class PhotonGeocoderTest {
     }
 
     @Test
+    fun search_sendsNearPointAsLocationBias() = runTest {
+        enqueueFixture("search_5000_forbes.json")
+
+        geocoder.search("first baptist church", PITTSBURGH_AREA, OAKLAND)
+
+        val url = server.takeRequest().url
+        assertEquals(
+            listOf("40.4443", "-79.9532"),
+            listOf(url.queryParameter("lat"), url.queryParameter("lon"))
+        )
+    }
+
+    @Test
     fun search_sendsUserAgent() = runTest {
         enqueueFixture("search_5000_forbes.json")
 
-        geocoder.search("5000 forbes ave", PITTSBURGH_AREA)
+        geocoder.search("5000 forbes ave", PITTSBURGH_AREA, OAKLAND)
 
         assertEquals("OpenPRT/test", server.takeRequest().headers["User-Agent"])
     }
@@ -95,7 +110,7 @@ class PhotonGeocoderTest {
             ).build()
         )
 
-        val result = geocoder.search("4400 forbes", PITTSBURGH_AREA)
+        val result = geocoder.search("4400 forbes", PITTSBURGH_AREA, OAKLAND)
 
         assertEquals(
             GeocodeResult.Success(
@@ -115,7 +130,7 @@ class PhotonGeocoderTest {
             ).build()
         )
 
-        val result = geocoder.search("pittsburgh", PITTSBURGH_AREA)
+        val result = geocoder.search("pittsburgh", PITTSBURGH_AREA, OAKLAND)
 
         assertEquals(GeocodeResult.Success(emptyList()), result)
     }
@@ -124,7 +139,7 @@ class PhotonGeocoderTest {
     fun search_whenServerReturns500_returnsHttpError() = runTest {
         server.enqueue(MockResponse.Builder().code(500).body("oops").build())
 
-        val result = geocoder.search("cmu", PITTSBURGH_AREA)
+        val result = geocoder.search("cmu", PITTSBURGH_AREA, OAKLAND)
 
         assertEquals(GeocodeResult.Failure(GeocodeError.Http(500)), result)
     }
@@ -140,7 +155,7 @@ class PhotonGeocoderTest {
             MockResponse.Builder().headersDelay(2, TimeUnit.SECONDS).body("{}").build()
         )
 
-        val result = impatient.search("cmu", PITTSBURGH_AREA)
+        val result = impatient.search("cmu", PITTSBURGH_AREA, OAKLAND)
 
         assertEquals(GeocodeResult.Failure(GeocodeError.Timeout), result)
     }
@@ -151,7 +166,7 @@ class PhotonGeocoderTest {
         server.close()
         val unreachable = PhotonGeocoder(userAgent = "OpenPRT/test", baseUrl = url)
 
-        val result = unreachable.search("cmu", PITTSBURGH_AREA)
+        val result = unreachable.search("cmu", PITTSBURGH_AREA, OAKLAND)
 
         assertTrue(result is GeocodeResult.Failure && result.error is GeocodeError.Network)
     }
@@ -160,10 +175,12 @@ class PhotonGeocoderTest {
     fun search_whenBodyIsNotGeoJson_returnsMalformedResponse() = runTest {
         server.enqueue(MockResponse.Builder().body("<html>maintenance</html>").build())
 
-        val result = geocoder.search("cmu", PITTSBURGH_AREA)
+        val result = geocoder.search("cmu", PITTSBURGH_AREA, OAKLAND)
 
         assertTrue(
             result is GeocodeResult.Failure && result.error is GeocodeError.MalformedResponse
         )
     }
 }
+
+private val OAKLAND = LatLng(40.4443, -79.9532)
