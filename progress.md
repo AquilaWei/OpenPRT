@@ -554,6 +554,23 @@
   不再查 TrueTime。判斷用該乘車段的預定上車時間（不是整個方案的出發時間），所以一小時內出發、但轉乘段在一小時後的方案，後段也不查。
   新增 2 個測試（全部 660 個），兩個都在修正前的程式下會失敗
 
+## 步行街道路線（F23 決定）
+
+- 服務：**FOSSGIS Valhalla** `https://valhalla1.openstreetmap.de/route`，`costing=pedestrian`、`directions_type=none`（只要折線與秒數），GET `?json=…`。
+  回應 `trip.legs[].shape` 是精度 **6 位**的 encoded polyline，`trip.summary.time` 是秒（小數，往上取整）
+- **使用政策**（2026-10-04 讀 https://routing.openstreetmap.de/about.html，完整版在 FOSSGIS 網站、德文）：要帶有效 User-Agent、**每秒最多 1 次**、
+  不可大量使用或爬取、要顯示 OSM 出處。做法：每個請求帶 `User-Agent: OpenPRT/<版號>`；`ValhallaWalkRouter` 用 Mutex 讓同一個實例的請求間隔至少 1 秒；
+  `CachingWalkRouter`（LRU 64 筆、只存成功的街道路線）讓同一段路（起訖座標相同）只查一次；只對**選定的方案**查，不對整份方案清單查。
+  OSM 出處已在 OpenFreeMap 地圖的 attribution 裡
+- 程式：`walk/WalkRouter.kt`（`WalkPath.Streets` / `Straight`、`WalkRouter`、`CachingWalkRouter`）、`walk/ValhallaWalkRouter.kt`。
+  失敗、HTTP 錯誤、格式錯誤、逾時（預設 **5 秒** call timeout）一律回 `Straight`，方案照常顯示。街道路線前後接上真正的起訖點（服務會把起訖點吸附到路上）
+- `TripPlanViewModel.select`：先讀乘車段站牌，再**逐段**查步行（一段查到就更新地圖），`SelectedTrip.walks` 依步行段順序存結果；
+  `toMapLayers` 多一個 `walkPaths` 參數，沒有路線的步行段畫直線。長度為 0 的步行段（起點就在站牌）不查
+- 步行分鐘：方案詳情（`TripDetailsPanel`）用 `SelectedTrip.minutesOf` 顯示街道路線的分鐘；**方案清單的分鐘與出發 / 抵達時間不變**（仍是規劃器的直線估算 1.2 m/s），
+  因為改它們等於改規劃結果，而且要對每個方案都查服務。實際步行比直線長很多時，詳情的步行分鐘可能大於規劃預留的時間（見實機驗收）
+- Fixture `valhalla/route_cmu_to_craig.json`：2026-10-04 真實錄製（Forbes Ave 近 CMU → Craig St，38 點、446.797 秒）
+- 新增 24 個測試（全部 684 個），verify 通過（lint 0 issue）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -615,6 +632,8 @@
   和 Google Maps 的「抵達時間」結果比對（同一班車或相近的出發時間）；Depart at 選一小時後的時間，方案只標 Scheduled；
   點開該方案按「Live bus」立刻顯示時刻表時間、不轉圈；日期選擇器只能選時刻表範圍內的日子；切回 Leave now 回到現在的方案
 - [ ] 0.1.28 站牌今天末班車開走後（深夜），站牌面板列出明天的班次並標出星期
+- [ ] F23 點一個要走一段路的方案（例如從 Cathedral of Learning 到 CMU）：步行虛線沿著人行道 / 街道，而不是穿過建築物；
+  詳情的步行分鐘和 Google Maps 步行時間相近；關掉網路後點另一個方案，步行段改畫直線、方案照常顯示
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -792,3 +811,8 @@
 - 2026-10-04：**第四次 review 修正**：方案詳情裡一小時以後才上車的乘車段按「Live bus」不再查 TrueTime，直接顯示時刻表時間。verify 通過（660 個測試，lint 0 issue）；沒有裝到手機
   - 下一步不變：實機驗收清單，然後 F23
 - 2026-10-04：本機 tag `v0.1.28` 原本停在 `4b8e0d2`（少了之後的修正），移到記錄這一行的 commit，也就是 0.1.28 最後通過 verify 的狀態。0.1.28 沒推送過，所以不升版號
+- 2026-10-04：**F23 完成**（版號 0.1.29，tag `v0.1.29` 只在本機）。選定方案的步行段改向 FOSSGIS Valhalla 查街道路線，地圖虛線沿街道、詳情顯示實際步行分鐘，
+  失敗或 5 秒逾時退回直線，見 F23 段落。開工前 verify 通過（660 個測試）；完成後 verify 通過（684 個測試，lint 0 issue）
+  - adb 沒有裝置，沒有安裝；需要實機驗收（見清單 F23 以及 F27、0.1.28、F22、F24）
+  - F17、F19 仍等使用者回答 questions
+  - 下一步：F17 輕軌 T 線（若使用者決定刪掉就從 `feature_list.json` 移除），否則 F18
