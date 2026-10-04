@@ -338,6 +338,77 @@ class TripPlanViewModelTest {
     }
 
     @Test
+    fun select_walkLongerAlongStreets_setsOffEarlierInTheDetails() = runTest(dispatcher) {
+        // 300 s instead of the planned 200 s before the 11:00Z bus.
+        val router = FakeWalkRouter(WalkPath.Streets(listOf(HERE, CORNER, FORBES.location), 300))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertEquals(
+            Instant.parse("2026-10-01T10:55:00Z"),
+            viewModel.results().selected?.option?.departureTime
+        )
+    }
+
+    @Test
+    fun select_walkLongerAlongStreets_setsOffEarlierInTheList() = runTest(dispatcher) {
+        val router = FakeWalkRouter(WalkPath.Streets(listOf(HERE, CORNER, FORBES.location), 300))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+        viewModel.closeSelection()
+
+        assertEquals(
+            Instant.parse("2026-10-01T10:55:00Z"),
+            viewModel.results().options.single().departureTime
+        )
+    }
+
+    @Test
+    fun select_walkTooLongToSetOffInTime_marksTheOptionMissingTheBus() = runTest(dispatcher) {
+        // 700 s before 11:00Z means setting off at 10:48:20Z, before NOW.
+        val router = FakeWalkRouter(WalkPath.Streets(listOf(HERE, CORNER, FORBES.location), 700))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertTrue(viewModel.results().selected?.option?.missesBus == true)
+    }
+
+    @Test
+    fun select_arriveByLastWalkLongerPastTheDeadline_marksTheOptionLate() = runTest(dispatcher) {
+        // Both walks take 400 s; the last one, planned at 100 s, ends at 11:36:40Z.
+        val router = FakeWalkRouter(WalkPath.Streets(listOf(HERE, THERE), 400))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, twoWalkPlanSource(), walkRouter = router)
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+        viewModel.setTime(Instant.parse("2026-10-01T11:32:00Z"))
+        advanceUntilIdle()
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertTrue(viewModel.results().selected?.option?.late == true)
+    }
+
+    @Test
+    fun select_twoWalksRouted_drawsTheSecondAfterTheFirstReTimedTheOption() = runTest(dispatcher) {
+        val router = FakeWalkRouter(WalkPath.Streets(listOf(HERE, THERE), 400))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, twoWalkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(listOf(HERE, THERE), listOf(HERE, THERE)),
+            viewModel.results().selected?.map?.walks
+        )
+    }
+
+    @Test
     fun select_walkNotRouted_staysStraightWithPlannedMinutes() = runTest(dispatcher) {
         val router = FakeWalkRouter(WalkPath.Straight(HERE, FORBES.location))
         val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
@@ -863,6 +934,9 @@ class TripPlanViewModelTest {
     private fun walkPlanSource() =
         FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(WALK_PLAN))))
 
+    private fun twoWalkPlanSource() =
+        FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(TWO_WALK_PLAN))))
+
     /** Answers every walk with [path] and records which walks were asked for. */
     private class FakeWalkRouter(val path: WalkPath) : WalkRouter {
         val calls = mutableListOf<Pair<LatLng, LatLng>>()
@@ -934,6 +1008,23 @@ class TripPlanViewModelTest {
                     WALK_TO_FORBES,
                     RideLeg("T1", "61C", "DOWNTOWN", FORBES, STEEL_PLAZA, 25_200, 27_000),
                     WalkLeg(STEEL_PLAZA, null, 0.0, 27_000, 27_000)
+                )
+            )
+        )
+
+        val MIDDLE_STOP = TransitStop("s2000", "Fifth Ave at Atwood", MIDDLE)
+
+        /**
+         * Walks 200 s from HERE to a stop down the street, rides to a stop short of THERE at
+         * 11:30Z, then walks 100 s to THERE, arriving 11:31:40Z.
+         */
+        val TWO_WALK_PLAN = TripPlan(
+            LocalDate.of(2026, 10, 1),
+            Itinerary(
+                listOf(
+                    WALK_TO_FORBES,
+                    RideLeg("T1", "61C", "DOWNTOWN", FORBES, MIDDLE_STOP, 25_200, 27_000),
+                    WalkLeg(MIDDLE_STOP, null, 120.0, 27_000, 27_100)
                 )
             )
         )

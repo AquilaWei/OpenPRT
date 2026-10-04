@@ -111,8 +111,9 @@ private fun OptionList(
 
 /**
  * One way to go: total time and clock times on top, the legs, then the first bus. For "Arrive
- * by" it starts with when to leave and warns when a late first bus may miss the deadline. The chevron
- * says the card opens; riders did not find out by themselves that it could be tapped.
+ * by" it starts with when to leave. It warns when a late first bus or a long walk may miss the
+ * deadline or a bus ([TripWarning]). The chevron says the card opens; riders did not find out by
+ * themselves that it could be tapped.
  */
 @Composable
 private fun OptionCard(option: TripOption, time: TripClockFormat, onClick: () -> Unit) {
@@ -147,16 +148,7 @@ private fun OptionCard(option: TripOption, time: TripClockFormat, onClick: () ->
                         MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
-                if (option.late && option.deadline != null) {
-                    Text(
-                        text = stringResource(
-                            R.string.trip_may_be_late,
-                            time.format(option.deadline)
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
+                TripWarning(option, time)
             }
             Icon(
                 painter = painterResource(R.drawable.ic_chevron_right),
@@ -166,6 +158,30 @@ private fun OptionCard(option: TripOption, time: TripClockFormat, onClick: () ->
             )
         }
     }
+}
+
+/**
+ * Why [option] may not work out, if it may not: a walk along the streets too long to catch a bus,
+ * or an arrival after the "Arrive by" deadline, blamed on the walks when they are longer than
+ * planned and otherwise on the late first bus. Nothing when the option is fine.
+ */
+@Composable
+internal fun TripWarning(option: TripOption, time: TripClockFormat) {
+    val text = when {
+        option.missesBus -> stringResource(R.string.trip_walk_may_miss_bus)
+
+        !option.late || option.deadline == null -> return
+
+        option.walksLonger ->
+            stringResource(R.string.trip_walk_may_be_late, time.format(option.deadline))
+
+        else -> stringResource(R.string.trip_may_be_late, time.format(option.deadline))
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.error
+    )
 }
 
 /** Total minutes, clock times, transfers and whether the first bus is live, on one row. */

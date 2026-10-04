@@ -44,7 +44,8 @@ sealed interface LegSummary {
  * One row of the plan list. When TrueTime predicts the first bus, [departureTime] and
  * [boardingTime] follow the prediction and [live] is true. Later legs have no live data, so
  * [arrivalTime] is the timetable's, pushed back only by as much of a late first bus as the
- * waits at transfers cannot absorb.
+ * waits at transfers cannot absorb. Once the walks of the chosen option are routed along the
+ * streets ([withWalks]), its walking minutes, [departureTime] and [arrivalTime] follow them.
  */
 data class TripOption(
     /** When to set off from the origin to reach the first bus. */
@@ -63,7 +64,15 @@ data class TripOption(
     /** The plan behind this row, for showing it on the map. */
     val plan: TripPlan,
     /** The "Arrive by" time the plan was made for; null for the other modes. */
-    val deadline: Instant? = null
+    val deadline: Instant? = null,
+    /**
+     * A walk takes longer along the streets than the planner allowed, more than the time there
+     * is to spare: the rider would have had to set off before now for the first bus, or reaches a
+     * transfer stop after the next bus has left.
+     */
+    val missesBus: Boolean = false,
+    /** At least one walk takes longer along the streets than the planner's estimate. */
+    val walksLonger: Boolean = false
 ) {
     /** A late first bus is expected to get the rider there after [deadline]. */
     val late: Boolean get() = deadline != null && arrivalTime > deadline
@@ -125,6 +134,19 @@ data class SelectedTrip(
         val index = option.plan.itinerary.legs.filterIsInstance<WalkLeg>().indexOf(walk)
         return (walks.getOrNull(index) as? WalkPath.Streets)?.minutes ?: walk.minutes()
     }
+}
+
+/**
+ * This option timed with the walks of [walks], one per walk of the itinerary in order: a
+ * [WalkPath.Streets] takes its own seconds, any other keeps the planner's estimate. The first bus
+ * keeps its [TripOption.boardingTime], so the result is the same however often it is re-timed.
+ * [now] tells whether the rider can still set off in time for the first bus.
+ */
+internal fun TripOption.withWalks(walks: List<WalkPath>, now: Instant): TripOption {
+    val seconds = plan.itinerary.legs.filterIsInstance<WalkLeg>().mapIndexed { index, walk ->
+        (walks.getOrNull(index) as? WalkPath.Streets)?.seconds ?: walk.seconds()
+    }
+    return plan.timed(boardingTime, live, deadline, seconds, now)
 }
 
 /** What the plan list shows while a destination is set. */
@@ -191,8 +213,9 @@ interface TripPlanActions {
  *
  * A chosen option is drawn from the origin the plans were made from, not where the user is now.
  * Its rides are traced through the stops [rideStops] reads from the timetable, then its walks,
- * one at a time, along the streets [walkRouter] finds; walks it cannot route stay straight. The
- * routed walking minutes are shown for the chosen option only and do not change its times.
+ * one at a time, along the streets [walkRouter] finds; walks it cannot route stay straight. Each
+ * routed walk re-times the chosen option, both in the details and in its row of the list (see
+ * [TripOption.withWalks]); the other options keep the planner's walking estimates.
  *
  * [time] holds the Leave now / Depart at / Arrive by choice, which outlives the destination;
  * the days the timetable covers are read from [timetableDates] the first time a time is chosen.
@@ -331,8 +354,20 @@ class TripPlanViewModel(
                 val routed = walks.toList()
                 val layers = itinerary.toMapLayers(from, to, stops, routed.map { it.points })
                 updateSelected(option) { it.copy(map = layers, walks = routed) }
+                retime(option, routed)
             }
         }
+    }
+
+    /** Puts the street walking times of [walks] into [option], in the details and the list. */
+    private fun retime(option: TripOption, walks: List<WalkPath>) {
+        val results = mutableState.value as? TripPlanUiState.Results ?: return
+        val selected = results.selected?.takeIf { it.option.plan == option.plan } ?: return
+        val timed = option.withWalks(walks, clock.instant())
+        mutableState.value = results.copy(
+            options = results.options.map { if (it.plan == option.plan) timed else it },
+            selected = selected.copy(option = timed)
+        )
     }
 
     override fun closeSelection() {
@@ -368,10 +403,11 @@ class TripPlanViewModel(
         rideLookup?.cancel()
     }
 
-    // A load that outlives its option must not change what replaced it.
+    // A load that outlives its option must not change what replaced it. Matched by plan, as
+    // routed walks re-time the option itself.
     private fun updateSelected(option: TripOption, transform: (SelectedTrip) -> SelectedTrip) {
         val results = mutableState.value as? TripPlanUiState.Results ?: return
-        val selected = results.selected?.takeIf { it.option == option } ?: return
+        val selected = results.selected?.takeIf { it.option.plan == option.plan } ?: return
         mutableState.value = results.copy(selected = transform(selected))
     }
 
@@ -497,11 +533,35 @@ internal fun TripPlan.toOption(
         (firstRide.startSeconds - itinerary.departureSeconds).toLong()
     )
     val live = closestPrediction(predictions, firstRide, scheduledBoarding, now + walkToBus)
-    val boardingTime = live?.predictedTime ?: scheduledBoarding
-    val departureTime = boardingTime - walkToBus
+    val walkSeconds = itinerary.legs.filterIsInstance<WalkLeg>().map { it.seconds() }
+    return timed(live?.predictedTime ?: scheduledBoarding, live != null, deadline, walkSeconds, now)
+}
+
+/**
+ * This plan as a list row whose first bus leaves at [boardingTime] and whose walks take
+ * [walkSeconds], one per walk in order. A walk longer than planned delays the rest of the trip
+ * the same way a late first bus does (see [delayAtEnd]), and sets [TripOption.missesBus] when it
+ * eats more than the time there is to spare.
+ */
+private fun TripPlan.timed(
+    boardingTime: Instant,
+    live: Boolean,
+    deadline: Instant?,
+    walkSeconds: List<Long>,
+    now: Instant
+): TripOption {
+    val firstRide = itinerary.rides.first()
+    val walks = itinerary.legs.filterIsInstance<WalkLeg>()
+    // The first walk ends as the first bus leaves.
+    val departureTime = boardingTime.minusSeconds(walkSeconds.first())
     // An early first bus does not make the later legs leave earlier, so only lateness counts.
-    val lateSeconds = Duration.between(scheduledBoarding, boardingTime).seconds.coerceAtLeast(0)
-    val expectedArrival = arrivalTime.plusSeconds(itinerary.delayAtEnd(lateSeconds))
+    val lateSeconds = Duration.between(timeOf(firstRide.startSeconds), boardingTime)
+        .seconds.coerceAtLeast(0)
+    val expectedArrival = arrivalTime.plusSeconds(itinerary.delayAtEnd(lateSeconds, walkSeconds))
+    val longerWalks = walks.indices.filter { walkSeconds[it] > walks[it].seconds() }
+    // Only a longer walk counts: a plan that left before now was never offered as catchable.
+    val missesFirstBus = 0 in longerWalks && departureTime < now
+    val missesTransfer = itinerary.missesTransfer(walkSeconds)
     return TripOption(
         departureTime = departureTime,
         arrivalTime = expectedArrival,
@@ -512,7 +572,7 @@ internal fun TripPlan.toOption(
                 is RideLeg -> LegSummary.Ride(leg.routeId)
 
                 is WalkLeg -> {
-                    val minutes = leg.minutes()
+                    val minutes = walkSeconds[walks.indexOf(leg)].roundedUpMinutes()
                     if (minutes > 0) LegSummary.Walk(minutes) else null
                 }
             }
@@ -520,9 +580,11 @@ internal fun TripPlan.toOption(
         firstRoute = firstRide.routeId,
         boardingStopName = firstRide.from.name,
         boardingTime = boardingTime,
-        live = live != null,
+        live = live,
         plan = this,
-        deadline = deadline
+        deadline = deadline,
+        missesBus = missesFirstBus || missesTransfer,
+        walksLonger = longerWalks.isNotEmpty()
     )
 }
 
@@ -547,19 +609,46 @@ private fun closestPrediction(
     ?.first
 
 /**
- * How late the trip ends when its first bus leaves [lateSeconds] late: each later ride starts
- * on time if the delay fits in the wait before it, and otherwise the rest of the delay carries
- * on, as if a later bus of that route ran the same timetable shifted back.
+ * How late the trip ends when its first bus leaves [lateSeconds] late and its walks take
+ * [walkSeconds], one per walk in order: each walk after the first bus adds what it takes over
+ * the planner's estimate, or takes off what it saves. Each later ride starts on time if the
+ * delay fits in the wait before it, and otherwise the rest of the delay carries on, as if a
+ * later bus of that route ran the same timetable shifted back. Negative when the last walk is
+ * shorter than planned.
  */
-private fun Itinerary.delayAtEnd(lateSeconds: Long): Long {
+private fun Itinerary.delayAtEnd(lateSeconds: Long, walkSeconds: List<Long>): Long {
     var delay = lateSeconds
-    legs.zipWithNext().forEach { (previous, next) ->
-        if (next is RideLeg && next != rides.first()) {
-            val wait = (next.startSeconds - previous.endSeconds).coerceAtLeast(0)
-            delay = (delay - wait).coerceAtLeast(0)
+    var walkIndex = 0
+    legs.forEachIndexed { index, leg ->
+        when (leg) {
+            // The first walk only decides when to set off; the first bus keeps its own time.
+            is WalkLeg -> {
+                if (walkIndex > 0) delay += walkSeconds[walkIndex] - leg.seconds()
+                walkIndex++
+            }
+
+            is RideLeg -> if (leg != rides.first()) {
+                val wait = (leg.startSeconds - legs[index - 1].endSeconds).coerceAtLeast(0)
+                delay = (delay - wait).coerceAtLeast(0)
+            }
         }
     }
     return delay
+}
+
+/**
+ * Whether a walk between two rides, taking [walkSeconds] (one per walk in order), runs over the
+ * planner's estimate by more than the wait after it, so the rider reaches the stop after the bus
+ * has left.
+ */
+private fun Itinerary.missesTransfer(walkSeconds: List<Long>): Boolean {
+    val walks = legs.filterIsInstance<WalkLeg>()
+    // The first walk is before any ride, so it cannot miss a transfer.
+    return walks.indices.drop(1).any { index ->
+        val walk = walks[index]
+        val next = legs.getOrNull(legs.indexOf(walk) + 1) as? RideLeg ?: return@any false
+        walkSeconds[index] - walk.seconds() > next.startSeconds - walk.endSeconds
+    }
 }
 
 /** Minutes of walking right before [ride], rounded up; 0 after a ride or a wait. */
@@ -569,7 +658,11 @@ private fun Itinerary.walkBefore(ride: RideLeg): Long {
 }
 
 /** How long this walk takes, rounded up so the user never gets less time than shown. */
-internal fun WalkLeg.minutes(): Long =
-    Duration.ofSeconds((endSeconds - startSeconds).toLong()).roundedUpMinutes()
+internal fun WalkLeg.minutes(): Long = seconds().roundedUpMinutes()
 
-private fun Duration.roundedUpMinutes(): Long = (seconds + 59) / 60
+/** How long the planner allows for this walk. */
+private fun WalkLeg.seconds(): Long = (endSeconds - startSeconds).toLong()
+
+private fun Duration.roundedUpMinutes(): Long = seconds.roundedUpMinutes()
+
+private fun Long.roundedUpMinutes(): Long = (this + 59) / 60

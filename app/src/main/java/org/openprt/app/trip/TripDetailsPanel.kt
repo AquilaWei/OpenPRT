@@ -36,7 +36,8 @@ import org.openprt.app.ui.displayName
  * One chosen way to go, leg by leg: walks with their minutes (along the streets once routed) and
  * where they lead, and rides with where to board and get off. Tapping a ride's live-bus button
  * looks its bus up through [actions]; when TrueTime has no data for it, the ride says its times
- * are from the timetable.
+ * are from the timetable. The summary on top warns, like the list, when the walks along the
+ * streets may miss a bus or the deadline.
  * The back button returns to the list of options. Times are shown in [zone], with their date
  * when it is not [today].
  */
@@ -62,7 +63,10 @@ fun TripDetailsPanel(
                         contentDescription = stringResource(R.string.trip_back)
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) { TripSummary(option, time) }
+                Column(modifier = Modifier.weight(1f)) {
+                    TripSummary(option, time)
+                    TripWarning(option, time)
+                }
             }
         }
         InfoCard {

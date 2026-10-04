@@ -104,6 +104,8 @@
     <string name="trip_time_cancel">Cancel</string>
     <string name="trip_leave_by">Leave by %1$s</string>
     <string name="trip_may_be_late">The first bus is running late, so you may arrive after %1$s.</string>
+    <string name="trip_walk_may_be_late">Walking along the streets takes longer than planned, so you may arrive after %1$s.</string>
+    <string name="trip_walk_may_miss_bus">Walking along the streets takes longer than planned, so you may miss a bus on this trip.</string>
     <string name="api_key_welcome_title">Welcome to OpenPRT</string>
     <string name="api_key_title">TrueTime API key</string>
     <string name="api_key_why">Live bus times and positions come from PRT TrueTime, which needs a free personal API key. Without one you can still see stops, search places and plan trips from the timetable.</string>

@@ -430,6 +430,54 @@ class TripPlansPanelTest {
     }
 
     @Test
+    fun tripPlansPanel_arriveByOptionLateFromWalking_blamesTheWalks() {
+        val late = ARRIVE_BY_OPTION.copy(
+            arrivalTime = Instant.parse("2026-10-01T11:36:00Z"),
+            walksLonger = true
+        )
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(late)),
+                RecordingActions(),
+                zone = UTC,
+                today = TODAY
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Walking along the streets takes longer than planned, so you may arrive after 11:32",
+                substring = true
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_optionMissingABus_warnsAboutIt() {
+        val missing = DIRECT.copy(missesBus = true, walksLonger = true)
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(missing)),
+                RecordingActions(),
+                zone = UTC,
+                today = TODAY
+            )
+        }
+
+        composeRule.onNodeWithText("you may miss a bus", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_selectedOptionMissingABus_warnsInTheDetails() {
+        val missing = SELECTED.selected!!.copy(option = DIRECT.copy(missesBus = true))
+        composeRule.setContent {
+            TripPlansPanel(SELECTED.copy(selected = missing), RecordingActions(), zone = UTC)
+        }
+
+        composeRule.onNodeWithText("you may miss a bus", substring = true).assertIsDisplayed()
+    }
+
+    @Test
     fun tripPlansPanel_optionLeavingTomorrow_showsItsDate() {
         composeRule.setContent {
             TripPlansPanel(
