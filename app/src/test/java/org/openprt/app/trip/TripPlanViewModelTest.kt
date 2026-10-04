@@ -591,6 +591,23 @@ class TripPlanViewModelTest {
     }
 
     @Test
+    fun setTimeMode_departAtBetweenWholeMinutes_startsAtTheNextMinute() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val clock = Clock.fixed(Instant.parse("2026-10-01T10:50:30Z"), ZoneOffset.UTC)
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, clock)
+        viewModel.onLocationChanged(HERE)
+        viewModel.onDestinationChanged(THERE)
+
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+        advanceUntilIdle()
+
+        assertEquals(
+            PlanCall(HERE, THERE, TripTime.DepartAt(Instant.parse("2026-10-01T10:51:00Z"))),
+            source.calls.last()
+        )
+    }
+
+    @Test
     fun setTime_planLeavesMoreThanAnHourFromNow_doesNotAskTrueTime() = runTest(dispatcher) {
         val predictions = FakePredictionSource(TrueTimeResult.Success(emptyList()))
         val source =

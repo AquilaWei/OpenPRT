@@ -232,8 +232,9 @@ class TripPlanViewModel(
         val at = when (mode) {
             TripTimeMode.LEAVE_NOW -> null
 
-            // Whole minutes, as the time picker shows them.
-            else -> current.at ?: clock.instant().truncatedTo(ChronoUnit.MINUTES)
+            // The next whole minute, as the time picker shows whole minutes; rounding down
+            // would list buses that left seconds ago.
+            else -> current.at ?: nextWholeMinute(clock.instant())
         }
         mutableTime.value = current.copy(mode = mode, at = at)
         if (mode != TripTimeMode.LEAVE_NOW) loadTimetableDates()
@@ -401,6 +402,12 @@ class TripPlanViewModel(
         }
         return plans.map { it.toOption(if (it in soon) live else emptyList(), now, deadline) }
     }
+}
+
+/** [now] rounded up to a whole minute, so a bus leaving at the chosen minute can still be caught. */
+private fun nextWholeMinute(now: Instant): Instant {
+    val minute = now.truncatedTo(ChronoUnit.MINUTES)
+    return if (minute < now) minute.plus(1, ChronoUnit.MINUTES) else minute
 }
 
 /** How far ahead TrueTime predicts buses, about; later plans keep their timetable times. */
