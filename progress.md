@@ -504,6 +504,20 @@
 - 手機這次顯示 `unauthorized`（USB 偵錯授權還沒按允許），**沒有裝到手機**，地圖點擊只能實機驗收
 - 新增 47 個測試（全部 559 個），verify 通過（lint 0 issue）
 
+## 起點地址與對調（F22 決定）
+
+- 兩端都由 `DestinationViewModel` 管：`DestinationUiState.origin`（null = My location）、`destination`、`editing`（`Endpoint.ORIGIN` / `DESTINATION`，
+  搜尋與長按填哪一端）。`editOrigin()` 進入「選起點模式」，直到選了地點、長按地圖或按 ✕（`cancelOriginEdit`）才結束；
+  失焦**不會**結束（長按地圖時搜尋框會失焦，不能因此把長按當成選目的地）
+- `TripPlanViewModel.onEndpointsChanged(origin, destination)`：`MainActivity` 用一個 `LaunchedEffect(origin, destination)` 一次送兩端，對調只規劃一次。
+  有選起點時用它的座標，定位更新完全不影響規劃；清除起點（null）時以目前位置重新規劃（沒有位置時等第一個定位）
+- 對調（`swapEndpoints`）：起點是 My location 時，新目的地是**按下當時**的位置（`Destination.wasUserLocation = true`，顯示「My location (pinned)」），
+  新起點是原目的地；再對調一次時這個「固定的位置」不會變成起點，而是回到 My location（跟著定位）。還不知道位置時對調不做事
+- From 列只在有目的地或已選起點時出現，所以沒選目的地時搜尋區仍是一列；選好目的地時搜尋區約 121dp（原本約 72dp，測試上限改成 130dp）
+- 「離起點太遠」的 NoRoute 文字改成「of the starting point」
+- 尚未做：地圖上沒有起點標記；只有目的地時的相機縮放仍以你的位置與目的地為準（選了方案後會縮放到整個行程，包含起點）
+- 新增 26 個 F22 測試與 16 個時刻表班次測試（全部 601 個），verify 通過（lint 0 issue）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -554,6 +568,9 @@
 - [ ] F24 點附近站牌（和班次詳情路線上的站牌）出現該站班次：站名、「Stop #」與站牌上的號碼一致；有 key 時標 Live 且和站牌看板一致，
   點一班打開即時詳情、返回回到站牌；移除 key 或關網路時改成 Scheduled 並說明原因；點站牌以外的地方不會誤觸，長按仍可選目的地；
   左下角圖例的顏色、圖示與地圖上看到的一致（淺色與深色都看）
+- [ ] 0.1.27 時刻表班次：站牌面板中標 Scheduled 的班次可以點，列出接下來的站與時間、和站牌上的時刻表一致；返回回到站牌列表，再返回關掉站牌
+- [ ] F22 輸入兩個地址規劃出方案：選目的地後點「From: My location」，搜尋一個地址（例如 Cathedral of Learning）選起點，方案從那裡出發、走路時不會重新規劃；
+  選起點模式下長按地圖也能設起點；✕ 回到 My location 並重新規劃；⇅ 對調後方案反過來，起點是 My location 時目的地顯示「My location (pinned)」
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -708,3 +725,12 @@
   開工前在本 worktree 跑 verify 通過（512 個測試）；完成後 verify 通過（559 個測試，lint 0 issue）
   - 手機 adb 顯示 unauthorized，沒有安裝；需要實機驗收（見清單 F24）
   - 下一步：F22 起點可輸入地址、對調起訖
+- 2026-10-04：reviewer 要求修正後：
+  - **F24 補上時刻表班次的詳情**（`fix:`）：站牌面板中 Scheduled 的班次點了會列出這班車從該站起的後續站與預定時間（GTFS），返回回到站牌列表，見 F24 段落。
+    reviewer 說的沒錯：F24 的 steps 寫「點班次可進入詳情」，原本時刻表班次不能點
+  - **F22 完成**：起點可以搜尋地址或長按地圖、清除回到 My location、⇅ 對調，見 F22 段落
+  - 版號 0.1.27（tag `v0.1.27` 只在本機）。開工前 verify 通過（559 個測試），完成後 verify 通過（601 個測試，lint 0 issue）
+  - README（功能描述、版本 badge）與 CHANGELOG 已更新
+  - 沒有裝到手機（上次 adb unauthorized，本次未再試）；需要實機驗收（見清單 0.1.27、F22、F24）
+  - F17、F19 是否保留仍等使用者回答 questions（不能由 session 自己決定刪掉）
+  - 下一步：F27 Leave now / Depart at / Arrive by（會改到 F22 剛改過的規劃輸入區：`TripPlanViewModel.onEndpointsChanged` 與 From/To 搜尋區）
