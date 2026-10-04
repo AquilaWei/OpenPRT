@@ -518,6 +518,23 @@
 - 尚未做：地圖上沒有起點標記；只有目的地時的相機縮放仍以你的位置與目的地為準（選了方案後會縮放到整個行程，包含起點）
 - 新增 26 個 F22 測試與 16 個時刻表班次測試（全部 601 個），verify 通過（lint 0 issue）
 
+## 指定出發 / 抵達時間（F27 決定）
+
+- 反向搜尋：`TransitNetwork.mirrored`（第一次用時才建、跟著網路一起快取）把每個 trip 倒過來、時間取負、上下車權限互換，
+  轉乘不變（步行雙向）。`RoutePlanner.planArrivingBy` 在鏡像網路上從目的地往回跑**同一個** RAPTOR，再把結果翻回正向（`Itinerary.mirrored`），
+  所以轉乘緩衝與 Pareto（少轉乘優先、多轉一次只有出發更晚才保留）規則和正向完全一樣；最後一班車下車後直接步行，不加緩衝
+- `TripPlanSource.plan(origin, destination, time: TripTime)`：`TripTime.DepartAt` / `ArriveBy`。Repository 跨服務日的合併也照 Arrive by 改成「出發越晚越好」。
+  凌晨的 Arrive by 會找前一服務日的深夜班次（例：週四 06:00 前抵達，會找到週三 24:40 那班）
+- `TripPlanViewModel.time`（`TripTimeUiState`：mode、at、dates）獨立於目的地；切換模式或時間都會重新規劃（清掉已選方案）。
+  Depart at / Arrive by 的預設時間是現在（取整到分）。日期範圍由 `RoomTimetableDatesSource` 從 calendar / calendar_dates 讀（第一次選非 Leave now 時才讀）
+- 出發時間在**一小時以後**（`LIVE_HORIZON`）的方案不查 TrueTime；Arrive by 方案的首班車即時誤點、推算抵達晚於期限時 `TripOption.late = true`，卡片顯示紅字提醒
+- 畫面：`trip/TripTimeControls.kt`（三段 SegmentedButton + 日期 / 時間按鈕，Material3 `DatePickerDialog` 只能選時刻表範圍內的日子，時間用 `TimePicker`）。
+  日期時間以手機時區顯示與解讀（和方案時間一致）。Arrive by 卡片最上面是「Leave by …」
+- NO_CONNECTION 文字改成「No buses in the timetable connect these places at this time.」
+- 尚未做：Depart at 跨到隔天的方案（例如 23:50 出發要等隔天第一班）仍只查當天與前一服務日，跟 Leave now 相同
+- 新增 41 個測試（全部 642 個），verify 通過（lint 0 issue）。上一個 session 未提交的 Repository 測試
+  `plan_arriveByBeforeTheFirstTrip_returnsNoConnection` 原本用週四 06:00，但週三深夜班次確實趕得上，改成週一 06:00（週日沒有班次）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -571,6 +588,10 @@
 - [ ] 0.1.27 時刻表班次：站牌面板中標 Scheduled 的班次可以點，列出接下來的站與時間、和站牌上的時刻表一致；返回回到站牌列表，再返回關掉站牌
 - [ ] F22 輸入兩個地址規劃出方案：選目的地後點「From: My location」，搜尋一個地址（例如 Cathedral of Learning）選起點，方案從那裡出發、走路時不會重新規劃；
   選起點模式下長按地圖也能設起點；✕ 回到 My location 並重新規劃；⇅ 對調後方案反過來，起點是 My location 時目的地顯示「My location (pinned)」
+- [ ] F27 Arrive by：選目的地（例如 CMU），切到 Arrive by、選明天上午的日期時間，卡片顯示「Leave by …」，
+  和 Google Maps 的「抵達時間」結果比對（同一班車或相近的出發時間）；Depart at 選一小時後的時間，方案只標 Scheduled；
+  日期選擇器只能選時刻表範圍內的日子；切回 Leave now 回到現在的方案
+- [ ] 0.1.28 站牌今天末班車開走後（深夜），站牌面板列出明天的班次並標出星期
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -734,3 +755,11 @@
   - 沒有裝到手機（上次 adb unauthorized，本次未再試）；需要實機驗收（見清單 0.1.27、F22、F24）
   - F17、F19 是否保留仍等使用者回答 questions（不能由 session 自己決定刪掉）
   - 下一步：F27 Leave now / Depart at / Arrive by（會改到 F22 剛改過的規劃輸入區：`TripPlanViewModel.onEndpointsChanged` 與 From/To 搜尋區）
+- 2026-10-04：**F27 完成**（版號 0.1.28，tag `v0.1.28` 只在本機）。Leave now / Depart at / Arrive by、反向 RAPTOR、Leave by 與遲到提醒，見 F27 段落。
+  - reviewer 第三點（站牌末班車後空白）已在 `08bf2af` 修正：時刻表也查下一服務日，並有跨日測試 `departures_afterTodaysLastTrip_listsNextServiceDaysFirstTrip`；CHANGELOG 補記在 0.1.28
+  - reviewer 第一點要求一次做完 F27、F23、F18：本 session 規則是一次一項，只做 F27；F23、F18 照順序留給之後的 session
+  - reviewer 第二點：F17 / F19 的取捨用 AskUserQuestion 問了使用者，**沒有回答**（非互動 session），所以兩項都保留、不刪
+  - 開工時工作樹有上一個 session 未提交的 F27 資料層與 ViewModel，檢查後沿用並補上畫面、測試與一個錯誤的測試
+  - 開工前 verify 失敗只因上述未提交程式的 ktlint 排序；完成後 verify 通過（642 個測試，lint 0 issue）
+  - adb 沒有裝置，沒有安裝；需要實機驗收（見清單 F27、0.1.28、F22、F24）
+  - 下一步：F23 步行段沿街道（FOSSGIS Valhalla）

@@ -35,7 +35,7 @@
         "Compose 測試：模式切換、日期時間按鈕顯示、Arrive by 卡片的 Leave by 與遲到提醒；NO_CONNECTION 文字不再寫死「today」",
         "實機驗收清單新增：Arrive by 指定日期時間到公開地標（如 CMU），與 Google Maps 的「抵達時間」結果比對"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "F23",
