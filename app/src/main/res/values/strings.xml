@@ -19,6 +19,9 @@
     <string name="departures_delayed">Delayed</string>
     <string name="departures_failed">Couldn\'t update departures.</string>
     <string name="departures_failed_missing_key">Live departures need a TrueTime API key. Tap the key icon at the top to add one.</string>
+    <string name="departures_offline">You\'re offline.</string>
+    <string name="departures_invalid_key">TrueTime didn\'t accept your API key. Tap the key icon at the top to change it.</string>
+    <string name="departures_quota_exceeded">Your TrueTime API key has used up today\'s requests. Live departures come back tomorrow.</string>
     <string name="departures_last_updated">%1$s Showing departures from %2$s.</string>
     <string name="details_back">Back to nearby departures</string>
     <string name="details_board_at">Board at %1$s</string>
@@ -42,9 +45,12 @@
     <string name="details_bus_departed">This bus has left your stop.</string>
     <string name="details_updated">Updated %1$s</string>
     <string name="details_bus_failed">Couldn\'t update the bus: %1$s.</string>
+    <string name="details_bus_offline_since">You\'re offline. Showing data from %1$s.</string>
     <string name="details_bus_failed_since">Couldn\'t update the bus: %1$s. Showing data from %2$s.</string>
     <string name="error_reason_missing_key">no TrueTime API key</string>
     <string name="error_reason_api">TrueTime says \"%1$s\"</string>
+    <string name="error_reason_invalid_key">TrueTime didn\'t accept your API key</string>
+    <string name="error_reason_quota_exceeded">your TrueTime API key has used up today\'s requests</string>
     <string name="error_reason_http">TrueTime server error (HTTP %1$d)</string>
     <string name="error_reason_timeout">TrueTime took too long to answer</string>
     <string name="error_reason_network">no internet connection</string>

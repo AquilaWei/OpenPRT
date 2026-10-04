@@ -118,6 +118,18 @@ class TripPlanRepositoryTest {
     }
 
     @Test
+    fun plan_afterTheTimetableIsImportedAgain_buildsTheNetworkAgain() = runTest {
+        var feedVersion = Instant.parse("2026-09-30T12:00:00Z")
+        val repository = TripPlanRepository(source, feedVersion = { feedVersion })
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+
+        feedVersion = Instant.parse("2026-10-01T09:00:00Z")
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+
+        assertEquals(listOf(THURSDAY, THURSDAY), source.builtDays)
+    }
+
+    @Test
     fun plan_onTheNextServiceDay_buildsItsNetwork() = runTest {
         repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
         repository.plan(

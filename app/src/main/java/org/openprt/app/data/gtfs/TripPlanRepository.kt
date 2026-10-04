@@ -70,14 +70,19 @@ fun interface TripPlanSource {
  * 24:00:00, and keeps the best plans of both. When nothing leaves in time, a departure search
  * moves on to the next service day, keeping only its network. "Arrive by" plans use the
  * same planners, whose mirrored networks are built on first use and kept with them.
+ *
+ * [feedVersion] names the imported timetable, e.g. its import time; when it changes, every kept
+ * planner is dropped so the next request reads the new timetable.
  */
 class TripPlanRepository(
     private val networks: TransitNetworkSource,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val feedVersion: () -> Any? = { null }
 ) : TripPlanSource {
     // Held while building, so overlapping requests for a new day build its network only once.
     private val lock = Mutex()
     private val planners = mutableMapOf<LocalDate, RoutePlanner>()
+    private var plannersVersion: Any? = null
 
     /**
      * Ways from [origin] to [destination] at [time]; see [TripPlanSource.plan]. Searching runs on
@@ -129,6 +134,11 @@ class TripPlanRepository(
     /** Planners for [days] in the same order, or null when there is no timetable. */
     private suspend fun plannersFor(days: List<LocalDate>): List<Pair<LocalDate, RoutePlanner>>? =
         lock.withLock {
+            val version = feedVersion()
+            if (version != plannersVersion) {
+                planners.clear()
+                plannersVersion = version
+            }
             planners.keys.retainAll(days.toSet())
             days.map { day ->
                 val planner = planners[day]

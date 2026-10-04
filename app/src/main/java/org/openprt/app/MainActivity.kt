@@ -18,7 +18,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.work.WorkManager
 import java.time.Clock
+import org.openprt.app.data.gtfs.GtfsUpdateWorker
 import org.openprt.app.data.gtfs.RoomScheduledTripSource
 import org.openprt.app.data.gtfs.RoomStopScheduleSource
 import org.openprt.app.data.gtfs.RoomTimetableDatesSource
@@ -54,6 +56,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as OpenPrtApplication
+        // Here rather than in the Application, so Robolectric tests never start WorkManager.
+        GtfsUpdateWorker.schedule(WorkManager.getInstance(applicationContext))
         // Lazy: after rotation the ViewModels already exist and need no new clients.
         val trueTimeFeeds by lazy {
             DataFeed.entries.map { TrueTimeClient.fromSettings(app.apiKeySettings, it) }

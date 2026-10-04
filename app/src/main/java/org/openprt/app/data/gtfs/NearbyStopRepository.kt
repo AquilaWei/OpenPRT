@@ -1,7 +1,5 @@
 package org.openprt.app.data.gtfs
 
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.openprt.app.geo.LatLng
 
 /** Outcome of a nearby-stop lookup; failures are values so the map can show them. */
@@ -19,22 +17,16 @@ fun interface NearbyStopSource {
 }
 
 /**
- * [NearbyStopSource] over the GTFS database that imports the feed first when the database has
- * no stops (first launch, or after a schema change dropped the tables). The first lookup can
- * therefore take as long as a full GTFS download.
+ * [NearbyStopSource] over the GTFS database that has [updater] import the feed first when the
+ * database has no stops. The first lookup can therefore take as long as a full GTFS download.
  */
 class NearbyStopRepository(
     private val dao: GtfsDao,
-    private val importer: GtfsImporter,
+    private val updater: GtfsUpdater,
     private val finder: NearbyStopFinder = NearbyStopFinder(dao)
 ) : NearbyStopSource {
-    // Serializes the empty check and the import so overlapping lookups download only once.
-    private val importLock = Mutex()
-
     override suspend fun nearbyStops(center: LatLng, radiusMeters: Double): NearbyStopsResult {
-        val importFailure = importLock.withLock {
-            if (dao.countStops() == 0) importer.import() as? GtfsImportResult.Failure else null
-        }
+        val importFailure = updater.importIfEmpty() as? GtfsImportResult.Failure
         if (importFailure != null) return NearbyStopsResult.Failure(importFailure.error)
         return NearbyStopsResult.Success(finder.findNearby(center, radiusMeters))
     }

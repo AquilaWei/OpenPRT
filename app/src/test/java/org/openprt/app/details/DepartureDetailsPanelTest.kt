@@ -261,14 +261,14 @@ class DepartureDetailsPanelTest {
             DepartureDetailsPanel(
                 DepartureDetailsUiState(
                     DEPARTURE,
-                    RouteStatus.Failed(TrueTimeError.Api(listOf("Transaction limit exceeded")))
+                    RouteStatus.Failed(TrueTimeError.Api(listOf("Internal server error")))
                 ),
                 onBack = {}
             )
         }
 
         composeRule
-            .onNodeWithText("TrueTime says \"Transaction limit exceeded\"", substring = true)
+            .onNodeWithText("TrueTime says \"Internal server error\"", substring = true)
             .assertIsDisplayed()
     }
 
@@ -411,6 +411,54 @@ class DepartureDetailsPanelTest {
             .onNodeWithText(
                 "Couldn't update the bus: TrueTime took too long to answer. " +
                     "Showing data from 12:40:15",
+                substring = true
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_offlineAfterUpdate_saysOfflineAndKeepsArrival() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Loading,
+                    LiveBus(
+                        arrival = Arrival.Expected(7, delayed = false),
+                        lastUpdated = Instant.parse("2026-10-01T16:40:15Z"),
+                        error = TrueTimeError.Network(IOException("offline"))
+                    )
+                ),
+                onBack = {},
+                zone = PITTSBURGH
+            )
+        }
+
+        composeRule
+            .onNodeWithText("You're offline. Showing data from 12:40:15", substring = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("7 min").assertIsDisplayed()
+    }
+
+    @Test
+    fun detailsPanel_routeFailedOnDailyLimit_saysTheKeyUsedUpItsRequests() {
+        composeRule.setContent {
+            DepartureDetailsPanel(
+                DepartureDetailsUiState(
+                    DEPARTURE,
+                    RouteStatus.Failed(
+                        TrueTimeError.Api(
+                            listOf("Transaction limit for current day has been exceeded.")
+                        )
+                    )
+                ),
+                onBack = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Couldn't load the route: your TrueTime API key has used up today's requests.",
                 substring = true
             )
             .assertIsDisplayed()

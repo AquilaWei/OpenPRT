@@ -560,6 +560,33 @@ class DepartureDetailsViewModelTest {
     }
 
     @Test
+    fun autoRefresh_offlineLater_keepsLastBusAndReportsOffline() = runTest(dispatcher) {
+        val source = FakeTripSource()
+        val viewModel = DepartureDetailsViewModel(source, CLOCK)
+        viewModel.open(DEPARTURE)
+        val refreshing = launch { viewModel.autoRefresh() }
+        runCurrent()
+
+        val offline = TrueTimeError.Network(IOException("offline"))
+        source.vehicles = TrueTimeResult.Failure(offline)
+        source.predictions = TrueTimeResult.Failure(offline)
+        advanceTimeBy(15_000)
+        runCurrent()
+        refreshing.cancel()
+
+        assertEquals(
+            LiveBus(
+                position = BusPosition(LatLng(40.43851, -79.92284), 145),
+                progress = BusProgress(passedStops = 1, stopsAway = 1),
+                arrival = Arrival.Expected(7, delayed = false),
+                lastUpdated = Instant.parse("2026-10-01T12:40:00Z"),
+                error = offline
+            ),
+            viewModel.state.value?.bus
+        )
+    }
+
+    @Test
     fun autoRefresh_lifecycleStopped_stopsRequesting() = runTest(dispatcher) {
         val source = FakeTripSource()
         val viewModel = DepartureDetailsViewModel(source, CLOCK)
