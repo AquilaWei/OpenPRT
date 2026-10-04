@@ -480,6 +480,27 @@
 - 實機（Galaxy S23）確認：搜尋 Carnegie Mellon University → 點方案 → 地圖畫出 64 路線與上車站；6:33 的班次按「Live bus」顯示僅時刻表
 - 新增 26 個測試（全部 476 個），verify 通過（lint 0 issue）
 
+## 站牌可點擊與地圖圖例（F24 決定）
+
+- **地圖上所有 `StopMarker.stopId` 現在都是 TrueTime ID**（`stop_code`，沒有時退回 `stop_id`）：附近站牌原本放 GTFS `stop_id`，
+  路線站牌（pattern）放 TrueTime `stpid`，兩邊不一致；改成一致後點哪一種站牌都能直接查 TrueTime。面板的「Stop #…」就是這個號碼（站牌上印的）
+- 點擊判斷 `map/StopHitTest.kt` 的 `stopAt`：螢幕像素距離，半徑 24 dp（48 dp 觸控目標的一半），取最近的；範圍外回傳 null 且 click listener
+  回傳 false（不吃掉事件）。長按是另一個 listener，不受影響。可點的站牌 = 目前畫出的附近站牌 + 班次詳情的路線站牌；方案（trip）的上下車站不能點
+- `stop/StopDeparturesViewModel`：和詳情相同的 `Selection` + `autoRefresh()` 模式（`MainActivity` 用 `repeatOnLifecycle(STARTED)`），每 30 秒一次 `getpredictions`（只在面板開著時，多一次呼叫）。
+  即時預測**有任何一班**就只顯示即時（最多 10 班）；TrueTime 失敗、沒有 key、或成功但沒有該站預測（含 No data found）時改查時刻表，
+  `StopTimesSource.Scheduled(liveError)` 記下原因，面板顯示「No live times (原因)」或「No live predictions…」。時刻表班次沒有車輛可追，所以不能點
+- 時刻表：`data/gtfs/StopSchedule.kt` 的 `RoomStopScheduleSource`，用 `GtfsDao.getStopsByTrueTimeId`（掃 stops 表，幾千筆，一次點擊一次）找 GTFS 站牌，
+  查今天與**前一個服務日**（跨午夜的班次）再合併排序；路線名稱取 `routes.shortName`。`GtfsTimetable` 第一次在 App 內使用
+- 步行分鐘：選站牌時用使用者位置到站牌的直線距離（和附近班次一樣 1.2 m/s 無條件進位），沒有位置時是 0
+- 導覽順序（sheet 內容）：班次詳情 > 站牌 > 方案 > 附近班次。從站牌點進詳情，返回（箭頭或系統返回）回到站牌；站牌的返回回到方案或附近班次。
+  在詳情中點路線站牌會先關掉詳情再開站牌。詳情返回箭頭的說明文字仍是「Back to nearby departures」（從站牌進入時不精確，未改）
+- 選中的站牌在地圖上用金色大圓（和上車站同樣式，`selected-stop-layer`），詳情開著時不畫
+- 圖例：`map/MapLegend.kt` 的 `mapLegend(palette)` 從同一份 `MapPalette` 取色（`MapLegendTest` 逐項寫死兩種主題的預期色），
+  `MapLegendDialog` 用 Canvas 畫圓點 / 線 / 虛線、公車用 `ic_bus`。按鈕是地圖左下角的小 FAB（`ic_legend`，Material Icons info_outline）。
+  Robolectric 的小螢幕放不下八列，所以內容可捲動（大字型的手機也需要）
+- 手機這次顯示 `unauthorized`（USB 偵錯授權還沒按允許），**沒有裝到手機**，地圖點擊只能實機驗收
+- 新增 47 個測試（全部 559 個），verify 通過（lint 0 issue）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -527,6 +548,9 @@
 - [ ] 0.1.24 設計改進：站名與方向文字是一般大小寫（沒有「INBOUND-」）；方案卡片的「›」看得出可以點；
   方案詳情不用拉面板就看得到「Live bus」；選好目的地後上方只剩一列「To: …」，點它可重新搜尋、✕ 清除
 - [ ] 0.1.25：方案卡片顯示「N min trip」；班次詳情中公車開到身邊時公車圖示在藍點上方、藍點光暈仍看得到
+- [ ] F24 點附近站牌（和班次詳情路線上的站牌）出現該站班次：站名、「Stop #」與站牌上的號碼一致；有 key 時標 Live 且和站牌看板一致，
+  點一班打開即時詳情、返回回到站牌；移除 key 或關網路時改成 Scheduled 並說明原因；點站牌以外的地方不會誤觸，長按仍可選目的地；
+  左下角圖例的顏色、圖示與地圖上看到的一致（淺色與深色都看）
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -677,3 +701,7 @@
   questions 列出仍未回答的五題（iOS 範圍、輕軌、GitHub repo / 發佈、介面語言、實機驗收時程），已回答的四題保留 `answer`。
   在本 worktree（0.1.25）跑 verify：通過，512 個測試，lint 0 issue
   - 下一步：F24 站牌可點擊 + 地圖圖例（顏色用 `mapPalette`，圖示用 `ic_bus`）
+- 2026-10-03：**F24 完成**（版號 0.1.26，tag `v0.1.26` 只在本機）。地圖站牌可點擊（即時 / 時刻表班次、點班次進詳情、返回回到站牌）+ 地圖圖例，見 F24 段落。
+  開工前在本 worktree 跑 verify 通過（512 個測試）；完成後 verify 通過（559 個測試，lint 0 issue）
+  - 手機 adb 顯示 unauthorized，沒有安裝；需要實機驗收（見清單 F24）
+  - 下一步：F22 起點可輸入地址、對調起訖
