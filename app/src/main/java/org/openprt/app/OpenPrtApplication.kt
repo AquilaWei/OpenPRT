@@ -12,6 +12,9 @@ import org.openprt.app.data.gtfs.RoomTransitNetworkSource
 import org.openprt.app.data.gtfs.TripPlanRepository
 import org.openprt.app.data.settings.ApiKeySettings
 import org.openprt.app.data.settings.AppearanceSettings
+import org.openprt.app.walk.CachingWalkRouter
+import org.openprt.app.walk.ValhallaWalkRouter
+import org.openprt.app.walk.WalkRouter
 
 /** Holds the app-wide singletons; Room wants one database instance per process. */
 class OpenPrtApplication : Application() {
@@ -41,4 +44,9 @@ class OpenPrtApplication : Application() {
     }
 
     val rideStops: RideStopsSource by lazy { RoomRideStopsSource(gtfsDatabase.gtfsDao()) }
+
+    // App-wide, so its cache and its one-request-a-second spacing outlive any one screen.
+    val walkRouter: WalkRouter by lazy {
+        CachingWalkRouter(ValhallaWalkRouter(userAgent = "OpenPRT/${BuildConfig.VERSION_NAME}"))
+    }
 }

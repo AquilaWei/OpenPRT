@@ -29,6 +29,8 @@ import org.openprt.app.planner.Itinerary
 import org.openprt.app.planner.NoRouteReason
 import org.openprt.app.planner.RideLeg
 import org.openprt.app.planner.WalkLeg
+import org.openprt.app.walk.WalkPath
+import org.openprt.app.walk.WalkRouter
 
 /** A leg as the plan list shows it. */
 sealed interface LegSummary {
@@ -108,13 +110,22 @@ sealed interface RideLookup {
 
 /**
  * The option the user chose, shown leg by leg and on the map. [map] draws rides straight from
- * stop to stop until the stops they pass have been read from the timetable.
+ * stop to stop until the stops they pass have been read from the timetable, and walks straight
+ * until a street route is found for them.
  */
 data class SelectedTrip(
     val option: TripOption,
     val map: TripMapLayers,
-    val ride: RideLookup = RideLookup.Idle
-)
+    val ride: RideLookup = RideLookup.Idle,
+    /** One per walk of the itinerary, in order; empty or [WalkPath.Straight] until routed. */
+    val walks: List<WalkPath> = emptyList()
+) {
+    /** Minutes of [walk], one of this trip's walks: along the streets once routed, else straight. */
+    fun minutesOf(walk: WalkLeg): Long {
+        val index = option.plan.itinerary.legs.filterIsInstance<WalkLeg>().indexOf(walk)
+        return (walks.getOrNull(index) as? WalkPath.Streets)?.minutes ?: walk.minutes()
+    }
+}
 
 /** What the plan list shows while a destination is set. */
 sealed interface TripPlanUiState {
@@ -179,7 +190,9 @@ interface TripPlanActions {
  * ahead.
  *
  * A chosen option is drawn from the origin the plans were made from, not where the user is now.
- * Its rides are traced through the stops [rideStops] reads from the timetable.
+ * Its rides are traced through the stops [rideStops] reads from the timetable, then its walks,
+ * one at a time, along the streets [walkRouter] finds; walks it cannot route stay straight. The
+ * routed walking minutes are shown for the chosen option only and do not change its times.
  *
  * [time] holds the Leave now / Depart at / Arrive by choice, which outlives the destination;
  * the days the timetable covers are read from [timetableDates] the first time a time is chosen.
@@ -192,7 +205,8 @@ class TripPlanViewModel(
     private val rideStops: RideStopsSource,
     private val clock: Clock,
     private val timetableDates: TimetableDatesSource = TimetableDatesSource { null },
-    private val zone: ZoneId = ZoneId.systemDefault()
+    private val zone: ZoneId = ZoneId.systemDefault(),
+    private val walkRouter: WalkRouter = WalkRouter { from, to -> WalkPath.Straight(from, to) }
 ) : ViewModel(),
     TripPlanActions {
     private val mutableState = MutableStateFlow<TripPlanUiState?>(null)
@@ -292,15 +306,32 @@ class TripPlanViewModel(
         val to = destination ?: return
         val itinerary = option.plan.itinerary
         cancelSelectionLoads()
+        val ends = itinerary.walkEnds(from, to)
+        val walks: MutableList<WalkPath> =
+            ends.map { (start, end) -> WalkPath.Straight(start, end) }.toMutableList()
         mutableState.value = results.copy(
-            selected = SelectedTrip(option, itinerary.toMapLayers(from, to, emptyList()))
+            selected = SelectedTrip(
+                option,
+                itinerary.toMapLayers(from, to, emptyList(), emptyList()),
+                walks = walks.toList()
+            )
         )
         selection = viewModelScope.launch {
             val stops = itinerary.rides.map {
                 rideStops.stopsBetween(it.tripId, it.from.stopId, it.to.stopId)
             }
-            val layers = itinerary.toMapLayers(from, to, stops)
-            updateSelected(option) { it.copy(map = layers) }
+            updateSelected(option) {
+                it.copy(map = itinerary.toMapLayers(from, to, stops, emptyList()))
+            }
+            // One at a time, as the routing service allows a request a second; each walk shows
+            // as soon as it is found.
+            ends.forEachIndexed { index, (start, end) ->
+                if (start == end) return@forEachIndexed
+                walks[index] = walkRouter.route(start, end)
+                val routed = walks.toList()
+                val layers = itinerary.toMapLayers(from, to, stops, routed.map { it.points })
+                updateSelected(option) { it.copy(map = layers, walks = routed) }
+            }
         }
     }
 

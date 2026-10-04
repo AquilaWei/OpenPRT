@@ -40,6 +40,8 @@ import org.openprt.app.planner.NoRouteReason
 import org.openprt.app.planner.RideLeg
 import org.openprt.app.planner.TransitStop
 import org.openprt.app.planner.WalkLeg
+import org.openprt.app.walk.WalkPath
+import org.openprt.app.walk.WalkRouter
 
 /**
  * Times: the plan is on Thursday 2026-10-01 (EDT, UTC-4); the clock reads 06:50 local. The
@@ -308,6 +310,56 @@ class TripPlanViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(listOf(HERE, MIDDLE, THERE)), viewModel.results().selected?.map?.rides)
+    }
+
+    @Test
+    fun select_afterWalkRouted_drawsItAlongTheStreets() = runTest(dispatcher) {
+        val router = FakeWalkRouter(WalkPath.Streets(listOf(HERE, CORNER, FORBES.location), 300))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(listOf(HERE, CORNER, FORBES.location)),
+            viewModel.results().selected?.map?.walks
+        )
+    }
+
+    @Test
+    fun select_afterWalkRouted_showsItsStreetMinutes() = runTest(dispatcher) {
+        val router = FakeWalkRouter(WalkPath.Streets(listOf(HERE, CORNER, FORBES.location), 300))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertEquals(5L, viewModel.results().selected?.minutesOf(WALK_TO_FORBES))
+    }
+
+    @Test
+    fun select_walkNotRouted_staysStraightWithPlannedMinutes() = runTest(dispatcher) {
+        val router = FakeWalkRouter(WalkPath.Straight(HERE, FORBES.location))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        val selected = viewModel.results().selected
+        assertEquals(listOf(listOf(HERE, FORBES.location)), selected?.map?.walks)
+        assertEquals(4L, selected?.minutesOf(WALK_TO_FORBES))
+    }
+
+    @Test
+    fun select_walkOfNoLength_isNotRouted() = runTest(dispatcher) {
+        // The plan's last walk ends at a stop on the destination itself.
+        val router = FakeWalkRouter(WalkPath.Straight(HERE, FORBES.location))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, walkPlanSource(), walkRouter = router)
+
+        viewModel.select(viewModel.results().options.single())
+        advanceUntilIdle()
+
+        assertEquals(listOf(HERE to FORBES.location), router.calls)
     }
 
     @Test
@@ -772,9 +824,11 @@ class TripPlanViewModelTest {
     private fun TestScope.plannedViewModel(
         predictions: PredictionSource,
         source: FakePlanSource = FakePlanSource(),
-        rideStops: RideStopsSource = STRAIGHT_RIDES
+        rideStops: RideStopsSource = STRAIGHT_RIDES,
+        walkRouter: WalkRouter = WalkRouter { from, to -> WalkPath.Straight(from, to) }
     ): TripPlanViewModel {
-        val viewModel = TripPlanViewModel(source, predictions, rideStops, CLOCK)
+        val viewModel =
+            TripPlanViewModel(source, predictions, rideStops, CLOCK, walkRouter = walkRouter)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
         advanceUntilIdle()
@@ -803,6 +857,19 @@ class TripPlanViewModelTest {
                 cancelled = true
                 throw e
             }
+        }
+    }
+
+    private fun walkPlanSource() =
+        FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(WALK_PLAN))))
+
+    /** Answers every walk with [path] and records which walks were asked for. */
+    private class FakeWalkRouter(val path: WalkPath) : WalkRouter {
+        val calls = mutableListOf<Pair<LatLng, LatLng>>()
+
+        override suspend fun route(from: LatLng, to: LatLng): WalkPath {
+            calls += from to to
+            return path
         }
     }
 
@@ -851,6 +918,22 @@ class TripPlanViewModelTest {
                     WalkLeg(null, CMU, 240.0, 24_000, 24_200),
                     RideLeg("T0", "61C", "DOWNTOWN", CMU, STEEL_PLAZA, 24_200, 26_000),
                     WalkLeg(STEEL_PLAZA, null, 120.0, 26_000, 26_100)
+                )
+            )
+        )
+
+        val CORNER = LatLng(40.4445, -79.9510)
+        val FORBES = TransitStop("s7117", "Forbes Ave at Craig", LatLng(40.4447, -79.9483))
+        val WALK_TO_FORBES = WalkLeg(null, FORBES, 240.0, 25_000, 25_200)
+
+        /** Walks from HERE to a stop down the street, then rides to THERE. */
+        val WALK_PLAN = TripPlan(
+            LocalDate.of(2026, 10, 1),
+            Itinerary(
+                listOf(
+                    WALK_TO_FORBES,
+                    RideLeg("T1", "61C", "DOWNTOWN", FORBES, STEEL_PLAZA, 25_200, 27_000),
+                    WalkLeg(STEEL_PLAZA, null, 0.0, 27_000, 27_000)
                 )
             )
         )

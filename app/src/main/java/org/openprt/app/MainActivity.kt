@@ -79,7 +79,8 @@ class MainActivity : ComponentActivity() {
                     trueTime::getPredictions,
                     app.rideStops,
                     Clock.systemUTC(),
-                    RoomTimetableDatesSource(app.gtfsDao)
+                    RoomTimetableDatesSource(app.gtfsDao),
+                    walkRouter = app.walkRouter
                 )
             }
             initializer { ApiKeyViewModel(app.apiKeySettings, TrueTimeClient.keyChecker()) }

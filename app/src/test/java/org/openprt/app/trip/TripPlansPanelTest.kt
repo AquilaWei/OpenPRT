@@ -27,6 +27,7 @@ import org.openprt.app.planner.TransitStop
 import org.openprt.app.planner.WalkLeg
 import org.openprt.app.ui.theme.OpenPrtTheme
 import org.openprt.app.ui.theme.ThemeMode
+import org.openprt.app.walk.WalkPath
 
 @RunWith(AndroidJUnit4::class)
 class TripPlansPanelTest {
@@ -216,6 +217,21 @@ class TripPlansPanelTest {
         composeRule.onNodeWithText("Walk 4 min to Forbes Ave at Morewood").assertIsDisplayed()
         composeRule.onNodeWithText("Toward Downtown").assertIsDisplayed()
         composeRule.onNodeWithText("Walk 2 min to your destination").assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_walkRoutedAlongStreets_showsItsStreetMinutes() {
+        val routed = SELECTED.selected!!.copy(
+            walks = listOf(
+                WalkPath.Streets(listOf(ORIGIN, CMU.location), 410),
+                WalkPath.Straight(STEEL_PLAZA.location, STEEL_PLAZA.location)
+            )
+        )
+        composeRule.setContent {
+            TripPlansPanel(SELECTED.copy(selected = routed), RecordingActions(), zone = UTC)
+        }
+
+        composeRule.onNodeWithText("Walk 7 min to Forbes Ave at Morewood").assertIsDisplayed()
     }
 
     @Test
@@ -478,6 +494,7 @@ class TripPlansPanelTest {
         val TODAY: LocalDate = LocalDate.of(2026, 10, 1)
         val CMU = TransitStop("s8312", "Forbes Ave at Morewood", LatLng(40.4443, -79.9532), "8312")
         val STEEL_PLAZA = TransitStop("s10", "Steel Plaza", LatLng(40.4406, -79.9959), "10")
+        val ORIGIN = LatLng(40.4450, -79.9500)
 
         val RIDE = RideLeg("T1", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)
 

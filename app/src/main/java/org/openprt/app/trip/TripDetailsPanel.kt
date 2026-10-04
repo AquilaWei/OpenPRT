@@ -33,9 +33,10 @@ import org.openprt.app.ui.displayHeadsign
 import org.openprt.app.ui.displayName
 
 /**
- * One chosen way to go, leg by leg: walks with their minutes and where they lead, and rides with
- * where to board and get off. Tapping a ride's live-bus button looks its bus up through
- * [actions]; when TrueTime has no data for it, the ride says its times are from the timetable.
+ * One chosen way to go, leg by leg: walks with their minutes (along the streets once routed) and
+ * where they lead, and rides with where to board and get off. Tapping a ride's live-bus button
+ * looks its bus up through [actions]; when TrueTime has no data for it, the ride says its times
+ * are from the timetable.
  * The back button returns to the list of options. Times are shown in [zone], with their date
  * when it is not [today].
  */
@@ -73,7 +74,7 @@ fun TripDetailsPanel(
                 legs.forEachIndexed { index, leg ->
                     if (index > 0) HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     when (leg) {
-                        is WalkLeg -> WalkRow(leg)
+                        is WalkLeg -> WalkRow(leg, selected.minutesOf(leg))
 
                         is RideLeg -> RideRow(
                             ride = leg,
@@ -90,14 +91,14 @@ fun TripDetailsPanel(
 }
 
 @Composable
-private fun WalkRow(walk: WalkLeg) {
+private fun WalkRow(walk: WalkLeg, minutes: Long) {
     val to = walk.to
     IconText(
         icon = R.drawable.ic_walk,
         text = if (to == null) {
-            stringResource(R.string.trip_walk_to_destination, walk.minutes())
+            stringResource(R.string.trip_walk_to_destination, minutes)
         } else {
-            stringResource(R.string.trip_walk_to_stop, walk.minutes(), displayName(to.name))
+            stringResource(R.string.trip_walk_to_stop, minutes, displayName(to.name))
         },
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.padding(vertical = 8.dp)
