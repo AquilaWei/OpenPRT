@@ -6,8 +6,10 @@ import androidx.lifecycle.testing.TestLifecycleOwner
 import java.io.IOException
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -23,6 +25,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
+import org.openprt.app.data.gtfs.ScheduledRun
+import org.openprt.app.data.gtfs.ScheduledStopTime
+import org.openprt.app.data.gtfs.ScheduledTripSource
 import org.openprt.app.data.gtfs.StopScheduleEntry
 import org.openprt.app.data.gtfs.StopScheduleSource
 import org.openprt.app.data.truetime.Prediction
@@ -51,14 +56,16 @@ class StopDeparturesViewModelTest {
 
     @Test
     fun state_beforeAnyStopIsSelected_isNull() {
-        val viewModel = StopDeparturesViewModel(FakePredictions(success()), FakeSchedule(), clock)
+        val viewModel =
+            StopDeparturesViewModel(FakePredictions(success()), FakeSchedule(), FakeTrips(), clock)
 
         assertNull(viewModel.state.value)
     }
 
     @Test
     fun select_beforeRefresh_showsStopLoading() {
-        val viewModel = StopDeparturesViewModel(FakePredictions(success()), FakeSchedule(), clock)
+        val viewModel =
+            StopDeparturesViewModel(FakePredictions(success()), FakeSchedule(), FakeTrips(), clock)
 
         viewModel.select(FORBES, from = null)
 
@@ -68,7 +75,7 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_stopSelected_asksTrueTimeAboutThatStopRightAway() = runTest(dispatcher) {
         val predictions = FakePredictions(success())
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = null)
 
         val refreshing = launch { viewModel.autoRefresh() }
@@ -81,7 +88,7 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_noStopSelected_makesNoRequest() = runTest(dispatcher) {
         val predictions = FakePredictions(success())
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
 
         val refreshing = launch { viewModel.autoRefresh() }
         advanceTimeBy(60_000)
@@ -94,7 +101,7 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_after30Seconds_asksAgain() = runTest(dispatcher) {
         val predictions = FakePredictions(success())
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = null)
 
         val refreshing = launch { viewModel.autoRefresh() }
@@ -109,7 +116,7 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_lifecycleStopped_stopsAsking() = runTest(dispatcher) {
         val predictions = FakePredictions(success())
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = null)
         val owner = lifecycleOwner()
 
@@ -129,7 +136,7 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_closed_stopsAsking() = runTest(dispatcher) {
         val predictions = FakePredictions(success())
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = null)
 
         val refreshing = launch { viewModel.autoRefresh() }
@@ -147,7 +154,7 @@ class StopDeparturesViewModelTest {
         val predictions = FakePredictions(
             success(prediction("71B", "Highland Park", 720), prediction("61C", "McKeesport", 300))
         )
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = null)
 
         val refreshing = launch { viewModel.autoRefresh() }
@@ -184,7 +191,7 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_selectedFromUserPosition_liveRowsCarryWalkToStop() = runTest(dispatcher) {
         val predictions = FakePredictions(success(prediction("61C", "McKeesport", 300)))
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = LatLng(40.44330, -79.94210))
 
         val refreshing = launch { viewModel.autoRefresh() }
@@ -197,11 +204,11 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_trueTimeFails_showsTimetableMarkedScheduled() = runTest(dispatcher) {
         val failure = TrueTimeError.Network(IOException("no network"))
-        val schedule =
-            FakeSchedule(StopScheduleEntry("61C", "INBOUND-DOWNTOWN", NOW.plusSeconds(600)))
+        val schedule = FakeSchedule(SCHEDULED_ENTRY)
         val viewModel = StopDeparturesViewModel(
             FakePredictions(TrueTimeResult.Failure(failure)),
             schedule,
+            FakeTrips(),
             clock
         )
         viewModel.select(FORBES, from = null)
@@ -213,7 +220,7 @@ class StopDeparturesViewModelTest {
         assertEquals(
             StopDeparturesUiState(
                 stop = FORBES,
-                departures = listOf(StopDeparture("61C", "INBOUND-DOWNTOWN", 10, false, null)),
+                departures = listOf(SCHEDULED_ROW),
                 source = StopTimesSource.Scheduled(failure),
                 lastUpdated = NOW
             ),
@@ -223,11 +230,11 @@ class StopDeparturesViewModelTest {
 
     @Test
     fun autoRefresh_noApiKey_showsTimetableMarkedScheduled() = runTest(dispatcher) {
-        val schedule =
-            FakeSchedule(StopScheduleEntry("61C", "INBOUND-DOWNTOWN", NOW.plusSeconds(600)))
+        val schedule = FakeSchedule(SCHEDULED_ENTRY)
         val viewModel = StopDeparturesViewModel(
             FakePredictions(TrueTimeResult.Failure(TrueTimeError.MissingApiKey)),
             schedule,
+            FakeTrips(),
             clock
         )
         viewModel.select(FORBES, from = null)
@@ -239,7 +246,7 @@ class StopDeparturesViewModelTest {
         assertEquals(
             StopDeparturesUiState(
                 stop = FORBES,
-                departures = listOf(StopDeparture("61C", "INBOUND-DOWNTOWN", 10, false, null)),
+                departures = listOf(SCHEDULED_ROW),
                 source = StopTimesSource.Scheduled(TrueTimeError.MissingApiKey),
                 lastUpdated = NOW
             ),
@@ -252,7 +259,8 @@ class StopDeparturesViewModelTest {
         val noData = TrueTimeError.Api(listOf("No data found for parameter"))
         val viewModel = StopDeparturesViewModel(
             FakePredictions(TrueTimeResult.Failure(noData)),
-            FakeSchedule(StopScheduleEntry("61C", "INBOUND-DOWNTOWN", NOW.plusSeconds(600))),
+            FakeSchedule(SCHEDULED_ENTRY),
+            FakeTrips(),
             clock
         )
         viewModel.select(FORBES, from = null)
@@ -270,6 +278,7 @@ class StopDeparturesViewModelTest {
         val viewModel = StopDeparturesViewModel(
             FakePredictions(TrueTimeResult.Failure(TrueTimeError.MissingApiKey)),
             schedule,
+            FakeTrips(),
             clock
         )
         viewModel.select(FORBES, from = null)
@@ -287,6 +296,7 @@ class StopDeparturesViewModelTest {
         val viewModel = StopDeparturesViewModel(
             FakePredictions(success(elsewhere)),
             FakeSchedule(),
+            FakeTrips(),
             clock
         )
         viewModel.select(FORBES, from = null)
@@ -300,7 +310,8 @@ class StopDeparturesViewModelTest {
 
     @Test
     fun close_afterSelect_clearsState() {
-        val viewModel = StopDeparturesViewModel(FakePredictions(success()), FakeSchedule(), clock)
+        val viewModel =
+            StopDeparturesViewModel(FakePredictions(success()), FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = null)
 
         viewModel.close()
@@ -311,7 +322,7 @@ class StopDeparturesViewModelTest {
     @Test
     fun autoRefresh_otherStopSelected_asksAboutNewStopRightAway() = runTest(dispatcher) {
         val predictions = FakePredictions(success())
-        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), clock)
+        val viewModel = StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
         viewModel.select(FORBES, from = null)
 
         val refreshing = launch { viewModel.autoRefresh() }
@@ -322,6 +333,111 @@ class StopDeparturesViewModelTest {
 
         assertEquals(listOf(listOf("7117"), listOf("2635")), predictions.requests)
     }
+
+    @Test
+    fun openScheduledTrip_timetabledRow_asksTimetableForItsRun() = runTest(dispatcher) {
+        val trips = FakeTrips(RUN_STOPS)
+        val viewModel = scheduledStopViewModel(trips)
+
+        viewModel.openScheduledTrip(SCHEDULED_ROW)
+        runCurrent()
+
+        assertEquals(listOf(RUN), trips.requests)
+    }
+
+    @Test
+    fun openScheduledTrip_loaded_showsRunWithItsStops() = runTest(dispatcher) {
+        val viewModel = scheduledStopViewModel(FakeTrips(RUN_STOPS))
+
+        viewModel.openScheduledTrip(SCHEDULED_ROW)
+        runCurrent()
+
+        assertEquals(
+            ScheduledTripUiState(SCHEDULED_ROW, RUN_STOPS),
+            viewModel.state.value?.scheduledTrip
+        )
+    }
+
+    @Test
+    fun openScheduledTrip_beforeLoaded_showsRunLoading() = runTest(dispatcher) {
+        val viewModel = scheduledStopViewModel(FakeTrips(RUN_STOPS, CompletableDeferred()))
+
+        viewModel.openScheduledTrip(SCHEDULED_ROW)
+        runCurrent()
+
+        assertEquals(ScheduledTripUiState(SCHEDULED_ROW), viewModel.state.value?.scheduledTrip)
+    }
+
+    @Test
+    fun openScheduledTrip_liveRow_opensNothing() = runTest(dispatcher) {
+        val trips = FakeTrips(RUN_STOPS)
+        val viewModel = scheduledStopViewModel(trips)
+
+        viewModel.openScheduledTrip(
+            StopDeparture("61C", "McKeesport", 5, false, departureItem("61C", "McKeesport", 5))
+        )
+        runCurrent()
+
+        assertNull(viewModel.state.value?.scheduledTrip)
+    }
+
+    @Test
+    fun back_runOpen_returnsToStopList() = runTest(dispatcher) {
+        val viewModel = scheduledStopViewModel(FakeTrips(RUN_STOPS))
+        viewModel.openScheduledTrip(SCHEDULED_ROW)
+        runCurrent()
+
+        viewModel.back()
+
+        assertEquals(StopDeparturesUiState(FORBES), viewModel.state.value)
+    }
+
+    @Test
+    fun back_noRunOpen_closesStop() {
+        val viewModel = scheduledStopViewModel(FakeTrips())
+
+        viewModel.back()
+
+        assertNull(viewModel.state.value)
+    }
+
+    @Test
+    fun openScheduledTrip_closedBeforeLoaded_staysClosed() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = scheduledStopViewModel(FakeTrips(RUN_STOPS, gate))
+        viewModel.openScheduledTrip(SCHEDULED_ROW)
+        runCurrent()
+
+        viewModel.back()
+        gate.complete(Unit)
+        runCurrent()
+
+        assertNull(viewModel.state.value?.scheduledTrip)
+    }
+
+    @Test
+    fun autoRefresh_runOpen_keepsItOpen() = runTest(dispatcher) {
+        val viewModel = scheduledStopViewModel(FakeTrips(RUN_STOPS))
+        viewModel.openScheduledTrip(SCHEDULED_ROW)
+        runCurrent()
+
+        val refreshing = launch { viewModel.autoRefresh() }
+        runCurrent()
+        refreshing.cancel()
+
+        assertEquals(
+            ScheduledTripUiState(SCHEDULED_ROW, RUN_STOPS),
+            viewModel.state.value?.scheduledTrip
+        )
+    }
+
+    /** A view model with FORBES open, whose live times fail so the timetable is shown. */
+    private fun scheduledStopViewModel(trips: FakeTrips) = StopDeparturesViewModel(
+        FakePredictions(TrueTimeResult.Failure(TrueTimeError.MissingApiKey)),
+        FakeSchedule(SCHEDULED_ENTRY),
+        trips,
+        clock
+    ).apply { select(FORBES, from = null) }
 
     /**
      * The owner's state setter blocks on its dispatcher, so it gets an unconfined one: a
@@ -355,6 +471,20 @@ class StopDeparturesViewModelTest {
         }
     }
 
+    /** Answers every run with [stops]; [gate] holds the answer back until it is completed. */
+    private class FakeTrips(
+        private val stops: List<ScheduledStopTime> = emptyList(),
+        private val gate: CompletableDeferred<Unit>? = null
+    ) : ScheduledTripSource {
+        val requests = mutableListOf<ScheduledRun>()
+
+        override suspend fun stopsFrom(run: ScheduledRun): List<ScheduledStopTime> {
+            requests.add(run)
+            gate?.await()
+            return stops
+        }
+    }
+
     private class FixedClock(val now: Instant) : Clock() {
         override fun instant(): Instant = now
 
@@ -369,6 +499,18 @@ class StopDeparturesViewModelTest {
         // 139 m north of the user position used in the walk test.
         val FORBES = StopMarker("7117", "Forbes Ave at Morewood", LatLng(40.44455, -79.94210))
         val FIFTH = StopMarker("2635", "Fifth Ave at Bellefield", LatLng(40.44577, -79.95142))
+
+        val RUN = ScheduledRun("T2", LocalDate.of(2026, 10, 1), 2)
+
+        val SCHEDULED_ENTRY =
+            StopScheduleEntry("61C", "INBOUND-DOWNTOWN", NOW.plusSeconds(600), RUN)
+
+        val SCHEDULED_ROW = StopDeparture("61C", "INBOUND-DOWNTOWN", 10, false, null, RUN)
+
+        val RUN_STOPS = listOf(
+            ScheduledStopTime("FORBES AVE + MOREWOOD AVE", NOW.plusSeconds(600)),
+            ScheduledStopTime("STEEL PLAZA STATION", NOW.plusSeconds(1800))
+        )
 
         fun success(vararg predictions: Prediction) = TrueTimeResult.Success(predictions.toList())
 

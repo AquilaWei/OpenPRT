@@ -433,7 +433,7 @@ class HomeScreenTest {
 
     @Test
     fun homeScreen_stopSelected_showsStopBusesInsteadOfNearbyDepartures() {
-        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = {}) }
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = {}) }
 
         composeRule.onNodeWithText("Stop #7117").assertIsDisplayed()
         composeRule.onNodeWithText("Nearby departures").assertDoesNotExist()
@@ -441,7 +441,7 @@ class HomeScreenTest {
 
     @Test
     fun homeScreen_departureClickedInStopPanel_showsItsDetails() {
-        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = {}) }
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = {}) }
 
         composeRule.onNodeWithText("To McKeesport").performClick()
 
@@ -450,7 +450,7 @@ class HomeScreenTest {
 
     @Test
     fun homeScreen_backFromDetailsOpenedFromStop_showsStopBusesAgain() {
-        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = {}) }
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = {}) }
         composeRule.onNodeWithText("To McKeesport").performClick()
 
         composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
@@ -459,9 +459,9 @@ class HomeScreenTest {
     }
 
     @Test
-    fun homeScreen_stopPanelBackClicked_callsOnCloseStop() {
+    fun homeScreen_stopPanelBackClicked_callsOnStopBack() {
         var closed = 0
-        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = { closed++ }) }
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = { closed++ }) }
 
         composeRule.onNodeWithContentDescription("Close this stop").performClick()
 
@@ -501,7 +501,7 @@ class HomeScreenTest {
 
     /** HomeScreen with a tapped stop open, and details held like MainActivity holds them. */
     @Composable
-    private fun NavigableStopHomeScreen(onCloseStop: () -> Unit) {
+    private fun NavigableStopHomeScreen(onStopBack: () -> Unit) {
         var details by remember { mutableStateOf<DepartureDetailsUiState?>(null) }
         HomeScreen(
             LocationUiState.Located(LatLng(40.4443, -79.9532)),
@@ -523,7 +523,7 @@ class HomeScreenTest {
                 departures = listOf(StopDeparture("61C", "McKeesport", 5, false, DEPARTURE)),
                 source = StopTimesSource.Live
             ),
-            onCloseStop = onCloseStop,
+            onStopBack = onStopBack,
             mapContent = stubMap
         )
     }

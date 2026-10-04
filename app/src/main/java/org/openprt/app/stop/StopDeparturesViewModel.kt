@@ -1,6 +1,7 @@
 package org.openprt.app.stop
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import java.time.Clock
 import java.time.Instant
 import kotlin.time.Duration
@@ -11,6 +12,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import org.openprt.app.data.gtfs.ScheduledRun
+import org.openprt.app.data.gtfs.ScheduledStopTime
+import org.openprt.app.data.gtfs.ScheduledTripSource
 import org.openprt.app.data.gtfs.StopScheduleEntry
 import org.openprt.app.data.gtfs.StopScheduleSource
 import org.openprt.app.data.truetime.Prediction
@@ -40,8 +45,9 @@ sealed interface StopTimesSource {
 }
 
 /**
- * One bus leaving the stop. [departure] is set for live rows only: a timetabled run has no
- * vehicle to follow, so it cannot open the departure details.
+ * One bus leaving the stop. Live rows carry [departure], which opens the departure details with
+ * the bus on the map; timetabled rows have no vehicle to follow and carry [run] instead, which
+ * opens the run's remaining stops and times.
  */
 data class StopDeparture(
     val route: String,
@@ -49,7 +55,15 @@ data class StopDeparture(
     /** Rounded down and never below 0, like the departures list. */
     val minutes: Long,
     val delayed: Boolean,
-    val departure: DepartureItem?
+    val departure: DepartureItem?,
+    val run: ScheduledRun? = null
+)
+
+/** A timetabled run opened from the stop's list. */
+data class ScheduledTripUiState(
+    val row: StopDeparture,
+    /** From the stop on; null while loading, empty when the timetable no longer has the run. */
+    val stops: List<ScheduledStopTime>? = null
 )
 
 data class StopDeparturesUiState(
@@ -57,20 +71,24 @@ data class StopDeparturesUiState(
     val departures: List<StopDeparture> = emptyList(),
     val source: StopTimesSource = StopTimesSource.Loading,
     /** When [departures] were last fetched; null before the first refresh. */
-    val lastUpdated: Instant? = null
+    val lastUpdated: Instant? = null,
+    /** The timetabled run shown over the list, if one is open. */
+    val scheduledTrip: ScheduledTripUiState? = null
 )
 
 /**
  * The departures from one stop the user tapped on the map. [state] is null while no stop is
- * open; [select] opens a stop, [close] goes back. [autoRefresh] fetches its TrueTime predictions
+ * open; [select] opens a stop, [back] goes back. [autoRefresh] fetches its TrueTime predictions
  * right away and then every [refreshInterval]; when TrueTime fails or predicts nothing there,
- * the timetable from [schedule] is shown instead and marked as scheduled.
+ * the timetable from [schedule] is shown instead and marked as scheduled. A timetabled row opens
+ * its run's remaining stops from [trips] through [openScheduledTrip].
  *
  * One API call per refresh, on top of the nearby list's, and only while a stop is open.
  */
 class StopDeparturesViewModel(
     private val predictions: PredictionSource,
     private val schedule: StopScheduleSource,
+    private val trips: ScheduledTripSource,
     private val clock: Clock,
     private val refreshInterval: Duration = DEFAULT_REFRESH_INTERVAL
 ) : ViewModel() {
@@ -98,6 +116,36 @@ class StopDeparturesViewModel(
     fun close() {
         selection.value = null
         mutableState.value = null
+    }
+
+    /** Closes the open timetabled run if there is one, and the stop otherwise. */
+    fun back() {
+        if (mutableState.value?.scheduledTrip != null) {
+            mutableState.update { it?.copy(scheduledTrip = null) }
+        } else {
+            close()
+        }
+    }
+
+    /**
+     * Shows where the timetabled [row] goes from this stop. Does nothing for a live row, whose
+     * bus opens the departure details instead.
+     */
+    fun openScheduledTrip(row: StopDeparture) {
+        val run = row.run ?: return
+        val opened = ScheduledTripUiState(row)
+        mutableState.update { it?.copy(scheduledTrip = opened) }
+        viewModelScope.launch {
+            val stops = trips.stopsFrom(run)
+            mutableState.update { state ->
+                // Identity: a run closed or replaced while loading must stay that way.
+                if (state?.scheduledTrip === opened) {
+                    state.copy(scheduledTrip = opened.copy(stops = stops))
+                } else {
+                    state
+                }
+            }
+        }
     }
 
     /**
@@ -171,7 +219,8 @@ private fun StopScheduleEntry.toRow(now: Instant) = StopDeparture(
     destination = headsign.orEmpty(),
     minutes = minutesUntil(time, now),
     delayed = false,
-    departure = null
+    departure = null,
+    run = run
 )
 
 private fun minutesUntil(time: Instant, now: Instant): Long =

@@ -488,7 +488,10 @@
   回傳 false（不吃掉事件）。長按是另一個 listener，不受影響。可點的站牌 = 目前畫出的附近站牌 + 班次詳情的路線站牌；方案（trip）的上下車站不能點
 - `stop/StopDeparturesViewModel`：和詳情相同的 `Selection` + `autoRefresh()` 模式（`MainActivity` 用 `repeatOnLifecycle(STARTED)`），每 30 秒一次 `getpredictions`（只在面板開著時，多一次呼叫）。
   即時預測**有任何一班**就只顯示即時（最多 10 班）；TrueTime 失敗、沒有 key、或成功但沒有該站預測（含 No data found）時改查時刻表，
-  `StopTimesSource.Scheduled(liveError)` 記下原因，面板顯示「No live times (原因)」或「No live predictions…」。時刻表班次沒有車輛可追，所以不能點
+  `StopTimesSource.Scheduled(liveError)` 記下原因，面板顯示「No live times (原因)」或「No live predictions…」。
+  時刻表班次沒有車輛可追，點了改開「班次時刻」：`ScheduledRun`（trip_id + 服務日 + stop_sequence）交給 `RoomScheduledTripSource`
+  （`GtfsDao.getTripStopTimesFrom`，走主鍵）列出這班車從該站起的後續站與預定時間（第一站用 departure、其餘用 arrival），標「Scheduled」；
+  返回（箭頭或系統返回，`StopDeparturesViewModel.back`）先回到站牌列表再關站牌。30 秒更新不會關掉開著的班次時刻（reviewer 2026-10-04 要求補上）
 - 時刻表：`data/gtfs/StopSchedule.kt` 的 `RoomStopScheduleSource`，用 `GtfsDao.getStopsByTrueTimeId`（掃 stops 表，幾千筆，一次點擊一次）找 GTFS 站牌，
   查今天與**前一個服務日**（跨午夜的班次）再合併排序；路線名稱取 `routes.shortName`。`GtfsTimetable` 第一次在 App 內使用
 - 步行分鐘：選站牌時用使用者位置到站牌的直線距離（和附近班次一樣 1.2 m/s 無條件進位），沒有位置時是 0

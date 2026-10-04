@@ -55,6 +55,7 @@ import org.openprt.app.map.StopMarker
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.map.mapPalette
 import org.openprt.app.planner.RideLeg
+import org.openprt.app.stop.StopDeparture
 import org.openprt.app.stop.StopDeparturesPanel
 import org.openprt.app.stop.StopDeparturesUiState
 import org.openprt.app.trip.TripOption
@@ -93,7 +94,8 @@ private val DETAILS_SHEET_PEEK_HEIGHT = 300.dp
  *
  * Tapping a stop on the map calls [onStopClick]; while [stopState] is set, the sheet lists that
  * stop's buses (over the ways there, under a departure's details, so backing out of a departure
- * opened from the stop returns to it) and back calls [onCloseStop]. The legend button explains
+ * opened from the stop returns to it). A timetabled bus in that list calls [onScheduledClick];
+ * back calls [onStopBack], which closes an open timetabled run before the stop. The legend button explains
  * the map's markers in the current theme's colors.
  *
  * The key button in the top bar calls [onOpenApiKey] to change the TrueTime key; the theme
@@ -122,7 +124,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     stopState: StopDeparturesUiState? = null,
     onStopClick: (StopMarker) -> Unit = {},
-    onCloseStop: () -> Unit = {},
+    onScheduledClick: (StopDeparture) -> Unit = {},
+    onStopBack: () -> Unit = {},
     mapContent: @Composable (Modifier, PaddingValues) -> Unit = { mapModifier, overlayPadding ->
         val trip = (tripPlanState as? TripPlanUiState.Results)?.selected?.map
         StopMap(
@@ -145,7 +148,7 @@ fun HomeScreen(
 ) {
     val tripSelected = (tripPlanState as? TripPlanUiState.Results)?.selected != null
     BackHandler(enabled = detailsState != null, onBack = onCloseDetails)
-    BackHandler(enabled = detailsState == null && stopState != null, onBack = onCloseStop)
+    BackHandler(enabled = detailsState == null && stopState != null, onBack = onStopBack)
     BackHandler(
         enabled = detailsState == null && stopState == null && tripSelected,
         onBack = tripPlanActions::closeSelection
@@ -194,7 +197,12 @@ fun HomeScreen(
                     onSwitchDirection = onDepartureClick
                 )
 
-                stopState != null -> StopDeparturesPanel(stopState, onCloseStop, onDepartureClick)
+                stopState != null -> StopDeparturesPanel(
+                    stopState,
+                    onBack = onStopBack,
+                    onDepartureClick = onDepartureClick,
+                    onScheduledClick = onScheduledClick
+                )
 
                 tripPlanState != null -> TripPlansPanel(tripPlanState, tripPlanActions)
 

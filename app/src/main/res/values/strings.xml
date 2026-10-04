@@ -109,6 +109,10 @@
     <string name="stop_empty">No more buses from this stop in today\'s timetable.</string>
     <string name="stop_scheduled_no_live">No live predictions for this stop right now. Times are from the timetable.</string>
     <string name="stop_scheduled_failed">No live times (%1$s). Times are from the timetable.</string>
+    <string name="scheduled_trip_back">Back to this stop\'s buses</string>
+    <string name="scheduled_trip_note">Timetabled run: there is no live position for this bus, so these are the scheduled times.</string>
+    <string name="scheduled_trip_loading">Loading this run\'s stops…</string>
+    <string name="scheduled_trip_missing">This run is no longer in the timetable.</string>
     <string name="legend_open">Map legend</string>
     <string name="legend_title">Map legend</string>
     <string name="legend_close">Close</string>

@@ -107,6 +107,14 @@ data class StopDepartureRow(
     val departureSeconds: Int
 )
 
+/** One stop of a trip, joined with the stop's name. */
+data class TripStopTimeRow(
+    val stopSequence: Int,
+    val stopName: String,
+    val arrivalSeconds: Int,
+    val departureSeconds: Int
+)
+
 @Dao
 interface GtfsDao {
     @Query("SELECT * FROM stops ORDER BY stopId")
@@ -160,6 +168,18 @@ interface GtfsDao {
             "WHERE st.tripId = :tripId ORDER BY st.stopSequence"
     )
     suspend fun getStopsOfTrip(tripId: String): List<StopEntity>
+
+    /**
+     * The stops of [tripId] from [fromSequence] on, with their names, in travel order; runs on
+     * the primary key.
+     */
+    @Query(
+        "SELECT st.stopSequence, s.name AS stopName, st.arrivalSeconds, st.departureSeconds " +
+            "FROM stop_times st JOIN stops s ON s.stopId = st.stopId " +
+            "WHERE st.tripId = :tripId AND st.stopSequence >= :fromSequence " +
+            "ORDER BY st.stopSequence"
+    )
+    suspend fun getTripStopTimesFrom(tripId: String, fromSequence: Int): List<TripStopTimeRow>
 
     /** Calendar rows whose date range contains [date], whatever their weekdays. */
     @Query("SELECT * FROM calendar WHERE :date BETWEEN startDate AND endDate")

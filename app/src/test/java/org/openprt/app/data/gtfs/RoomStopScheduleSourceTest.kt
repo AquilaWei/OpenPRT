@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -57,8 +58,18 @@ class RoomStopScheduleSourceTest {
 
         assertEquals(
             listOf(
-                StopScheduleEntry("61C", "INBOUND-DOWNTOWN", Instant.parse("2026-10-01T12:10:00Z")),
-                StopScheduleEntry("61C", "INBOUND-DOWNTOWN", Instant.parse("2026-10-02T04:50:00Z"))
+                StopScheduleEntry(
+                    "61C",
+                    "INBOUND-DOWNTOWN",
+                    Instant.parse("2026-10-01T12:10:00Z"),
+                    ScheduledRun("T2", LocalDate.of(2026, 10, 1), 2)
+                ),
+                StopScheduleEntry(
+                    "61C",
+                    "INBOUND-DOWNTOWN",
+                    Instant.parse("2026-10-02T04:50:00Z"),
+                    ScheduledRun("T4", LocalDate.of(2026, 10, 1), 2)
+                )
             ),
             departures
         )
@@ -71,7 +82,12 @@ class RoomStopScheduleSourceTest {
 
         assertEquals(
             listOf(
-                StopScheduleEntry("61C", "INBOUND-DOWNTOWN", Instant.parse("2026-10-02T04:50:00Z"))
+                StopScheduleEntry(
+                    "61C",
+                    "INBOUND-DOWNTOWN",
+                    Instant.parse("2026-10-02T04:50:00Z"),
+                    ScheduledRun("T4", LocalDate.of(2026, 10, 1), 2)
+                )
             ),
             departures
         )
@@ -90,6 +106,32 @@ class RoomStopScheduleSourceTest {
         val departures = source.departures("424242", Instant.parse("2026-10-01T11:15:00Z"), 10)
 
         assertEquals(emptyList<StopScheduleEntry>(), departures)
+    }
+
+    // T2 leaves Fifth + Bellefield at 08:10 and reaches Steel Plaza at 08:30, Thursday EDT.
+    @Test
+    fun stopsFrom_runAtSecondStop_listsItAndLaterStopsWithTimes() = runTest {
+        val stops = RoomScheduledTripSource(database.gtfsDao())
+            .stopsFrom(ScheduledRun("T2", LocalDate.of(2026, 10, 1), 2))
+
+        assertEquals(
+            listOf(
+                ScheduledStopTime(
+                    "FIFTH AVE + BELLEFIELD, OPP",
+                    Instant.parse("2026-10-01T12:10:00Z")
+                ),
+                ScheduledStopTime("STEEL PLAZA STATION", Instant.parse("2026-10-01T12:30:00Z"))
+            ),
+            stops
+        )
+    }
+
+    @Test
+    fun stopsFrom_tripNotInTimetable_isEmpty() = runTest {
+        val stops = RoomScheduledTripSource(database.gtfsDao())
+            .stopsFrom(ScheduledRun("GONE", LocalDate.of(2026, 10, 1), 1))
+
+        assertEquals(emptyList<ScheduledStopTime>(), stops)
     }
 
     // GTFS stop_id 10 is not a TrueTime ID: TrueTime calls that stop 99994.

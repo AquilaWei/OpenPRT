@@ -2,14 +2,45 @@ package org.openprt.app.data.gtfs
 
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 
 /** A timetabled departure from a stop, named the way riders see it. */
 data class StopScheduleEntry(
     /** The route's short name, e.g. "61C"; the GTFS route ID when the feed has none. */
     val route: String,
     val headsign: String?,
-    val time: Instant
+    val time: Instant,
+    /** Which run this is, so [ScheduledTripSource] can list where it goes from here. */
+    val run: ScheduledRun
 )
+
+/**
+ * One timetabled run calling at a stop: trip [tripId] of [serviceDate], at its stop number
+ * [stopSequence]. The service date matters for trips that run past midnight.
+ */
+data class ScheduledRun(val tripId: String, val serviceDate: LocalDate, val stopSequence: Int)
+
+/** A stop a timetabled run calls at and when it is due there. */
+data class ScheduledStopTime(val stopName: String, val time: Instant)
+
+/** The rest of a timetabled run; an interface so the stop panel can be tested with a fake. */
+fun interface ScheduledTripSource {
+    /**
+     * The stops of [run]'s trip from its stop on, in travel order, the first one at its departure
+     * time and the rest at their arrival times. Empty when the trip is no longer in the timetable,
+     * for instance after an update replaced it.
+     */
+    suspend fun stopsFrom(run: ScheduledRun): List<ScheduledStopTime>
+}
+
+/** [ScheduledTripSource] over the imported GTFS timetable. */
+class RoomScheduledTripSource(private val dao: GtfsDao) : ScheduledTripSource {
+    override suspend fun stopsFrom(run: ScheduledRun): List<ScheduledStopTime> =
+        dao.getTripStopTimesFrom(run.tripId, run.stopSequence).mapIndexed { index, row ->
+            val seconds = if (index == 0) row.departureSeconds else row.arrivalSeconds
+            ScheduledStopTime(row.stopName, serviceTime(run.serviceDate, seconds))
+        }
+}
 
 /** Timetabled departures from a stop; an interface so the stop panel can be tested with a fake. */
 fun interface StopScheduleSource {
@@ -53,7 +84,8 @@ class RoomStopScheduleSource(
             StopScheduleEntry(
                 route = routeNames[it.routeId] ?: it.routeId,
                 headsign = it.headsign,
-                time = it.departureTime
+                time = it.departureTime,
+                run = ScheduledRun(it.tripId, it.serviceDate, it.stopSequence)
             )
         }
     }

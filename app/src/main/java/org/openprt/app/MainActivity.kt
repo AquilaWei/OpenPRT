@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import java.time.Clock
+import org.openprt.app.data.gtfs.RoomScheduledTripSource
 import org.openprt.app.data.gtfs.RoomStopScheduleSource
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.fromSettings
@@ -62,6 +63,7 @@ class MainActivity : ComponentActivity() {
                 StopDeparturesViewModel(
                     trueTime::getPredictions,
                     RoomStopScheduleSource(app.gtfsDao),
+                    RoomScheduledTripSource(app.gtfsDao),
                     Clock.systemUTC()
                 )
             }
@@ -216,7 +218,8 @@ class MainActivity : ComponentActivity() {
                             detailsViewModel.close()
                             stopViewModel.select(stop, locationState.location)
                         },
-                        onCloseStop = stopViewModel::close
+                        onScheduledClick = stopViewModel::openScheduledTrip,
+                        onStopBack = stopViewModel::back
                     )
                 }
             }
