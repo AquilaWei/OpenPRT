@@ -2,6 +2,13 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.29] - 2026-10-04
+
+### 新增
+
+- 點一個方案後，地圖上的步行虛線改成**沿著街道與人行道**走（用 OpenStreetMap 的 FOSSGIS Valhalla 步行路線服務），方案詳情的步行分鐘也改成實際路線的時間。
+  服務查不到或 5 秒內沒回應時仍畫直線、用原本的估算，方案照常顯示；同一段路只查一次
+
 ## [0.1.28] - 2026-10-04
 
 ### 新增
