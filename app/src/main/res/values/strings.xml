@@ -115,7 +115,7 @@
     <string name="stop_back">Close this stop</string>
     <string name="stop_number">Stop #%1$s</string>
     <string name="stop_loading">Loading buses at this stop…</string>
-    <string name="stop_empty">No more buses from this stop in today\'s timetable.</string>
+    <string name="stop_empty">No buses from this stop in the timetable for the rest of today or tomorrow.</string>
     <string name="stop_scheduled_no_live">No live predictions for this stop right now. Times are from the timetable.</string>
     <string name="stop_scheduled_failed">No live times (%1$s). Times are from the timetable.</string>
     <string name="scheduled_trip_back">Back to this stop\'s buses</string>

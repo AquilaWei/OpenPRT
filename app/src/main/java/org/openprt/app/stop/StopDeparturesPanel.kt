@@ -20,6 +20,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -32,6 +34,7 @@ import org.openprt.app.ui.InfoCard
 import org.openprt.app.ui.MinutesPill
 import org.openprt.app.ui.RouteBadge
 import org.openprt.app.ui.StatusChip
+import org.openprt.app.ui.TimePill
 import org.openprt.app.ui.TimeStatus
 import org.openprt.app.ui.displayHeadsign
 import org.openprt.app.ui.displayName
@@ -89,7 +92,7 @@ fun StopDeparturesPanel(
         if (source is StopTimesSource.Scheduled) ScheduledNote(source.liveError)
         when {
             state.departures.isNotEmpty() ->
-                StopDepartureList(state.departures, onDepartureClick, onScheduledClick)
+                StopDepartureList(state, zone, onDepartureClick, onScheduledClick)
 
             source == StopTimesSource.Loading -> PanelText(stringResource(R.string.stop_loading))
 
@@ -112,23 +115,43 @@ private fun ScheduledNote(liveError: TrueTimeError?) {
 
 @Composable
 private fun StopDepartureList(
-    departures: List<StopDeparture>,
+    state: StopDeparturesUiState,
+    zone: ZoneId,
     onDepartureClick: (DepartureItem) -> Unit,
     onScheduledClick: (StopDeparture) -> Unit
 ) {
+    val clock = ClockText(zone, state.lastUpdated?.atZone(zone)?.toLocalDate())
     // Bounded so the list scrolls inside the sheet instead of growing past the screen.
     LazyColumn(
         modifier = Modifier.heightIn(max = 400.dp),
         contentPadding = PaddingValues(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(departures) { row -> StopDepartureRow(row, onDepartureClick, onScheduledClick) }
+        items(state.departures) { row ->
+            StopDepartureRow(row, clock, onDepartureClick, onScheduledClick)
+        }
+    }
+}
+
+/**
+ * Formats far-off timetabled departures as a clock time in [zone], with the weekday when the
+ * bus leaves on another day than [today] (for instance tomorrow's first bus late at night).
+ */
+private class ClockText(private val zone: ZoneId, private val today: LocalDate?) {
+    private val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+    private val weekday = DateTimeFormatter.ofPattern("EEE").withZone(zone)
+
+    fun format(instant: Instant): String = if (instant.atZone(zone).toLocalDate() == today) {
+        time.format(instant)
+    } else {
+        "${weekday.format(instant)} ${time.format(instant)}"
     }
 }
 
 @Composable
 private fun StopDepartureRow(
     row: StopDeparture,
+    clock: ClockText,
     onDepartureClick: (DepartureItem) -> Unit,
     onScheduledClick: (StopDeparture) -> Unit
 ) {
@@ -157,7 +180,12 @@ private fun StopDepartureRow(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                MinutesPill(row.minutes)
+                val time = row.time
+                if (time != null && row.minutes >= CLOCK_AFTER_MINUTES) {
+                    TimePill(clock.format(time))
+                } else {
+                    MinutesPill(row.minutes)
+                }
                 StatusChip(
                     when {
                         departure == null -> TimeStatus.SCHEDULED
@@ -242,3 +270,6 @@ private fun ScheduledStopList(stops: List<ScheduledStopTime>, time: DateTimeForm
         }
     }
 }
+
+/** Timetabled buses at least this far off show their clock time instead of a countdown. */
+private const val CLOCK_AFTER_MINUTES = 60

@@ -54,7 +54,7 @@ class RoomStopScheduleSourceTest {
     // Thursday 07:15 in Pittsburgh: T2 at 08:10, then T4 at 24:50 (00:50 Friday).
     @Test
     fun departures_weekdayMorning_listsLaterTripsWithRouteName() = runTest {
-        val departures = source.departures("2635", Instant.parse("2026-10-01T11:15:00Z"), 10)
+        val departures = source.departures("2635", Instant.parse("2026-10-01T11:15:00Z"), 2)
 
         assertEquals(
             listOf(
@@ -87,6 +87,24 @@ class RoomStopScheduleSourceTest {
                     "INBOUND-DOWNTOWN",
                     Instant.parse("2026-10-02T04:50:00Z"),
                     ScheduledRun("T4", LocalDate.of(2026, 10, 1), 2)
+                )
+            ),
+            departures
+        )
+    }
+
+    // Sunday noon: Saturday's T3 has left and nothing runs on Sunday; Monday's T1 is at 07:10.
+    @Test
+    fun departures_afterTodaysLastTrip_listsNextServiceDaysFirstTrip() = runTest {
+        val departures = source.departures("2635", Instant.parse("2026-10-04T16:00:00Z"), 1)
+
+        assertEquals(
+            listOf(
+                StopScheduleEntry(
+                    "61C",
+                    "INBOUND-DOWNTOWN",
+                    Instant.parse("2026-10-05T11:10:00Z"),
+                    ScheduledRun("T1", LocalDate.of(2026, 10, 5), 2)
                 )
             ),
             departures

@@ -56,7 +56,9 @@ data class StopDeparture(
     val minutes: Long,
     val delayed: Boolean,
     val departure: DepartureItem?,
-    val run: ScheduledRun? = null
+    val run: ScheduledRun? = null,
+    /** When a timetabled row's bus leaves; shown instead of [minutes] when it is hours away. */
+    val time: Instant? = null
 )
 
 /** A timetabled run opened from the stop's list. */
@@ -220,7 +222,8 @@ private fun StopScheduleEntry.toRow(now: Instant) = StopDeparture(
     minutes = minutesUntil(time, now),
     delayed = false,
     departure = null,
-    run = run
+    run = run,
+    time = time
 )
 
 private fun minutesUntil(time: Instant, now: Instant): Long =

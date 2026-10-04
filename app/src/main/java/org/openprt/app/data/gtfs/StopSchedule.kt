@@ -57,7 +57,8 @@ fun interface StopScheduleSource {
 
 /**
  * [StopScheduleSource] over the imported GTFS timetable. Besides today's service day it also
- * asks yesterday's, whose trips can still run after midnight (times past 24:00:00).
+ * asks yesterday's, whose trips can still run after midnight (times past 24:00:00), and
+ * tomorrow's, so the list is not empty once today's last bus has left.
  */
 class RoomStopScheduleSource(
     private val dao: GtfsDao,
@@ -70,7 +71,7 @@ class RoomStopScheduleSource(
     ): List<StopScheduleEntry> {
         val today = after.atZone(PRT_TIME_ZONE).toLocalDate()
         val scheduled = dao.getStopsByTrueTimeId(trueTimeStopId).flatMap { stop ->
-            listOf(today.minusDays(1), today).flatMap { serviceDate ->
+            listOf(today.minusDays(1), today, today.plusDays(1)).flatMap { serviceDate ->
                 val seconds = Duration.between(serviceTime(serviceDate, 0), after).seconds
                 timetable.departuresAfter(stop.stopId, serviceDate, seconds.toInt(), limit)
             }

@@ -266,7 +266,7 @@ class StopDeparturesPanelTest {
     }
 
     @Test
-    fun stopPanel_nothingLeftToday_saysSo() {
+    fun stopPanel_nothingLeftTodayOrTomorrow_saysSo() {
         composeRule.setContent {
             StopDeparturesPanel(
                 StopDeparturesUiState(STOP, emptyList(), StopTimesSource.Scheduled(null)),
@@ -276,8 +276,101 @@ class StopDeparturesPanelTest {
             )
         }
 
-        composeRule.onNodeWithText("No more buses from this stop in today's timetable.")
-            .assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "No buses from this stop in the timetable for the rest of today or tomorrow."
+        ).assertIsDisplayed()
+    }
+
+    // Sunday afternoon; Monday's first bus is 19 hours off.
+    @Test
+    fun stopPanel_scheduledHoursAwayOnAnotherDay_showsWeekdayAndClockTime() {
+        composeRule.setContent {
+            StopDeparturesPanel(
+                StopDeparturesUiState(
+                    STOP,
+                    listOf(
+                        StopDeparture(
+                            "61C",
+                            "INBOUND-DOWNTOWN",
+                            1150,
+                            false,
+                            null,
+                            ScheduledRun("T1", LocalDate.of(2026, 10, 5), 2),
+                            Instant.parse("2026-10-05T11:10:00Z")
+                        )
+                    ),
+                    StopTimesSource.Scheduled(null),
+                    lastUpdated = Instant.parse("2026-10-04T16:00:00Z")
+                ),
+                onBack = {},
+                onDepartureClick = {},
+                onScheduledClick = {},
+                zone = ZoneOffset.UTC
+            )
+        }
+
+        composeRule.onNodeWithText("Mon 11:10", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun stopPanel_scheduledHoursAwaySameDay_showsClockTimeWithoutWeekday() {
+        composeRule.setContent {
+            StopDeparturesPanel(
+                StopDeparturesUiState(
+                    STOP,
+                    listOf(
+                        StopDeparture(
+                            "61C",
+                            "INBOUND-DOWNTOWN",
+                            250,
+                            false,
+                            null,
+                            ScheduledRun("T2", LocalDate.of(2026, 10, 1), 2),
+                            Instant.parse("2026-10-01T12:10:00Z")
+                        )
+                    ),
+                    StopTimesSource.Scheduled(null),
+                    lastUpdated = Instant.parse("2026-10-01T08:00:00Z")
+                ),
+                onBack = {},
+                onDepartureClick = {},
+                onScheduledClick = {},
+                zone = ZoneOffset.UTC
+            )
+        }
+
+        composeRule.onNodeWithText("12:10", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Thu", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun stopPanel_scheduledUnderAnHour_showsMinutes() {
+        composeRule.setContent {
+            StopDeparturesPanel(
+                StopDeparturesUiState(
+                    STOP,
+                    listOf(
+                        StopDeparture(
+                            "61C",
+                            "INBOUND-DOWNTOWN",
+                            10,
+                            false,
+                            null,
+                            ScheduledRun("T2", LocalDate.of(2026, 10, 1), 2),
+                            Instant.parse("2026-10-01T12:10:00Z")
+                        )
+                    ),
+                    StopTimesSource.Scheduled(null),
+                    lastUpdated = Instant.parse("2026-10-01T12:00:00Z")
+                ),
+                onBack = {},
+                onDepartureClick = {},
+                onScheduledClick = {},
+                zone = ZoneOffset.UTC
+            )
+        }
+
+        composeRule.onNodeWithText("10 min").assertIsDisplayed()
     }
 
     private companion object {

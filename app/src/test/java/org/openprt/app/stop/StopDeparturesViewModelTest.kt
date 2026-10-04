@@ -505,7 +505,8 @@ class StopDeparturesViewModelTest {
         val SCHEDULED_ENTRY =
             StopScheduleEntry("61C", "INBOUND-DOWNTOWN", NOW.plusSeconds(600), RUN)
 
-        val SCHEDULED_ROW = StopDeparture("61C", "INBOUND-DOWNTOWN", 10, false, null, RUN)
+        val SCHEDULED_ROW =
+            StopDeparture("61C", "INBOUND-DOWNTOWN", 10, false, null, RUN, NOW.plusSeconds(600))
 
         val RUN_STOPS = listOf(
             ScheduledStopTime("FORBES AVE + MOREWOOD AVE", NOW.plusSeconds(600)),

@@ -72,6 +72,12 @@ fun InfoCard(
 /** Minutes until a bus comes, large enough to read at a glance like a stop's countdown sign. */
 @Composable
 fun MinutesPill(minutes: Long, modifier: Modifier = Modifier) {
+    TimePill(minutesText(minutes), modifier)
+}
+
+/** A departure time in [MinutesPill]'s style, for buses too far off to count down in minutes. */
+@Composable
+fun TimePill(text: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
@@ -79,7 +85,7 @@ fun MinutesPill(minutes: Long, modifier: Modifier = Modifier) {
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
     ) {
         Text(
-            text = minutesText(minutes),
+            text = text,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
