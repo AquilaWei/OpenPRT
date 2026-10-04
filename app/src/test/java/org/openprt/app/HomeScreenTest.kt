@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.IOException
 import org.junit.Assert.assertEquals
@@ -33,7 +34,11 @@ import org.openprt.app.geo.LatLng
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
+import org.openprt.app.map.StopMarker
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.stop.StopDeparture
+import org.openprt.app.stop.StopDeparturesUiState
+import org.openprt.app.stop.StopTimesSource
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.ui.theme.OpenPrtTheme
 import org.openprt.app.ui.theme.ThemeMode
@@ -424,6 +429,103 @@ class HomeScreenTest {
         composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
 
         assertEquals(0, relocations)
+    }
+
+    @Test
+    fun homeScreen_stopSelected_showsStopBusesInsteadOfNearbyDepartures() {
+        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = {}) }
+
+        composeRule.onNodeWithText("Stop #7117").assertIsDisplayed()
+        composeRule.onNodeWithText("Nearby departures").assertDoesNotExist()
+    }
+
+    @Test
+    fun homeScreen_departureClickedInStopPanel_showsItsDetails() {
+        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = {}) }
+
+        composeRule.onNodeWithText("To McKeesport").performClick()
+
+        composeRule.onNodeWithText("Locating the bus…").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_backFromDetailsOpenedFromStop_showsStopBusesAgain() {
+        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = {}) }
+        composeRule.onNodeWithText("To McKeesport").performClick()
+
+        composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
+
+        composeRule.onNodeWithText("Stop #7117").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_stopPanelBackClicked_callsOnCloseStop() {
+        var closed = 0
+        composeRule.setContent { NavigableStopHomeScreen(onCloseStop = { closed++ }) }
+
+        composeRule.onNodeWithContentDescription("Close this stop").performClick()
+
+        assertEquals(1, closed)
+    }
+
+    @Test
+    fun homeScreen_legendButtonClicked_explainsEveryMapMarker() {
+        composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
+
+        composeRule.onNodeWithContentDescription("Map legend").performClick()
+
+        // The list scrolls on Robolectric's small screen, so each row is scrolled to first.
+        composeRule.onNodeWithText("You").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Bus stop near you. Tap one to see its buses.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Stop to board at, or the stop you tapped")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Stop on the bus's route").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Bus route").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Walk").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("The bus you're following").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Destination").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_legendClosed_hidesLegend() {
+        composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
+        composeRule.onNodeWithContentDescription("Map legend").performClick()
+
+        composeRule.onNodeWithText("Close").performClick()
+
+        composeRule.onNodeWithText("Bus route").assertDoesNotExist()
+    }
+
+    /** HomeScreen with a tapped stop open, and details held like MainActivity holds them. */
+    @Composable
+    private fun NavigableStopHomeScreen(onCloseStop: () -> Unit) {
+        var details by remember { mutableStateOf<DepartureDetailsUiState?>(null) }
+        HomeScreen(
+            LocationUiState.Located(LatLng(40.4443, -79.9532)),
+            MapUiState(stopsStatus = StopsStatus.Ready),
+            DeparturesUiState(emptyList(), DeparturesStatus.Ready),
+            detailsState = details,
+            destinationState = DestinationUiState(),
+            destinationActions = NoDestinationActions,
+            tripPlanState = null,
+            tripPlanActions = NoTripPlanActions,
+            onRelocate = {},
+            onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
+            onCloseDetails = { details = null },
+            onOpenApiKey = {},
+            themeMode = ThemeMode.SYSTEM,
+            onThemeModeChange = {},
+            stopState = StopDeparturesUiState(
+                stop = StopMarker("7117", "Forbes Ave at Morewood", LatLng(40.4446, -79.9428)),
+                departures = listOf(StopDeparture("61C", "McKeesport", 5, false, DEPARTURE)),
+                source = StopTimesSource.Live
+            ),
+            onCloseStop = onCloseStop,
+            mapContent = stubMap
+        )
     }
 
     /** HomeScreen with details state held the way MainActivity's ViewModel holds it. */

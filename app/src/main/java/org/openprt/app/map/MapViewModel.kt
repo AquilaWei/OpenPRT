@@ -16,7 +16,10 @@ import org.openprt.app.departures.WalkableStop
 import org.openprt.app.geo.LatLng
 import org.openprt.app.geo.haversineMeters
 
-/** A stop to draw on the map. */
+/**
+ * A stop to draw on the map. [stopId] is its TrueTime stop ID (the number on the stop sign),
+ * so a tapped stop can be asked about straight away, whether it came from GTFS or a pattern.
+ */
 data class StopMarker(val stopId: String, val name: String, val position: LatLng)
 
 /** Whether the stop markers reflect the latest queried position. */
@@ -77,7 +80,7 @@ class MapViewModel(
             is NearbyStopsResult.Success -> MapUiState(
                 stopMarkers = result.stops.map {
                     StopMarker(
-                        stopId = it.stop.stopId,
+                        stopId = it.stop.trueTimeStopId,
                         name = it.stop.name,
                         position = LatLng(it.stop.latitude, it.stop.longitude)
                     )

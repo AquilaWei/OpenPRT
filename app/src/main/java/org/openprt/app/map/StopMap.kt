@@ -61,6 +61,7 @@ private const val ROUTE_STOPS_SOURCE = "route-stops"
 private const val BOARDING_STOP_SOURCE = "boarding-stop"
 private const val BUS_SOURCE = "bus"
 private const val DESTINATION_SOURCE = "destination"
+private const val SELECTED_STOP_SOURCE = "selected-stop"
 private const val TRIP_WALK_SOURCE = "trip-walks"
 private const val TRIP_RIDE_SOURCE = "trip-rides"
 private const val TRIP_BOARDING_SOURCE = "trip-boarding"
@@ -74,6 +75,9 @@ private const val USER_HALO_OPACITY = 0.25f
 
 // Street level: a 400 m stop radius fills most of a phone screen.
 private const val FOLLOW_ZOOM = 16.0
+
+// Half a 48 dp touch target, so a stop dot is as easy to hit as a button.
+private val STOP_TOUCH_RADIUS = 24.dp
 
 /** Margin kept between a fitted route (or user and destination) and the map edges. */
 private val ROUTE_FIT_PADDING = 48.dp
@@ -90,6 +94,9 @@ private val ROUTE_FIT_PADDING = 48.dp
  * A [destination], when set, is drawn as a red dot and, while no route is shown, the camera fits
  * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
  * reports the pressed spot through [onLongPress].
+ *
+ * Tapping near one of [stops] or a stop of [route] reports that stop through [onStopClick];
+ * [selectedStop], the stop whose buses are shown, is drawn large like a boarding stop.
  *
  * A chosen [trip] is drawn the same way as a route, with its walks dashed; the camera is fitted
  * to it while no route is shown. Camera fits keep [overlayPadding] clear, the space the search
@@ -113,15 +120,20 @@ fun StopMap(
     palette: MapPalette,
     modifier: Modifier = Modifier,
     trip: TripMapLayers? = null,
-    overlayPadding: PaddingValues = PaddingValues()
+    overlayPadding: PaddingValues = PaddingValues(),
+    selectedStop: LatLng? = null,
+    onStopClick: (StopMarker) -> Unit = {}
 ) {
     val context = LocalContext.current
     val fitPadding = fitPaddingPx(overlayPadding)
+    val touchRadiusPx = with(LocalDensity.current) { STOP_TOUCH_RADIUS.toPx() }
     val mapView = remember { createMapView(context) }
     // Null until the style has loaded; sources can only be updated after that.
     var style by remember { mutableStateOf<Style?>(null) }
     // The listener is registered once; this keeps it calling the latest callback.
     val currentOnLongPress by rememberUpdatedState(onLongPress)
+    val currentOnStopClick by rememberUpdatedState(onStopClick)
+    val tappableStops by rememberUpdatedState(stops + route?.stops.orEmpty())
 
     MapViewLifecycle(mapView)
     LaunchedEffect(mapView) {
@@ -129,6 +141,17 @@ fun StopMap(
             map.addOnMapLongClickListener { point ->
                 currentOnLongPress(LatLng(point.latitude, point.longitude))
                 true
+            }
+            // A tap away from every stop is not consumed, so the map handles it as usual.
+            map.addOnMapClickListener { point ->
+                val projection = map.projection
+                val tap = projection.toScreenLocation(point)
+                val stop = stopAt(ScreenPoint(tap.x, tap.y), tappableStops, touchRadiusPx) {
+                    val screen = projection.toScreenLocation(it.toMapLibre())
+                    ScreenPoint(screen.x, screen.y)
+                }
+                stop?.let(currentOnStopClick)
+                stop != null
             }
         }
     }
@@ -163,6 +186,9 @@ fun StopMap(
         style?.getSourceAs<GeoJsonSource>(BUS_SOURCE)?.setGeoJson(
             FeatureCollection.fromFeatures(listOfNotNull(bus?.toFeature()))
         )
+    }
+    LaunchedEffect(style, selectedStop) {
+        style?.setPoints(SELECTED_STOP_SOURCE, listOfNotNull(selectedStop))
     }
     LaunchedEffect(style, destination) {
         style?.setPoints(DESTINATION_SOURCE, listOfNotNull(destination))
@@ -274,8 +300,8 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
 }
 
 /**
- * Layers are drawn in the order added: route line, stops, route stops, boarding stop,
- * destination, user, bus.
+ * Layers are drawn in the order added: route line, stops, route stops, trip, boarding stop,
+ * selected stop, destination, user, bus.
  */
 private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette) {
     listOf(
@@ -287,6 +313,7 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
         TRIP_ALIGHTING_SOURCE,
         TRIP_BOARDING_SOURCE,
         BOARDING_STOP_SOURCE,
+        SELECTED_STOP_SOURCE,
         DESTINATION_SOURCE,
         BUS_SOURCE,
         USER_SOURCE
@@ -319,6 +346,10 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
     // Larger and gold so the stop to walk to stands out from the rest of the route.
     style.addLayer(
         largeMarkerLayer("boarding-stop-layer", BOARDING_STOP_SOURCE, palette.boardingStop, palette)
+    )
+    // The tapped stop looks like a boarding stop: it is where the listed buses are boarded.
+    style.addLayer(
+        largeMarkerLayer("selected-stop-layer", SELECTED_STOP_SOURCE, palette.boardingStop, palette)
     )
     // Red, the usual map color for "where you are going".
     style.addLayer(

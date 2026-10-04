@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import java.time.Clock
+import org.openprt.app.data.gtfs.RoomStopScheduleSource
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.fromSettings
 import org.openprt.app.data.truetime.keyChecker
@@ -36,6 +37,7 @@ import org.openprt.app.map.MapViewModel
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.settings.ApiKeyScreen
 import org.openprt.app.settings.ApiKeyViewModel
+import org.openprt.app.stop.StopDeparturesViewModel
 import org.openprt.app.trip.RideLookup
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.trip.TripPlanViewModel
@@ -56,6 +58,13 @@ class MainActivity : ComponentActivity() {
             }
             initializer { NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC()) }
             initializer { DepartureDetailsViewModel(trueTime.asTripSource(), Clock.systemUTC()) }
+            initializer {
+                StopDeparturesViewModel(
+                    trueTime::getPredictions,
+                    RoomStopScheduleSource(app.gtfsDao),
+                    Clock.systemUTC()
+                )
+            }
             initializer {
                 DestinationViewModel(
                     PhotonGeocoder(userAgent = "OpenPRT/${BuildConfig.VERSION_NAME}")
@@ -83,6 +92,8 @@ class MainActivity : ComponentActivity() {
             val departuresState by departuresViewModel.state.collectAsStateWithLifecycle()
             val detailsViewModel: DepartureDetailsViewModel = viewModel(factory = viewModelFactory)
             val detailsState by detailsViewModel.state.collectAsStateWithLifecycle()
+            val stopViewModel: StopDeparturesViewModel = viewModel(factory = viewModelFactory)
+            val stopState by stopViewModel.state.collectAsStateWithLifecycle()
             val destinationViewModel: DestinationViewModel = viewModel(factory = viewModelFactory)
             val destinationState by destinationViewModel.state.collectAsStateWithLifecycle()
             val tripPlanViewModel: TripPlanViewModel = viewModel(factory = viewModelFactory)
@@ -163,6 +174,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // A tapped stop's buses refresh every 30 seconds, also only while visible.
+            LaunchedEffect(lifecycleOwner) {
+                lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    stopViewModel.autoRefresh()
+                }
+            }
+
             // Before the first lookup succeeds the list is empty for want of stops, not of
             // buses, so only finished lookups are passed on.
             LaunchedEffect(mapState.walkableStops, mapState.stopsStatus) {
@@ -191,7 +209,14 @@ class MainActivity : ComponentActivity() {
                         onCloseDetails = detailsViewModel::close,
                         onOpenApiKey = apiKeyViewModel::open,
                         themeMode = themeMode,
-                        onThemeModeChange = app.appearanceSettings::setThemeMode
+                        onThemeModeChange = app.appearanceSettings::setThemeMode,
+                        stopState = stopState,
+                        onStopClick = { stop ->
+                            // A route stop tapped under a departure's details replaces them.
+                            detailsViewModel.close()
+                            stopViewModel.select(stop, locationState.location)
+                        },
+                        onCloseStop = stopViewModel::close
                     )
                 }
             }

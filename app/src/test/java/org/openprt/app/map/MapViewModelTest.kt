@@ -82,6 +82,24 @@ class MapViewModelTest {
             assertEquals(listOf(WalkableStop("99994", 120.0)), viewModel.state.value.walkableStops)
         }
 
+    // A tapped marker asks TrueTime about its stop, so it carries the TrueTime ID too.
+    @Test
+    fun onLocationChanged_stopWithCode_markerUsesStopCodeAsTrueTimeId() = runTest(dispatcher) {
+        val steelPlaza = NearbyStop(
+            StopEntity("10", "99994", "STEEL PLAZA STATION", 40.440277, -79.996529, 0),
+            distanceMeters = 120.0
+        )
+        val viewModel = MapViewModel(FakeStopSource(NearbyStopsResult.Success(listOf(steelPlaza))))
+
+        viewModel.onLocationChanged(LatLng(40.4406, -79.9959))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(StopMarker("99994", "STEEL PLAZA STATION", LatLng(40.440277, -79.996529))),
+            viewModel.state.value.stopMarkers
+        )
+    }
+
     @Test
     fun onLocationChanged_stopWithoutCode_walkableStopFallsBackToStopId() = runTest(dispatcher) {
         val noCode = NearbyStop(

@@ -131,8 +131,21 @@ interface GtfsDao {
     @Query("SELECT COUNT(*) FROM stops")
     suspend fun countStops(): Int
 
+    /**
+     * The stops TrueTime knows as [trueTimeStopId] (see [trueTimeStopId]). Scans the stops table,
+     * which is a few thousand rows, so it suits one lookup per tap, not a loop.
+     */
+    @Query(
+        "SELECT * FROM stops WHERE code = :trueTimeStopId " +
+            "OR (code IS NULL AND stopId = :trueTimeStopId) ORDER BY stopId"
+    )
+    suspend fun getStopsByTrueTimeId(trueTimeStopId: String): List<StopEntity>
+
     @Query("SELECT * FROM routes ORDER BY routeId")
     suspend fun getAllRoutes(): List<RouteEntity>
+
+    @Query("SELECT * FROM routes WHERE routeId IN (:routeIds)")
+    suspend fun getRoutes(routeIds: Collection<String>): List<RouteEntity>
 
     @Query("SELECT COUNT(*) FROM stop_times")
     suspend fun countStopTimes(): Int

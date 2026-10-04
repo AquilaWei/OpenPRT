@@ -16,6 +16,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -47,11 +48,15 @@ import org.openprt.app.details.RouteStatus
 import org.openprt.app.geo.LatLng
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
+import org.openprt.app.map.MapLegendDialog
 import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopMap
+import org.openprt.app.map.StopMarker
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.map.mapPalette
 import org.openprt.app.planner.RideLeg
+import org.openprt.app.stop.StopDeparturesPanel
+import org.openprt.app.stop.StopDeparturesUiState
 import org.openprt.app.trip.TripOption
 import org.openprt.app.trip.TripPlanActions
 import org.openprt.app.trip.TripPlanUiState
@@ -86,6 +91,11 @@ private val DETAILS_SHEET_PEEK_HEIGHT = 300.dp
  * leg by leg and on the map; those requests go to [tripPlanActions], and system back returns to
  * the list.
  *
+ * Tapping a stop on the map calls [onStopClick]; while [stopState] is set, the sheet lists that
+ * stop's buses (over the ways there, under a departure's details, so backing out of a departure
+ * opened from the stop returns to it) and back calls [onCloseStop]. The legend button explains
+ * the map's markers in the current theme's colors.
+ *
  * The key button in the top bar calls [onOpenApiKey] to change the TrueTime key; the theme
  * button offers System / Light / Dark, marks [themeMode] and reports a pick to [onThemeModeChange].
  *
@@ -110,6 +120,9 @@ fun HomeScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
+    stopState: StopDeparturesUiState? = null,
+    onStopClick: (StopMarker) -> Unit = {},
+    onCloseStop: () -> Unit = {},
     mapContent: @Composable (Modifier, PaddingValues) -> Unit = { mapModifier, overlayPadding ->
         val trip = (tripPlanState as? TripPlanUiState.Results)?.selected?.map
         StopMap(
@@ -124,23 +137,27 @@ fun HomeScreen(
             palette = mapPalette(dark = LocalOpenPrtColors.current.isDark),
             modifier = mapModifier,
             trip = trip,
-            overlayPadding = overlayPadding
+            overlayPadding = overlayPadding,
+            selectedStop = stopState?.stop?.position.takeIf { detailsState == null },
+            onStopClick = onStopClick
         )
     }
 ) {
     val tripSelected = (tripPlanState as? TripPlanUiState.Results)?.selected != null
     BackHandler(enabled = detailsState != null, onBack = onCloseDetails)
+    BackHandler(enabled = detailsState == null && stopState != null, onBack = onCloseStop)
     BackHandler(
-        enabled = detailsState == null && tripSelected,
+        enabled = detailsState == null && stopState == null && tripSelected,
         onBack = tripPlanActions::closeSelection
     )
-    val peekHeight = if (detailsState != null || tripSelected) {
+    val peekHeight = if (detailsState != null || stopState != null || tripSelected) {
         DETAILS_SHEET_PEEK_HEIGHT
     } else {
         SHEET_PEEK_HEIGHT
     }
     // The search box floats over the top of the map; camera fits keep clear of it.
     var searchHeight by remember { mutableStateOf(0.dp) }
+    var legendOpen by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     BottomSheetScaffold(
         modifier = modifier,
@@ -177,6 +194,8 @@ fun HomeScreen(
                     onSwitchDirection = onDepartureClick
                 )
 
+                stopState != null -> StopDeparturesPanel(stopState, onCloseStop, onDepartureClick)
+
                 tripPlanState != null -> TripPlansPanel(tripPlanState, tripPlanActions)
 
                 else -> DeparturesPanel(departuresState, onDepartureClick)
@@ -210,6 +229,17 @@ fun HomeScreen(
                     )
                 )
             }
+            SmallFloatingActionButton(
+                onClick = { legendOpen = true },
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_legend),
+                    contentDescription = stringResource(R.string.legend_open)
+                )
+            }
             FloatingActionButton(
                 onClick = onRelocate,
                 containerColor = LocalOpenPrtColors.current.accent,
@@ -222,6 +252,12 @@ fun HomeScreen(
                 )
             }
         }
+    }
+    if (legendOpen) {
+        MapLegendDialog(
+            palette = mapPalette(dark = LocalOpenPrtColors.current.isDark),
+            onDismiss = { legendOpen = false }
+        )
     }
 }
 
