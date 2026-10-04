@@ -513,7 +513,9 @@
   有選起點時用它的座標，定位更新完全不影響規劃；清除起點（null）時以目前位置重新規劃（沒有位置時等第一個定位）
 - 對調（`swapEndpoints`）：起點是 My location 時，新目的地是**按下當時**的位置（`Destination.wasUserLocation = true`，顯示「My location (pinned)」），
   新起點是原目的地；再對調一次時這個「固定的位置」不會變成起點，而是回到 My location（跟著定位）。還不知道位置時對調不做事
-- From 列只在有目的地或已選起點時出現，所以沒選目的地時搜尋區仍是一列；選好目的地時搜尋區約 121dp（原本約 72dp，測試上限改成 130dp）
+- From 列**一直都在**（review 後改）：F22 要求它在目的地搜尋框上方，所以還沒選目的地也能先選起點（搜尋或長按地圖），⇅ 等有目的地才出現。
+  搜尋區約 121dp（原本約 72dp，測試上限 130dp）；`HomeScreenTest` 中搜尋框下方狀態訊息的 4 個測試改用手機尺寸（`w360dp-h780dp`），
+  Robolectric 預設 470dp 高的螢幕放不下
 - 「離起點太遠」的 NoRoute 文字改成「of the starting point」
 - 尚未做：地圖上沒有起點標記；只有目的地時的相機縮放仍以你的位置與目的地為準（選了方案後會縮放到整個行程，包含起點）
 - 新增 26 個 F22 測試與 16 個時刻表班次測試（全部 601 個），verify 通過（lint 0 issue）
@@ -535,6 +537,12 @@
 - 0.1.28 的 `VERSION_CODE` 原本沿用 0.1.27 的 26，改成 27
 - 新增 41 個測試，review 後再加 2 個隔天回歸測試（全部 644 個），verify 通過（lint 0 issue）。上一個 session 未提交的 Repository 測試
   `plan_arriveByBeforeTheFirstTrip_returnsNoConnection` 原本用週四 06:00，但週三深夜班次確實趕得上，改成週一 06:00（週日沒有班次）
+- 第二次 review 後的修正：
+  - Arrive by 的反向搜尋會找到**出發時間早於現在**的方案（例：現在 9:55、期限 10:00，9:40 出發那班）。`TripPlanViewModel` 只在 Arrive by 時把
+    `departureTime < now` 的方案拿掉（用含即時誤點的出發時間）；全部拿掉時顯示 NO_CONNECTION。過濾放在 ViewModel 而不是 Repository，因為只有它知道「現在」
+  - 日期按鈕在時刻表日期讀到之前停用；`DatePickerDialog` 的 OK 只有選到範圍內的日子才能按（目前日期超出範圍時預設不選）。
+    時間按鈕仍保留目前的日期，所以「今天」本身不在時刻表範圍內時，只改時間仍會送出今天（規劃結果會是找不到方案）
+  - 新增 9 個測試（全部 653 個），verify 通過；其中 6 個回歸測試確認在修正前的程式下會失敗
 
 ## 給下一個 session 的注意事項
 
@@ -589,6 +597,8 @@
 - [ ] 0.1.27 時刻表班次：站牌面板中標 Scheduled 的班次可以點，列出接下來的站與時間、和站牌上的時刻表一致；返回回到站牌列表，再返回關掉站牌
 - [ ] F22 輸入兩個地址規劃出方案：選目的地後點「From: My location」，搜尋一個地址（例如 Cathedral of Learning）選起點，方案從那裡出發、走路時不會重新規劃；
   選起點模式下長按地圖也能設起點；✕ 回到 My location 並重新規劃；⇅ 對調後方案反過來，起點是 My location 時目的地顯示「My location (pinned)」
+- [ ] 第二次 review 修正：剛開 App（沒選目的地）時搜尋框上方就有「From: My location」，可先選起點再選目的地；
+  Arrive by 選幾分鐘後的期限時不會出現已經開走的方案；剛切到 Depart at 的一瞬間日期按鈕是灰的，讀完後才可按，日期選擇器只能選範圍內的日子
 - [ ] F27 Arrive by：選目的地（例如 CMU），切到 Arrive by、選明天上午的日期時間，卡片顯示「Leave by …」，
   和 Google Maps 的「抵達時間」結果比對（同一班車或相近的出發時間）；Depart at 選一小時後的時間，方案只標 Scheduled；
   日期選擇器只能選時刻表範圍內的日子；切回 Leave now 回到現在的方案
