@@ -228,7 +228,11 @@ fun HomeScreen(
                     onQueryChanged = destinationActions::onQueryChanged,
                     onPlaceSelected = destinationActions::selectPlace,
                     onRetry = destinationActions::retry,
-                    onClearDestination = destinationActions::clearDestination
+                    onClearDestination = destinationActions::clearDestination,
+                    onEditOrigin = destinationActions::editOrigin,
+                    onCancelOriginEdit = destinationActions::cancelOriginEdit,
+                    onClearOrigin = destinationActions::clearOrigin,
+                    onSwap = destinationActions::swapEndpoints
                 )
                 StatusMessages(
                     messages = listOfNotNull(
@@ -406,6 +410,14 @@ private object PreviewDestinationActions : DestinationActions {
     override fun onMapLongPress(location: LatLng) = Unit
 
     override fun clearDestination() = Unit
+
+    override fun editOrigin() = Unit
+
+    override fun cancelOriginEdit() = Unit
+
+    override fun clearOrigin() = Unit
+
+    override fun swapEndpoints() = Unit
 }
 
 /** Trip actions that do nothing, for previews and screens without a trip. */

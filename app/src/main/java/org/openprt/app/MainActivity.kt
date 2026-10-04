@@ -158,8 +158,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(destinationState.destination) {
-                tripPlanViewModel.onDestinationChanged(destinationState.destination?.location)
+            // Both ends in one call, so swapping them plans once.
+            LaunchedEffect(destinationState.origin, destinationState.destination) {
+                tripPlanViewModel.onEndpointsChanged(
+                    destinationState.origin?.location,
+                    destinationState.destination?.location
+                )
             }
 
             // Departures refresh every 30 seconds, also only while the app is visible.

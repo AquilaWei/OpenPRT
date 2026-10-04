@@ -268,6 +268,148 @@ class DestinationViewModelTest {
     }
 
     /** Answers with [results] in order, repeating the last; records what it was asked. */
+    @Test
+    fun editOrigin_thenPlaceSelected_setsOriginAndKeepsDestination() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.onMapLongPress(PINNED)
+
+        viewModel.editOrigin()
+        viewModel.selectPlace(CMU)
+
+        assertEquals(
+            DestinationUiState(
+                destination = Destination(null, PINNED),
+                origin = Destination("Carnegie Mellon University", CMU.location)
+            ),
+            viewModel.state.value
+        )
+    }
+
+    @Test
+    fun editOrigin_thenMapLongPressed_setsPinnedOrigin() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.selectPlace(CMU)
+
+        viewModel.editOrigin()
+        viewModel.onMapLongPress(PINNED)
+
+        assertEquals(Destination(null, PINNED), viewModel.state.value.origin)
+    }
+
+    @Test
+    fun editOrigin_searchesForOrigin() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+
+        viewModel.editOrigin()
+
+        assertEquals(Endpoint.ORIGIN, viewModel.state.value.editing)
+    }
+
+    @Test
+    fun selectPlace_afterOriginChosen_goesBackToSearchingDestinations() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.editOrigin()
+        viewModel.selectPlace(CMU)
+
+        viewModel.onMapLongPress(PINNED)
+
+        assertEquals(Destination(null, PINNED), viewModel.state.value.destination)
+    }
+
+    @Test
+    fun cancelOriginEdit_keepsOriginAndSearchesDestinationsAgain() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.editOrigin()
+        viewModel.selectPlace(CMU)
+        viewModel.editOrigin()
+        viewModel.onQueryChanged("pit")
+
+        viewModel.cancelOriginEdit()
+
+        assertEquals(
+            DestinationUiState(origin = Destination("Carnegie Mellon University", CMU.location)),
+            viewModel.state.value
+        )
+    }
+
+    @Test
+    fun clearOrigin_startsFromUserLocationAgain() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.editOrigin()
+        viewModel.selectPlace(CMU)
+
+        viewModel.clearOrigin()
+
+        assertEquals(null, viewModel.state.value.origin)
+    }
+
+    @Test
+    fun swapEndpoints_fromUserLocation_destinationBecomesWhereUserIs() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.onLocationChanged(USER)
+        viewModel.selectPlace(CMU)
+
+        viewModel.swapEndpoints()
+
+        assertEquals(
+            DestinationUiState(
+                destination = Destination(null, USER, wasUserLocation = true),
+                origin = Destination("Carnegie Mellon University", CMU.location)
+            ),
+            viewModel.state.value
+        )
+    }
+
+    @Test
+    fun swapEndpoints_chosenOrigin_exchangesBothEnds() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.selectPlace(CMU)
+        viewModel.editOrigin()
+        viewModel.onMapLongPress(PINNED)
+
+        viewModel.swapEndpoints()
+
+        assertEquals(
+            DestinationUiState(
+                destination = Destination(null, PINNED),
+                origin = Destination("Carnegie Mellon University", CMU.location)
+            ),
+            viewModel.state.value
+        )
+    }
+
+    @Test
+    fun swapEndpoints_twiceFromUserLocation_startsFromUserLocationAgain() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.onLocationChanged(USER)
+        viewModel.selectPlace(CMU)
+
+        viewModel.swapEndpoints()
+        viewModel.swapEndpoints()
+
+        assertEquals(
+            DestinationUiState(
+                destination = Destination("Carnegie Mellon University", CMU.location)
+            ),
+            viewModel.state.value
+        )
+    }
+
+    @Test
+    fun swapEndpoints_userLocationUnknown_changesNothing() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.selectPlace(CMU)
+
+        viewModel.swapEndpoints()
+
+        assertEquals(
+            DestinationUiState(
+                destination = Destination("Carnegie Mellon University", CMU.location)
+            ),
+            viewModel.state.value
+        )
+    }
+
     private class FakeGeocoder(vararg results: GeocodeResult) : Geocoder {
         private val remaining = ArrayDeque(results.toList())
         val queries = mutableListOf<String>()
@@ -293,5 +435,7 @@ class DestinationViewModelTest {
             LatLng(40.4439193, -79.9428267)
         )
         val TIMEOUT = GeocodeError.Timeout
+        val PINNED = LatLng(40.4612, -79.9254)
+        val USER = LatLng(40.4443, -79.9532)
     }
 }

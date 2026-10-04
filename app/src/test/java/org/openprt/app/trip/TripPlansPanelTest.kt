@@ -139,7 +139,7 @@ class TripPlansPanelTest {
         }
 
         composeRule
-            .onNodeWithText("No bus stop within walking distance (800 m) of you.")
+            .onNodeWithText("No bus stop within walking distance (800 m) of the starting point.")
             .assertIsDisplayed()
     }
 

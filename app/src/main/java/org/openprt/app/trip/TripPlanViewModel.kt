@@ -117,12 +117,14 @@ interface TripPlanActions {
 }
 
 /**
- * Plans a trip from the user's location to the chosen destination. A new destination replaces
- * the plans, and clearing it cancels any search in flight; `state` is null while there is no
- * destination, so the screen shows the nearby departures instead.
+ * Plans a trip to the chosen destination, from a chosen starting point or else from the user's
+ * location. New ends replace the plans, and clearing the destination cancels any search in
+ * flight; `state` is null while there is no destination, so the screen shows the nearby
+ * departures instead.
  *
  * Location updates do not plan again, so the list stays put while the user walks; only the first
- * known location (also after re-centering) starts a search that was waiting for one.
+ * known location (also after re-centering) starts a search that was waiting for one. With a
+ * chosen starting point the user's location plays no part.
  *
  * The first bus of each option is looked up in TrueTime once, when the plans arrive; if that
  * fails the options keep their timetable times rather than failing the whole search.
@@ -140,7 +142,8 @@ class TripPlanViewModel(
     private val mutableState = MutableStateFlow<TripPlanUiState?>(null)
     val state: StateFlow<TripPlanUiState?> = mutableState.asStateFlow()
 
-    private var origin: LatLng? = null
+    private var userLocation: LatLng? = null
+    private var chosenOrigin: LatLng? = null
     private var destination: LatLng? = null
     private var plannedFrom: LatLng? = null
     private var planning: Job? = null
@@ -151,15 +154,22 @@ class TripPlanViewModel(
 
     /** Reports the user's location; null while it is being looked up again. */
     fun onLocationChanged(location: LatLng?) {
-        val waitingForLocation = origin == null
-        origin = location
+        val waitingForLocation = userLocation == null && chosenOrigin == null
+        userLocation = location
         if (waitingForLocation && location != null && destination != null) startPlanning()
     }
 
-    /** Reports the destination; null clears it and returns to the nearby departures. */
-    fun onDestinationChanged(location: LatLng?) {
-        if (location == destination) return
-        destination = location
+    /** Reports the destination, keeping the starting point; see [onEndpointsChanged]. */
+    fun onDestinationChanged(location: LatLng?) = onEndpointsChanged(chosenOrigin, location)
+
+    /**
+     * Reports both ends at once, so a swap plans once. A null [origin] starts from the user's
+     * location; a null [destination] clears the plans and returns to the nearby departures.
+     */
+    fun onEndpointsChanged(origin: LatLng?, destination: LatLng?) {
+        if (origin == chosenOrigin && destination == this.destination) return
+        chosenOrigin = origin
+        this.destination = destination
         startPlanning()
     }
 
@@ -255,7 +265,7 @@ class TripPlanViewModel(
             return
         }
         mutableState.value = TripPlanUiState.Planning
-        val from = origin ?: return
+        val from = chosenOrigin ?: userLocation ?: return
         plannedFrom = from
         // Cancelled before it can write if the destination changes, since both run on Main.
         planning = viewModelScope.launch { mutableState.value = plan(from, to) }

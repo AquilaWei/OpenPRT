@@ -413,6 +413,91 @@ class TripPlanViewModelTest {
         assertEquals(RideLookup.Idle, viewModel.results().selected?.ride)
     }
 
+    @Test
+    fun onEndpointsChanged_chosenOrigin_plansFromItInsteadOfLocation() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
+        viewModel.onLocationChanged(HERE)
+
+        viewModel.onEndpointsChanged(MIDDLE, THERE)
+        advanceUntilIdle()
+
+        assertEquals(listOf(PlanCall(MIDDLE, THERE, NOW)), source.calls)
+    }
+
+    @Test
+    fun onEndpointsChanged_chosenOriginWithoutLocation_plansRightAway() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
+
+        viewModel.onEndpointsChanged(MIDDLE, THERE)
+        advanceUntilIdle()
+
+        assertEquals(listOf(PlanCall(MIDDLE, THERE, NOW)), source.calls)
+    }
+
+    @Test
+    fun onLocationChanged_chosenOrigin_doesNotPlanAgain() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
+        viewModel.onEndpointsChanged(MIDDLE, THERE)
+        advanceUntilIdle()
+
+        viewModel.onLocationChanged(HERE)
+        advanceUntilIdle()
+
+        assertEquals(listOf(PlanCall(MIDDLE, THERE, NOW)), source.calls)
+    }
+
+    @Test
+    fun onEndpointsChanged_originCleared_plansAgainFromLocation() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
+        viewModel.onLocationChanged(HERE)
+        viewModel.onEndpointsChanged(MIDDLE, THERE)
+        advanceUntilIdle()
+
+        viewModel.onEndpointsChanged(null, THERE)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(PlanCall(MIDDLE, THERE, NOW), PlanCall(HERE, THERE, NOW)),
+            source.calls
+        )
+    }
+
+    // What the screen reports after swapping with the start at "My location": the destination
+    // is where the user was, the start is the old destination.
+    @Test
+    fun onEndpointsChanged_swappedFromLocation_plansOnceTheOtherWay() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
+        viewModel.onLocationChanged(HERE)
+        viewModel.onEndpointsChanged(null, THERE)
+        advanceUntilIdle()
+
+        viewModel.onEndpointsChanged(THERE, HERE)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(PlanCall(HERE, THERE, NOW), PlanCall(THERE, HERE, NOW)),
+            source.calls
+        )
+    }
+
+    @Test
+    fun onEndpointsChanged_sameEnds_doesNotPlanAgain() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
+        viewModel.onEndpointsChanged(MIDDLE, THERE)
+        advanceUntilIdle()
+
+        viewModel.onEndpointsChanged(MIDDLE, THERE)
+        advanceUntilIdle()
+
+        assertEquals(1, source.calls.size)
+    }
+
     /** A view model that has planned [DIRECT_PLAN] from HERE to THERE. */
     private fun TestScope.plannedViewModel(
         predictions: PredictionSource,

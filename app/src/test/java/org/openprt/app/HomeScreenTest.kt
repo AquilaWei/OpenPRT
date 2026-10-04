@@ -575,5 +575,13 @@ class HomeScreenTest {
         override fun onMapLongPress(location: LatLng) = Unit
 
         override fun clearDestination() = Unit
+
+        override fun editOrigin() = Unit
+
+        override fun cancelOriginEdit() = Unit
+
+        override fun clearOrigin() = Unit
+
+        override fun swapEndpoints() = Unit
     }
 }
