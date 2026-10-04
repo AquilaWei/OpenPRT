@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.31] - 2026-10-04
+
+### 新增
+
+- 沒有網路時，附近班次寫「**You're offline.**」並繼續顯示上次的班次與更新時間；班次詳情也寫「You're offline. Showing data from …」並保留公車位置與到站分鐘
+- TrueTime 不接受 API key 時，附近班次說明要按上方鑰匙圖示換 key；key 當天的請求次數用完時，說明即時班次明天才會回來（詳情與站牌面板也用同樣的說明）
+- 站牌與時刻表資料超過 7 天時，App 會在有網路時於背景重新下載（每天檢查一次）；下載失敗時繼續用原本的資料，更新後的方案規劃改用新的時刻表
+
 ## [0.1.30] - 2026-10-04
 
 ### 新增
