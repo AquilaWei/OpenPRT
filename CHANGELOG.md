@@ -2,6 +2,20 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.28] - 2026-10-04
+
+### 新增
+
+- 方案可以指定時間了：「Ways to get there」上方多了 **Leave now / Depart at / Arrive by** 三個選項（預設 Leave now，跟以前一樣）。
+  選 Depart at 或 Arrive by 後，下面出現日期與時間兩個按鈕，可選時刻表涵蓋範圍內的任一天。
+  Arrive by 會找出**最晚出發、仍能在指定時間前抵達**的方案，卡片最上面寫「Leave by 7:12 AM」；第一班車即時誤點、可能趕不上時，卡片會用紅字提醒
+- 出發時間在一小時以後的方案不查即時資料，只用時刻表時間（TrueTime 不會預測那麼遠）
+
+### 修正
+
+- 站牌今天的末班車開走後，站牌面板改列明天的班次，不再一片空白
+- 找不到方案時的說明不再寫死「today」，改成「…at this time」，因為現在可以查別天
+
 ## [0.1.27] - 2026-10-04
 
 ### 新增
