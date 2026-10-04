@@ -401,6 +401,33 @@ class TripPlanViewModelTest {
     }
 
     @Test
+    fun openRide_boardsMoreThanAnHourFromNow_doesNotAskTrueTime() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(TrueTimeResult.Success(emptyList()))
+        val source =
+            FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(TOMORROW_PLAN))))
+        val viewModel = plannedViewModel(predictions, source = source)
+        viewModel.select(viewModel.results().options.single())
+
+        viewModel.openRide(TOMORROW_PLAN.itinerary.rides.single())
+        advanceUntilIdle()
+
+        assertEquals(emptyList<List<String>>(), predictions.requests)
+    }
+
+    @Test
+    fun openRide_boardsMoreThanAnHourFromNow_isScheduledOnlyAtOnce() = runTest(dispatcher) {
+        val source =
+            FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(TOMORROW_PLAN))))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source = source)
+        viewModel.select(viewModel.results().options.single())
+        val ride = TOMORROW_PLAN.itinerary.rides.single()
+
+        viewModel.openRide(ride)
+
+        assertEquals(RideLookup.ScheduledOnly(ride), viewModel.results().selected?.ride)
+    }
+
+    @Test
     fun onRideOpened_afterLiveBusFound_isIdleAgain() = runTest(dispatcher) {
         val predictions = FakePredictionSource(
             TrueTimeResult.Success(listOf(prediction("61C", "8312", "2026-10-01T11:02:00Z")))

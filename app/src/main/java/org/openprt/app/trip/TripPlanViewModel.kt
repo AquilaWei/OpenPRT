@@ -142,7 +142,10 @@ interface TripPlanActions {
     /** Back from a chosen option to the list, without planning again. */
     fun closeSelection()
 
-    /** Looks for the live bus of [ride] in the chosen option. */
+    /**
+     * Looks for the live bus of [ride] in the chosen option; a ride boarding more than an hour
+     * from now is scheduled only, without asking TrueTime.
+     */
     fun openRide(ride: RideLeg)
 
     /** The screen has opened the live bus found by [openRide]. */
@@ -171,8 +174,9 @@ interface TripPlanActions {
  * The first bus of each option is looked up in TrueTime once, when the plans arrive; if that
  * fails the options keep their timetable times rather than failing the whole search.
  *
- * Plans that set off more than [LIVE_HORIZON] from now are not looked up: TrueTime does not
- * predict that far ahead.
+ * Plans that set off more than [LIVE_HORIZON] from now are not looked up, and neither is a ride
+ * the user taps that boards more than [LIVE_HORIZON] from now: TrueTime does not predict that far
+ * ahead.
  *
  * A chosen option is drawn from the origin the plans were made from, not where the user is now.
  * Its rides are traced through the stops [rideStops] reads from the timetable.
@@ -308,8 +312,13 @@ class TripPlanViewModel(
 
     override fun openRide(ride: RideLeg) {
         val option = (mutableState.value as? TripPlanUiState.Results)?.selected?.option ?: return
-        updateSelected(option) { it.copy(ride = RideLookup.Looking(ride)) }
         rideLookup?.cancel()
+        // TrueTime does not predict this far ahead, so asking it could only fail or mislead.
+        if (option.plan.timeOf(ride.startSeconds) > clock.instant() + LIVE_HORIZON) {
+            updateSelected(option) { it.copy(ride = RideLookup.ScheduledOnly(ride)) }
+            return
+        }
+        updateSelected(option) { it.copy(ride = RideLookup.Looking(ride)) }
         rideLookup = viewModelScope.launch {
             val found = findLiveBus(option, ride)
             updateSelected(option) {
