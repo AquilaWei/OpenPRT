@@ -6,6 +6,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -150,7 +151,10 @@ interface TripPlanActions {
     /** Switches between Leave now, Depart at and Arrive by, and plans again. */
     fun setTimeMode(mode: TripTimeMode)
 
-    /** Sets the Depart at / Arrive by time and plans again; ignored for Leave now. */
+    /**
+     * Sets the Depart at / Arrive by time and plans again; ignored for Leave now. A day the
+     * timetable does not cover is replaced by the nearest one it does.
+     */
     fun setTime(at: Instant)
 }
 
@@ -175,13 +179,16 @@ interface TripPlanActions {
  *
  * [time] holds the Leave now / Depart at / Arrive by choice, which outlives the destination;
  * the days the timetable covers are read from [timetableDates] the first time a time is chosen.
+ * Once they are known, a chosen time on a day outside them moves to the nearest covered day at
+ * the same time of day, read in [zone], so no search runs on a day with no timetable.
  */
 class TripPlanViewModel(
     private val source: TripPlanSource,
     private val predictions: PredictionSource,
     private val rideStops: RideStopsSource,
     private val clock: Clock,
-    private val timetableDates: TimetableDatesSource = TimetableDatesSource { null }
+    private val timetableDates: TimetableDatesSource = TimetableDatesSource { null },
+    private val zone: ZoneId = ZoneId.systemDefault()
 ) : ViewModel(),
     TripPlanActions {
     private val mutableState = MutableStateFlow<TripPlanUiState?>(null)
@@ -234,7 +241,7 @@ class TripPlanViewModel(
 
             // The next whole minute, as the time picker shows whole minutes; rounding down
             // would list buses that left seconds ago.
-            else -> current.at ?: nextWholeMinute(clock.instant())
+            else -> current.at ?: withinTimetable(nextWholeMinute(clock.instant()))
         }
         mutableTime.value = current.copy(mode = mode, at = at)
         if (mode != TripTimeMode.LEAVE_NOW) loadTimetableDates()
@@ -243,8 +250,10 @@ class TripPlanViewModel(
 
     override fun setTime(at: Instant) {
         val current = mutableTime.value
-        if (current.mode == TripTimeMode.LEAVE_NOW || at == current.at) return
-        mutableTime.value = current.copy(at = at)
+        if (current.mode == TripTimeMode.LEAVE_NOW) return
+        val covered = withinTimetable(at)
+        if (covered == current.at) return
+        mutableTime.value = current.copy(at = covered)
         retry()
     }
 
@@ -252,10 +261,25 @@ class TripPlanViewModel(
         if (datesLoad != null) return
         datesLoad = viewModelScope.launch {
             val dates = timetableDates.dates()
-            mutableTime.value = mutableTime.value.copy(dates = dates)
+            val current = mutableTime.value
+            // The time was chosen before the dates were known, so it may lie outside them.
+            val at = current.at?.let { withinTimetable(it, dates) }
+            mutableTime.value = current.copy(at = at, dates = dates)
+            if (at != current.at) retry()
             // No timetable yet: read again next time, it may have downloaded meanwhile.
             if (dates == null) datesLoad = null
         }
+    }
+
+    /** [at], moved to the nearest day in [dates] if it falls outside them; unchanged without dates. */
+    private fun withinTimetable(
+        at: Instant,
+        dates: ClosedRange<LocalDate>? = mutableTime.value.dates
+    ): Instant {
+        if (dates == null) return at
+        val local = at.atZone(zone).toLocalDateTime()
+        val day = local.toLocalDate().coerceIn(dates.start, dates.endInclusive)
+        return local.with(day).atZone(zone).toInstant()
     }
 
     override fun select(option: TripOption) {

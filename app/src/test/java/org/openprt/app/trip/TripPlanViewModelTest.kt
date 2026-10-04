@@ -591,6 +591,54 @@ class TripPlanViewModelTest {
     }
 
     @Test
+    fun setTimeMode_departAtTodayBeforeTheTimetable_plansOnItsFirstDay() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(
+            source,
+            NO_PREDICTIONS,
+            STRAIGHT_RIDES,
+            CLOCK,
+            TimetableDatesSource { LocalDate.of(2026, 10, 2)..LocalDate.of(2026, 11, 21) },
+            ZoneOffset.UTC
+        )
+        viewModel.onLocationChanged(HERE)
+        viewModel.onDestinationChanged(THERE)
+
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+        advanceUntilIdle()
+
+        assertEquals(
+            PlanCall(HERE, THERE, TripTime.DepartAt(Instant.parse("2026-10-02T10:50:00Z"))),
+            source.calls.last()
+        )
+    }
+
+    @Test
+    fun setTime_dayAfterTheTimetable_plansOnItsLastDayAtThatTime() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = TripPlanViewModel(
+            source,
+            NO_PREDICTIONS,
+            STRAIGHT_RIDES,
+            CLOCK,
+            TimetableDatesSource { LocalDate.of(2026, 9, 27)..LocalDate.of(2026, 11, 21) },
+            ZoneOffset.UTC
+        )
+        viewModel.onLocationChanged(HERE)
+        viewModel.onDestinationChanged(THERE)
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+        advanceUntilIdle()
+
+        viewModel.setTime(Instant.parse("2026-12-05T08:00:00Z"))
+        advanceUntilIdle()
+
+        assertEquals(
+            PlanCall(HERE, THERE, TripTime.DepartAt(Instant.parse("2026-11-21T08:00:00Z"))),
+            source.calls.last()
+        )
+    }
+
+    @Test
     fun setTimeMode_departAtBetweenWholeMinutes_startsAtTheNextMinute() = runTest(dispatcher) {
         val source = FakePlanSource()
         val clock = Clock.fixed(Instant.parse("2026-10-01T10:50:30Z"), ZoneOffset.UTC)
