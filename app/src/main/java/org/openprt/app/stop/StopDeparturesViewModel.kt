@@ -212,7 +212,8 @@ private fun Prediction.toRow(walkMinutes: Long, now: Instant) = StopDeparture(
         minutesUntilDeparture = minutesUntil(predictedTime, now),
         delayed = delayed,
         stopId = stopId,
-        vehicleId = vehicleId
+        vehicleId = vehicleId,
+        feed = feed
     )
 )
 

@@ -88,7 +88,7 @@ internal fun DirectionDto.toModel() = Direction(id = id, name = name)
 internal fun StopDto.toModel() = Stop(id = stpid, name = stpnm, latitude = lat, longitude = lon)
 
 /** @throws IllegalArgumentException when [PredictionDto.typ] is neither "A" nor "D". */
-internal fun PredictionDto.toModel() = Prediction(
+internal fun PredictionDto.toModel(feed: DataFeed) = Prediction(
     generatedAt = parseTrueTime(tmstmp),
     type =
         when (typ) {
@@ -104,7 +104,8 @@ internal fun PredictionDto.toModel() = Prediction(
     routeDirection = rtdir,
     destination = des,
     predictedTime = parseTrueTime(prdtm),
-    delayed = dly
+    delayed = dly,
+    feed = feed
 )
 
 internal fun VehicleDto.toModel() = Vehicle(

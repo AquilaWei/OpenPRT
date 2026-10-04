@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.Pattern
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.TrueTimeClient
@@ -21,21 +22,34 @@ import org.openprt.app.data.truetime.orEmptyWhenNoData
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.geo.LatLng
 
-/** The TrueTime calls the details screen needs; an interface so tests can use a fake. */
+/**
+ * The TrueTime calls the details screen needs; an interface so tests can use a fake. Each call
+ * names the [DataFeed] to ask, because vehicle and pattern IDs only mean something in the feed
+ * that reported the departure.
+ */
 interface TripSource {
-    suspend fun vehicles(vehicleIds: List<String>): TrueTimeResult<List<Vehicle>>
+    suspend fun vehicles(feed: DataFeed, vehicleIds: List<String>): TrueTimeResult<List<Vehicle>>
 
-    suspend fun patterns(patternId: Int): TrueTimeResult<List<Pattern>>
+    suspend fun patterns(feed: DataFeed, patternId: Int): TrueTimeResult<List<Pattern>>
 
-    suspend fun predictions(stopIds: List<String>): TrueTimeResult<List<Prediction>>
+    suspend fun predictions(feed: DataFeed, stopIds: List<String>): TrueTimeResult<List<Prediction>>
 }
 
-fun TrueTimeClient.asTripSource(): TripSource = object : TripSource {
-    override suspend fun vehicles(vehicleIds: List<String>) = getVehicles(vehicleIds)
+/** Sends each call to the client in [clients] whose [TrueTimeClient.feed] matches. */
+fun tripSourceOf(clients: List<TrueTimeClient>): TripSource = object : TripSource {
+    private val byFeed = clients.associateBy { it.feed }
 
-    override suspend fun patterns(patternId: Int) = getPatterns(patternId)
+    private fun client(feed: DataFeed) =
+        requireNotNull(byFeed[feed]) { "No TrueTime client for feed $feed" }
 
-    override suspend fun predictions(stopIds: List<String>) = getPredictions(stopIds)
+    override suspend fun vehicles(feed: DataFeed, vehicleIds: List<String>) =
+        client(feed).getVehicles(vehicleIds)
+
+    override suspend fun patterns(feed: DataFeed, patternId: Int) =
+        client(feed).getPatterns(patternId)
+
+    override suspend fun predictions(feed: DataFeed, stopIds: List<String>) =
+        client(feed).getPredictions(stopIds)
 }
 
 /** Progress of loading the route drawn for the selected departure. */
@@ -133,12 +147,14 @@ class DepartureDetailsViewModel(
 
     private suspend fun refresh(current: Selection) {
         val departure = current.departure
-        val vehicles = source.vehicles(listOf(departure.vehicleId)).orEmptyWhenNoData()
+        val vehicles =
+            source.vehicles(departure.feed, listOf(departure.vehicleId)).orEmptyWhenNoData()
         if (mutableState.value?.route !is RouteStatus.Ready) {
             val route = loadRoute(departure, vehicles)
             updateIfOpen(current) { it.copy(route = route) }
         }
-        val predictions = source.predictions(listOf(departure.stopId)).orEmptyWhenNoData()
+        val predictions =
+            source.predictions(departure.feed, listOf(departure.stopId)).orEmptyWhenNoData()
         val now = clock.instant()
         updateIfOpen(current) {
             it.copy(bus = it.bus.next(departure, it.route, vehicles, predictions, now))
@@ -164,7 +180,7 @@ class DepartureDetailsViewModel(
             is TrueTimeResult.Success -> vehicles.value.firstOrNull { it.id == departure.vehicleId }
         } ?: return RouteStatus.NotFound
 
-        val patterns = source.patterns(vehicle.patternId).orEmptyWhenNoData()
+        val patterns = source.patterns(departure.feed, vehicle.patternId).orEmptyWhenNoData()
         val pattern = when (patterns) {
             is TrueTimeResult.Failure -> return RouteStatus.Failed(patterns.error)
             is TrueTimeResult.Success -> patterns.value.firstOrNull { it.id == vehicle.patternId }

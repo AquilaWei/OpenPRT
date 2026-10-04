@@ -2,6 +2,15 @@ package org.openprt.app.data.truetime
 
 import java.time.Instant
 
+/**
+ * One of PRT's TrueTime data feeds. Buses and light rail (the T) are separate feeds with their
+ * own vehicles and patterns, so a call about one vehicle must go to the feed it came from.
+ */
+enum class DataFeed(val apiName: String) {
+    BUS("Port Authority Bus"),
+    LIGHT_RAIL("Light Rail")
+}
+
 /** A PRT route as listed by `getroutes`. [color] is the API's hex string, e.g. `#cc00cc`. */
 data class Route(val id: String, val name: String, val color: String)
 
@@ -15,7 +24,10 @@ enum class PredictionType {
     DEPARTURE
 }
 
-/** A predicted arrival or departure of one vehicle at one stop. */
+/**
+ * A predicted arrival or departure of one vehicle at one stop. [feed] is the feed that reported
+ * it; the vehicle's position and pattern have to be asked from the same feed.
+ */
 data class Prediction(
     val generatedAt: Instant,
     val type: PredictionType,
@@ -27,7 +39,8 @@ data class Prediction(
     val routeDirection: String,
     val destination: String,
     val predictedTime: Instant,
-    val delayed: Boolean
+    val delayed: Boolean,
+    val feed: DataFeed = DataFeed.BUS
 )
 
 /** The last reported position of a vehicle on pattern [patternId]. */

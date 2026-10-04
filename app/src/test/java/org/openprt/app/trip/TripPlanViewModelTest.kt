@@ -29,6 +29,7 @@ import org.openprt.app.data.gtfs.TripPlan
 import org.openprt.app.data.gtfs.TripPlanResult
 import org.openprt.app.data.gtfs.TripPlanSource
 import org.openprt.app.data.gtfs.TripTime
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.PredictionType
 import org.openprt.app.data.truetime.TrueTimeError
@@ -474,6 +475,26 @@ class TripPlanViewModelTest {
             listOf("61C", "8312", "5501", "Forbes Ave at Morewood"),
             with(lookup.departure) { listOf(route, stopId, vehicleId, stopName) }
         )
+    }
+
+    @Test
+    fun openRide_lightRailPredicted_departureUsesTheLightRailFeed() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(
+            TrueTimeResult.Success(
+                listOf(
+                    prediction("61C", "8312", "2026-10-01T11:02:00Z")
+                        .copy(feed = DataFeed.LIGHT_RAIL)
+                )
+            )
+        )
+        val viewModel = plannedViewModel(predictions)
+        viewModel.select(viewModel.results().options.single())
+
+        viewModel.openRide(DIRECT_PLAN.itinerary.rides.single())
+        advanceUntilIdle()
+
+        val departure = (viewModel.results().selected?.ride as RideLookup.Live).departure
+        assertEquals(DataFeed.LIGHT_RAIL, departure.feed)
     }
 
     @Test

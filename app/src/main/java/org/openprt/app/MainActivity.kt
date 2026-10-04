@@ -22,14 +22,17 @@ import java.time.Clock
 import org.openprt.app.data.gtfs.RoomScheduledTripSource
 import org.openprt.app.data.gtfs.RoomStopScheduleSource
 import org.openprt.app.data.gtfs.RoomTimetableDatesSource
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.fromSettings
 import org.openprt.app.data.truetime.keyChecker
+import org.openprt.app.departures.MergedPredictionSource
 import org.openprt.app.departures.NearbyDeparturesViewModel
+import org.openprt.app.departures.PredictionSource
 import org.openprt.app.destination.DestinationViewModel
 import org.openprt.app.destination.PhotonGeocoder
 import org.openprt.app.details.DepartureDetailsViewModel
-import org.openprt.app.details.asTripSource
+import org.openprt.app.details.tripSourceOf
 import org.openprt.app.location.FusedLocationProvider
 import org.openprt.app.location.LOCATION_PERMISSIONS
 import org.openprt.app.location.LocationUiState
@@ -51,18 +54,28 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as OpenPrtApplication
-        // Lazy: after rotation the ViewModels already exist and need no new client.
-        val trueTime by lazy { TrueTimeClient.fromSettings(app.apiKeySettings) }
+        // Lazy: after rotation the ViewModels already exist and need no new clients.
+        val trueTimeFeeds by lazy {
+            DataFeed.entries.map { TrueTimeClient.fromSettings(app.apiKeySettings, it) }
+        }
+        // Buses and light rail together; each prediction remembers which feed it came from.
+        val predictions by lazy {
+            MergedPredictionSource(
+                trueTimeFeeds.map { client -> PredictionSource(client::getPredictions) }
+            )
+        }
         val viewModelFactory = viewModelFactory {
             initializer { LocationViewModel(FusedLocationProvider(applicationContext)) }
             initializer {
                 MapViewModel(app.nearbyStopRepository)
             }
-            initializer { NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC()) }
-            initializer { DepartureDetailsViewModel(trueTime.asTripSource(), Clock.systemUTC()) }
+            initializer { NearbyDeparturesViewModel(predictions, Clock.systemUTC()) }
+            initializer {
+                DepartureDetailsViewModel(tripSourceOf(trueTimeFeeds), Clock.systemUTC())
+            }
             initializer {
                 StopDeparturesViewModel(
-                    trueTime::getPredictions,
+                    predictions,
                     RoomStopScheduleSource(app.gtfsDao),
                     RoomScheduledTripSource(app.gtfsDao),
                     Clock.systemUTC()
@@ -76,7 +89,7 @@ class MainActivity : ComponentActivity() {
             initializer {
                 TripPlanViewModel(
                     app.tripPlanRepository,
-                    trueTime::getPredictions,
+                    predictions,
                     app.rideStops,
                     Clock.systemUTC(),
                     RoomTimetableDatesSource(app.gtfsDao),

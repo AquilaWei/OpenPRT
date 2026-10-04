@@ -24,6 +24,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.Pattern
 import org.openprt.app.data.truetime.PatternPoint
 import org.openprt.app.data.truetime.PatternStop
@@ -80,6 +81,36 @@ class DepartureDetailsViewModelTest {
         refreshing.cancel()
 
         assertEquals(listOf(listOf("5601")), source.vehicleRequests)
+    }
+
+    @Test
+    fun open_lightRailDeparture_asksTheLightRailFeedForVehiclePatternAndPredictions() =
+        runTest(dispatcher) {
+            val source = FakeTripSource()
+            val viewModel = DepartureDetailsViewModel(source, CLOCK)
+
+            viewModel.open(DEPARTURE.copy(feed = DataFeed.LIGHT_RAIL))
+            val refreshing = launch { viewModel.autoRefresh() }
+            runCurrent()
+            refreshing.cancel()
+
+            assertEquals(
+                listOf(DataFeed.LIGHT_RAIL, DataFeed.LIGHT_RAIL, DataFeed.LIGHT_RAIL),
+                source.feeds
+            )
+        }
+
+    @Test
+    fun open_busDeparture_asksTheBusFeedForVehiclePatternAndPredictions() = runTest(dispatcher) {
+        val source = FakeTripSource()
+        val viewModel = DepartureDetailsViewModel(source, CLOCK)
+
+        viewModel.open(DEPARTURE)
+        val refreshing = launch { viewModel.autoRefresh() }
+        runCurrent()
+        refreshing.cancel()
+
+        assertEquals(listOf(DataFeed.BUS, DataFeed.BUS, DataFeed.BUS), source.feeds)
     }
 
     @Test
@@ -563,19 +594,34 @@ class DepartureDetailsViewModelTest {
         val patternRequests = mutableListOf<Int>()
         val predictionRequests = mutableListOf<List<String>>()
 
-        override suspend fun vehicles(vehicleIds: List<String>): TrueTimeResult<List<Vehicle>> {
+        /** The feed each call went to, in call order. */
+        val feeds = mutableListOf<DataFeed>()
+
+        override suspend fun vehicles(
+            feed: DataFeed,
+            vehicleIds: List<String>
+        ): TrueTimeResult<List<Vehicle>> {
+            feeds.add(feed)
             vehicleRequests.add(vehicleIds)
             delay(responseDelayMillis)
             return vehicles
         }
 
-        override suspend fun patterns(patternId: Int): TrueTimeResult<List<Pattern>> {
+        override suspend fun patterns(
+            feed: DataFeed,
+            patternId: Int
+        ): TrueTimeResult<List<Pattern>> {
+            feeds.add(feed)
             patternRequests.add(patternId)
             delay(responseDelayMillis)
             return patterns
         }
 
-        override suspend fun predictions(stopIds: List<String>): TrueTimeResult<List<Prediction>> {
+        override suspend fun predictions(
+            feed: DataFeed,
+            stopIds: List<String>
+        ): TrueTimeResult<List<Prediction>> {
+            feeds.add(feed)
             predictionRequests.add(stopIds)
             delay(responseDelayMillis)
             return predictions

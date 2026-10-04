@@ -30,6 +30,7 @@ import org.openprt.app.data.gtfs.ScheduledStopTime
 import org.openprt.app.data.gtfs.ScheduledTripSource
 import org.openprt.app.data.gtfs.StopScheduleEntry
 import org.openprt.app.data.gtfs.StopScheduleSource
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.PredictionType
 import org.openprt.app.data.truetime.TrueTimeError
@@ -184,6 +185,25 @@ class StopDeparturesViewModelTest {
                 lastUpdated = NOW
             ),
             viewModel.state.value
+        )
+    }
+
+    @Test
+    fun autoRefresh_lightRailPrediction_rowOpensDetailsOnTheLightRailFeed() = runTest(dispatcher) {
+        val predictions = FakePredictions(
+            success(prediction("RED", "Downtown", 300).copy(feed = DataFeed.LIGHT_RAIL))
+        )
+        val viewModel =
+            StopDeparturesViewModel(predictions, FakeSchedule(), FakeTrips(), clock)
+        viewModel.select(FORBES, from = null)
+
+        val refreshing = launch { viewModel.autoRefresh() }
+        runCurrent()
+        refreshing.cancel()
+
+        assertEquals(
+            DataFeed.LIGHT_RAIL,
+            viewModel.state.value?.departures?.single()?.departure?.feed
         )
     }
 

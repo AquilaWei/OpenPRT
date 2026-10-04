@@ -432,7 +432,8 @@ class TripPlanViewModel(
             minutesUntilDeparture = Duration.between(now, prediction.predictedTime).toMinutes(),
             delayed = prediction.delayed,
             stopId = prediction.stopId,
-            vehicleId = prediction.vehicleId
+            vehicleId = prediction.vehicleId,
+            feed = prediction.feed
         )
     }
 
