@@ -166,6 +166,31 @@ class TripPlanRepositoryTest {
     }
 
     @Test
+    fun plan_departAtOnADayWithoutService_ridesTheNextServiceDaysFirstTrip() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(SUNDAY_10_00)
+        )
+
+        assertEquals(
+            listOf(RideLeg("T1", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_departAtOnADayWithoutService_planBelongsToTheNextServiceDay() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(SUNDAY_10_00)
+        )
+
+        assertEquals(LocalDate.of(2026, 10, 5), plans(result).single().serviceDate)
+    }
+
+    @Test
     fun plan_arriveByMorning_ridesTheLatestTripThatArrivesInTime() = runTest {
         val result = repository.plan(
             CMU.location,
@@ -303,6 +328,9 @@ class TripPlanRepositoryTest {
         val FRIDAY_00_30: Instant = Instant.parse("2026-10-02T04:30:00Z")
         val THURSDAY_08_45: Instant = Instant.parse("2026-10-01T12:45:00Z")
         val FRIDAY_01_30: Instant = Instant.parse("2026-10-02T05:30:00Z")
+
+        // No trips run on Sundays, and Saturday's last one is long gone.
+        val SUNDAY_10_00: Instant = Instant.parse("2026-10-04T14:00:00Z")
 
         val CMU = TransitStop(
             "8312",

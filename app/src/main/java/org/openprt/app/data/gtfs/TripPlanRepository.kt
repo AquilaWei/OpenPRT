@@ -65,9 +65,10 @@ fun interface TripPlanSource {
  * Plans trips on the device from the imported timetable.
  *
  * Builds a [RoutePlanner] per service day the first time it is needed and keeps it until a
- * request no longer needs that day, so at most two networks (today and yesterday) stay in memory.
- * In the early morning it also searches the previous service day, whose last trips run past
- * midnight with times over 24:00:00, and keeps the best plans of both. "Arrive by" plans use the
+ * request no longer needs that day, so at most two networks stay in memory. In the early morning
+ * it also searches the previous service day, whose last trips run past midnight with times over
+ * 24:00:00, and keeps the best plans of both. When nothing leaves in time, a departure search
+ * moves on to the next service day, keeping only its network. "Arrive by" plans use the
  * same planners, whose mirrored networks are built on first use and kept with them.
  */
 class TripPlanRepository(
@@ -87,6 +88,24 @@ class TripPlanRepository(
         val days = listOf(today.minusDays(1), today).filter {
             secondsInto(it, time.time) <= LATEST_SERVICE_DAY_SECONDS
         }
+        val result = planOn(days, origin, destination, time)
+        // After today's last bus, or on a day without service, wait for the next day's first.
+        // Only then: it never arrives earlier than a bus still running today. The next day's
+        // trips all leave after "arrive by" times on earlier days, so those need no fallback.
+        val noConnection = TripPlanResult.NoRoute(NoRouteReason.NO_CONNECTION)
+        return if (time is TripTime.DepartAt && result == noConnection) {
+            planOn(listOf(today.plusDays(1)), origin, destination, time)
+        } else {
+            result
+        }
+    }
+
+    private suspend fun planOn(
+        days: List<LocalDate>,
+        origin: LatLng,
+        destination: LatLng,
+        time: TripTime
+    ): TripPlanResult {
         val dayPlanners = plannersFor(days) ?: return TripPlanResult.NoTimetable
         val results = withContext(dispatcher) {
             dayPlanners.map { (day, planner) ->
