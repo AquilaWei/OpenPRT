@@ -635,6 +635,47 @@ class TripPlanViewModelTest {
         assertFalse(viewModel.results().options.single().late)
     }
 
+    @Test
+    fun setTime_arriveByPlanAlreadyLeft_dropsItAndKeepsTheCatchableOne() = runTest(dispatcher) {
+        val source = FakePlanSource(
+            CompletableDeferred(TripPlanResult.Found(listOf(MISSED_PLAN, DIRECT_PLAN)))
+        )
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+
+        viewModel.setTime(Instant.parse("2026-10-01T11:32:00Z"))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(Instant.parse("2026-10-01T10:56:40Z")),
+            viewModel.results().options.map { it.departureTime }
+        )
+    }
+
+    @Test
+    fun setTime_arriveByEveryPlanAlreadyLeft_showsNoConnection() = runTest(dispatcher) {
+        val source =
+            FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(MISSED_PLAN))))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+
+        viewModel.setTime(Instant.parse("2026-10-01T11:20:00Z"))
+        advanceUntilIdle()
+
+        assertEquals(TripPlanUiState.NoRoute(NoRouteReason.NO_CONNECTION), viewModel.state.value)
+    }
+
+    @Test
+    fun leaveNow_planLeftBeforeNow_isStillListed() = runTest(dispatcher) {
+        // Only "Arrive by" drops them; a departure search never returns plans that have left.
+        val source =
+            FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(MISSED_PLAN))))
+
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+
+        assertEquals(1, viewModel.results().options.size)
+    }
+
     /** A view model that has planned [DIRECT_PLAN] from HERE to THERE. */
     private fun TestScope.plannedViewModel(
         predictions: PredictionSource,
@@ -706,6 +747,18 @@ class TripPlanViewModelTest {
                     WalkLeg(null, CMU, 240.0, 25_000, 25_200),
                     RideLeg("T1", "61C", "DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000),
                     WalkLeg(STEEL_PLAZA, null, 120.0, 27_000, 27_100)
+                )
+            )
+        )
+
+        /** Sets off at 10:40Z, ten minutes before [NOW], and arrives at 11:15Z. */
+        val MISSED_PLAN = TripPlan(
+            LocalDate.of(2026, 10, 1),
+            Itinerary(
+                listOf(
+                    WalkLeg(null, CMU, 240.0, 24_000, 24_200),
+                    RideLeg("T0", "61C", "DOWNTOWN", CMU, STEEL_PLAZA, 24_200, 26_000),
+                    WalkLeg(STEEL_PLAZA, null, 120.0, 26_000, 26_100)
                 )
             )
         )

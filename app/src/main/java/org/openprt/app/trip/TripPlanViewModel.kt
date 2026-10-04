@@ -362,7 +362,18 @@ class TripPlanViewModel(
         return when (val result = source.plan(from, to, time)) {
             is TripPlanResult.Found -> {
                 val deadline = (time as? TripTime.ArriveBy)?.time
-                TripPlanUiState.Results(options(result.plans, now, deadline))
+                val options = options(result.plans, now, deadline)
+                // Searching back from the deadline also finds ways that set off before now.
+                val catchable = if (deadline == null) {
+                    options
+                } else {
+                    options.filter { it.departureTime >= now }
+                }
+                if (catchable.isEmpty()) {
+                    TripPlanUiState.NoRoute(NoRouteReason.NO_CONNECTION)
+                } else {
+                    TripPlanUiState.Results(catchable)
+                }
             }
 
             is TripPlanResult.NoRoute -> TripPlanUiState.NoRoute(result.reason)
