@@ -21,9 +21,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.planner.RideLeg
 import org.openprt.app.planner.WalkLeg
@@ -37,16 +36,18 @@ import org.openprt.app.ui.displayName
  * One chosen way to go, leg by leg: walks with their minutes and where they lead, and rides with
  * where to board and get off. Tapping a ride's live-bus button looks its bus up through
  * [actions]; when TrueTime has no data for it, the ride says its times are from the timetable.
- * The back button returns to the list of options. Times are shown in [zone].
+ * The back button returns to the list of options. Times are shown in [zone], with their date
+ * when it is not [today].
  */
 @Composable
 fun TripDetailsPanel(
     selected: SelectedTrip,
     actions: TripPlanActions,
     modifier: Modifier = Modifier,
-    zone: ZoneId = ZoneId.systemDefault()
+    zone: ZoneId = ZoneId.systemDefault(),
+    today: LocalDate = LocalDate.now(zone)
 ) {
-    val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+    val time = TripClockFormat(zone, today)
     val option = selected.option
     Column(
         modifier = modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -108,7 +109,7 @@ private fun RideRow(
     ride: RideLeg,
     option: TripOption,
     lookup: RideLookup,
-    time: DateTimeFormatter,
+    time: TripClockFormat,
     onLiveBus: () -> Unit
 ) {
     val plan = option.plan

@@ -1,5 +1,6 @@
 package org.openprt.app.trip
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -21,9 +22,12 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
 import org.openprt.app.R
 import org.openprt.app.departures.PanelText
 import org.openprt.app.planner.NoRouteReason
@@ -38,7 +42,8 @@ import org.openprt.app.ui.displayName
  * The ways to the chosen destination, shown in the home screen's bottom sheet in place of the
  * nearby departures. Tapping an option shows it leg by leg ([TripDetailsPanel]); the other
  * requests, such as planning again when the timetable was missing or another [time], go to
- * [actions]. Times are shown, and picked, in [zone].
+ * [actions]. Times are shown, and picked, in [zone]; those on another day than [today] carry
+ * their date.
  */
 @Composable
 fun TripPlansPanel(
@@ -46,11 +51,12 @@ fun TripPlansPanel(
     actions: TripPlanActions,
     modifier: Modifier = Modifier,
     time: TripTimeUiState = TripTimeUiState(),
-    zone: ZoneId = ZoneId.systemDefault()
+    zone: ZoneId = ZoneId.systemDefault(),
+    today: LocalDate = LocalDate.now(zone)
 ) {
     val selected = (state as? TripPlanUiState.Results)?.selected
     if (selected != null) {
-        TripDetailsPanel(selected, actions, modifier, zone)
+        TripDetailsPanel(selected, actions, modifier, zone, today)
         return
     }
     Column(modifier = modifier) {
@@ -63,7 +69,8 @@ fun TripPlansPanel(
         when (state) {
             TripPlanUiState.Planning -> PanelText(stringResource(R.string.trip_planning))
 
-            is TripPlanUiState.Results -> OptionList(state.options, actions::select, zone)
+            is TripPlanUiState.Results ->
+                OptionList(state.options, actions::select, TripClockFormat(zone, today))
 
             is TripPlanUiState.NoRoute -> PanelText(stringResource(state.reason.textRes()))
 
@@ -87,8 +94,11 @@ private fun NoRouteReason.textRes(): Int = when (this) {
 }
 
 @Composable
-private fun OptionList(options: List<TripOption>, onSelect: (TripOption) -> Unit, zone: ZoneId) {
-    val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+private fun OptionList(
+    options: List<TripOption>,
+    onSelect: (TripOption) -> Unit,
+    time: TripClockFormat
+) {
     // Bounded so the list scrolls inside the sheet instead of growing past the screen.
     LazyColumn(
         modifier = Modifier.heightIn(max = 400.dp),
@@ -105,7 +115,7 @@ private fun OptionList(options: List<TripOption>, onSelect: (TripOption) -> Unit
  * says the card opens; riders did not find out by themselves that it could be tapped.
  */
 @Composable
-private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () -> Unit) {
+private fun OptionCard(option: TripOption, time: TripClockFormat, onClick: () -> Unit) {
     InfoCard(onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -160,7 +170,7 @@ private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () 
 
 /** Total minutes, clock times, transfers and whether the first bus is live, on one row. */
 @Composable
-internal fun TripSummary(option: TripOption, time: DateTimeFormatter) {
+internal fun TripSummary(option: TripOption, time: TripClockFormat) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = stringResource(R.string.trip_total_minutes, option.totalMinutes),
@@ -208,6 +218,23 @@ private fun Legs(legs: List<LegSummary>) {
                     RouteBadge(leg.route, style = MaterialTheme.typography.labelLarge)
             }
         }
+    }
+}
+
+/**
+ * Trip times as clock times, with the date in front of those not on [today]: a plan for the next
+ * morning would otherwise read as this morning's.
+ */
+internal class TripClockFormat(private val zone: ZoneId, private val today: LocalDate) {
+    private val clock = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+    private val date = DateTimeFormatter
+        .ofPattern(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEMMMd"))
+        .withZone(zone)
+
+    fun format(at: Instant): String = if (at.atZone(zone).toLocalDate() == today) {
+        clock.format(at)
+    } else {
+        "${date.format(at)} ${clock.format(at)}"
     }
 }
 

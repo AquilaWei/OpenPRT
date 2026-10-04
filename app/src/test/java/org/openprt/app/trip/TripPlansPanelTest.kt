@@ -372,7 +372,8 @@ class TripPlansPanelTest {
             TripPlansPanel(
                 TripPlanUiState.Results(listOf(ARRIVE_BY_OPTION)),
                 RecordingActions(),
-                zone = UTC
+                zone = UTC,
+                today = TODAY
             )
         }
 
@@ -396,7 +397,12 @@ class TripPlansPanelTest {
     fun tripPlansPanel_arriveByOptionLate_warnsItMayMissTheDeadline() {
         val late = ARRIVE_BY_OPTION.copy(arrivalTime = Instant.parse("2026-10-01T11:36:00Z"))
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.Results(listOf(late)), RecordingActions(), zone = UTC)
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(late)),
+                RecordingActions(),
+                zone = UTC,
+                today = TODAY
+            )
         }
 
         composeRule
@@ -405,6 +411,34 @@ class TripPlansPanelTest {
                 substring = true
             )
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_optionLeavingTomorrow_showsItsDate() {
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(TOMORROW_MORNING)),
+                RecordingActions(),
+                zone = UTC,
+                today = TODAY
+            )
+        }
+
+        composeRule.onNodeWithText("Fri, Oct 2 6:56", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_optionLeavingToday_showsOnlyClockTimes() {
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(DIRECT)),
+                RecordingActions(),
+                zone = UTC,
+                today = TODAY
+            )
+        }
+
+        composeRule.onNodeWithText("Oct 1", substring = true).assertDoesNotExist()
     }
 
     private class RecordingActions : TripPlanActions {
@@ -441,6 +475,7 @@ class TripPlansPanelTest {
 
     private companion object {
         val UTC: ZoneId = ZoneId.of("UTC")
+        val TODAY: LocalDate = LocalDate.of(2026, 10, 1)
         val CMU = TransitStop("s8312", "Forbes Ave at Morewood", LatLng(40.4443, -79.9532), "8312")
         val STEEL_PLAZA = TransitStop("s10", "Steel Plaza", LatLng(40.4406, -79.9959), "10")
 
@@ -490,6 +525,12 @@ class TripPlansPanelTest {
         )
 
         val TWO_OPTIONS = listOf(DIRECT, WITH_TRANSFER)
+
+        val TOMORROW_MORNING = DIRECT.copy(
+            departureTime = Instant.parse("2026-10-02T06:56:00Z"),
+            arrivalTime = Instant.parse("2026-10-02T07:31:00Z"),
+            boardingTime = Instant.parse("2026-10-02T07:00:00Z")
+        )
 
         val ARRIVE_BY_OPTION = DIRECT.copy(deadline = Instant.parse("2026-10-01T11:32:00Z"))
 
