@@ -531,8 +531,9 @@
 - 畫面：`trip/TripTimeControls.kt`（三段 SegmentedButton + 日期 / 時間按鈕，Material3 `DatePickerDialog` 只能選時刻表範圍內的日子，時間用 `TimePicker`）。
   日期時間以手機時區顯示與解讀（和方案時間一致）。Arrive by 卡片最上面是「Leave by …」
 - NO_CONNECTION 文字改成「No buses in the timetable connect these places at this time.」
-- 尚未做：Depart at 跨到隔天的方案（例如 23:50 出發要等隔天第一班）仍只查當天與前一服務日，跟 Leave now 相同
-- 新增 41 個測試（全部 642 個），verify 通過（lint 0 issue）。上一個 session 未提交的 Repository 測試
+- 跨到隔天（review 後補上）：Depart at / Leave now 在當天與前一服務日都是 NO_CONNECTION 時，改查**下一個服務日**（例：週日 10:00 出發 → 週一 07:00 的 T1，`TripPlan.serviceDate` 是週一）。只在找不到時才查，因為隔天的車不會比今天還在跑的車更早到；快取仍最多兩個網路（fallback 只留隔天那個）。Arrive by 不需要：隔天的班次都晚於期限
+- 0.1.28 的 `VERSION_CODE` 原本沿用 0.1.27 的 26，改成 27
+- 新增 41 個測試，review 後再加 2 個隔天回歸測試（全部 644 個），verify 通過（lint 0 issue）。上一個 session 未提交的 Repository 測試
   `plan_arriveByBeforeTheFirstTrip_returnsNoConnection` 原本用週四 06:00，但週三深夜班次確實趕得上，改成週一 06:00（週日沒有班次）
 
 ## 給下一個 session 的注意事項
