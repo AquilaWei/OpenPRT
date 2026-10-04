@@ -577,6 +577,31 @@
 - Fixture `valhalla/route_cmu_to_craig.json`：2026-10-04 真實錄製（Forbes Ave 近 CMU → Craig St，38 點、446.797 秒）
 - 新增 24 個測試（全部 684 個），verify 通過（lint 0 issue）
 
+## 輕軌 T 線（F17 決定）
+
+- 使用者沒回答 questions 的輕軌題（非互動 session），照建議選項「要，照順序做 F17」實作；若使用者之後決定不要，revert `44a6ef4` 即可
+- GTFS 本來就有輕軌：`routes.txt` 的 `RED` / `BLUE` / `SLVR`（route_type 2），車站是一般站牌、stop_code 是 999xx（例：Steel Plaza stop_id `10`、code `99994`），
+  所以附近站牌與站牌面板**已經包含輕軌站**，不用改 GTFS 匯入。缺的只是 TrueTime 那邊沒問 `Light Rail` feed
+- `TrueTimeModels.kt` 新增 `enum DataFeed(apiName)`：`BUS`（"Port Authority Bus"）、`LIGHT_RAIL`（"Light Rail"）。`TrueTimeClient` 的 `dataFeed: String` 換成 `feed: DataFeed`，
+  `BUS_DATA_FEED` 常數拿掉。`Prediction.feed` 由 client 填入（預設 BUS），`DepartureItem.feed` 從 prediction 帶過來（附近班次、站牌面板、方案的「Live bus」三處）
+- `departures/MergedPredictionSource.kt`：同時（`async`）問每個 feed、合併結果。規則：
+  - 各 feed 的 `No data found` 當空列表
+  - 至少一個 feed 有預測 → 成功，失敗的 feed 被忽略（公車或輕軌暫時壞掉，另一邊照常顯示）
+  - 沒有任何預測且有 feed 失敗 → 回第一個失敗（順序是 `DataFeed.entries`，所以公車的錯誤優先）。這樣沒有 key、沒有網路仍顯示錯誤，而不是「附近沒有班次」
+  - 已知取捨：公車 feed 暫時失敗但輕軌有預測時，那 30 秒內列表只剩輕軌，且不顯示錯誤
+- `MainActivity`：每個 `DataFeed` 一個 `TrueTimeClient`（共用 App 內的 key）。附近班次、站牌面板、方案首班車即時時間都用合併後的 source；
+  班次詳情用 `tripSourceOf(clients)`：`TripSource` 的三個方法多了 `feed` 參數，`DepartureDetailsViewModel` 用 `departure.feed` 問對的 feed
+- **API 呼叫次數**（每個 predictions 呼叫變兩個請求）：
+  - 附近班次：每 30 秒 1 → **2** 個請求；App 整天開著 2880 → **5760** 次 / 天
+  - 站牌面板（開著時）：同樣每 30 秒 2 個；方案首班車：每次規劃 2 個（原 1 個）
+  - 班次詳情：不變（每 15 秒 getvehicles + getpredictions，只問該班車的 feed）
+  - BusTime 預設每日額度是 **10,000 次 / key**（未向 PRT 確認是否不同），一般使用（一天開幾十分鐘）遠低於額度；
+    附近班次整天開著是 5760 次；若同時一直開著站牌面板會再加 5760 次而超過額度（沒查證兩者是否同時更新）。若實機發現配額不夠，
+    可改成只在附近有輕軌站時才問輕軌 feed（需要從 GTFS 判斷哪些站是輕軌站）
+- **未確認（沒有 key）**：輕軌的 TrueTime `stpid` 是否也等於 GTFS stop_code、輕軌 `rt` 是否是 `RED` / `BLUE` / `SLVR`（方案首班車用 `rt == route_id` 配對）。列入實機驗收
+- 新增 16 個測試（全部 721 個）：`MergedPredictionSourceTest`（9）、附近班次合併兩個 feed（1）、詳情問對的 feed（2）、client 送 / 標記 Light Rail（2）、
+  站牌面板與方案 Live bus 帶著 feed（2）。新測試用到新的 `feed` API，舊程式下無法編譯（等同失敗）
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -641,6 +666,9 @@
 - [ ] F23 點一個要走一段路的方案（例如從 Cathedral of Learning 到 CMU）：步行虛線沿著人行道 / 街道，而不是穿過建築物；
   詳情的步行分鐘和 Google Maps 步行時間相近；關掉網路後點另一個方案，步行段改畫直線、方案照常顯示；
   步行比原估算長時，詳情上方與返回清單後那張卡片的出發 / 抵達時間（Arrive by 的「Leave by」）一起變；剛好要出門的方案步行變長時出現「may miss a bus」紅字
+- [ ] F17 站在輕軌站附近（例如 Steel Plaza、Station Square）：附近班次出現 RED / BLUE / SLVR，分鐘數與月台看板一致；
+  點一班輕軌，地圖畫出輕軌路線、列車位置每 15 秒移動、到站分鐘合理；點輕軌站站牌，面板標 Live 且列出輕軌班次；
+  規劃一個第一段坐輕軌的方案（例如 Downtown → South Hills Village），卡片的首班車標「Live」（若一直是 scheduled，代表輕軌 rt 和 GTFS route_id 不同）
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -827,3 +855,9 @@
   來不及趕上第一班車或轉乘時提醒「may miss a bus」，Arrive by 因步行晚到時提醒，見 F23 段落。verify 通過（705 個測試，lint 0 issue）；沒有裝到手機
   - 0.1.29 沒推送過，所以不升版號；本機 tag `v0.1.29` 移到記錄這一行的 commit
   - 下一步不變：實機驗收清單，然後 F17（等使用者回答）或 F18
+- 2026-10-04：**F17 完成**（版號 0.1.30，tag `v0.1.30` 只在本機）。附近班次、站牌面板、方案首班車同時問公車與輕軌兩個 TrueTime feed 並合併，
+  一個 feed 失敗或沒資料時另一個照常顯示；輕軌班次的詳情改問 Light Rail feed，見 F17 段落（含 API 呼叫次數）。
+  使用者沒回答輕軌題，照建議選項做。開工前 verify 通過（705 個測試）；完成後 verify 通過（721 個測試，lint 0 issue）
+  - adb 沒有試，沒有裝到手機；需要實機驗收（見清單 F17 以及 F23、F27、0.1.28、F22、F24）
+  - F19 仍等使用者回答 questions
+  - 下一步：F18 可靠性與離線狀態
