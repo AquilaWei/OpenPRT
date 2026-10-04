@@ -528,7 +528,7 @@
 - `TripPlanSource.plan(origin, destination, time: TripTime)`：`TripTime.DepartAt` / `ArriveBy`。Repository 跨服務日的合併也照 Arrive by 改成「出發越晚越好」。
   凌晨的 Arrive by 會找前一服務日的深夜班次（例：週四 06:00 前抵達，會找到週三 24:40 那班）
 - `TripPlanViewModel.time`（`TripTimeUiState`：mode、at、dates）獨立於目的地；切換模式或時間都會重新規劃（清掉已選方案）。
-  Depart at / Arrive by 的預設時間是現在（取整到分）。日期範圍由 `RoomTimetableDatesSource` 從 calendar / calendar_dates 讀（第一次選非 Leave now 時才讀）
+  Depart at / Arrive by 的預設時間是現在**往上取到下一個整分**（第三次 review 後；原本往下截，會列出幾十秒前開走的車）。日期範圍由 `RoomTimetableDatesSource` 從 calendar / calendar_dates 讀（第一次選非 Leave now 時才讀）
 - 出發時間在**一小時以後**（`LIVE_HORIZON`）的方案不查 TrueTime；Arrive by 方案的首班車即時誤點、推算抵達晚於期限時 `TripOption.late = true`，卡片顯示紅字提醒
 - 畫面：`trip/TripTimeControls.kt`（三段 SegmentedButton + 日期 / 時間按鈕，Material3 `DatePickerDialog` 只能選時刻表範圍內的日子，時間用 `TimePicker`）。
   日期時間以手機時區顯示與解讀（和方案時間一致）。Arrive by 卡片最上面是「Leave by …」
@@ -541,8 +541,15 @@
   - Arrive by 的反向搜尋會找到**出發時間早於現在**的方案（例：現在 9:55、期限 10:00，9:40 出發那班）。`TripPlanViewModel` 只在 Arrive by 時把
     `departureTime < now` 的方案拿掉（用含即時誤點的出發時間）；全部拿掉時顯示 NO_CONNECTION。過濾放在 ViewModel 而不是 Repository，因為只有它知道「現在」
   - 日期按鈕在時刻表日期讀到之前停用；`DatePickerDialog` 的 OK 只有選到範圍內的日子才能按（目前日期超出範圍時預設不選）。
-    時間按鈕仍保留目前的日期，所以「今天」本身不在時刻表範圍內時，只改時間仍會送出今天（規劃結果會是找不到方案）
+    時間按鈕仍保留目前的日期，所以「今天」本身不在時刻表範圍內時，只改時間仍會送出今天（第三次 review 後已修正，見下）
   - 新增 9 個測試（全部 653 個），verify 通過；其中 6 個回歸測試確認在修正前的程式下會失敗
+- 第三次 review 後的修正（三個 `fix:` commit，版號仍是未推送的 0.1.28）：
+  - **日期範圍改由 `TripPlanViewModel` 把關**：新增建構參數 `zone`（預設手機時區，和畫面一致），`setTime` 與預設時間都經過 `withinTimetable`，
+    超出時刻表範圍的日子換成最近的有效日、保留時刻。日期讀到之前選的時間在讀完後也會被拉回範圍內並重新規劃一次。
+    放在 ViewModel 而不是畫面，是因為時間按鈕、日期按鈕、預設值三個入口都要守，只有 ViewModel 全看得到
+  - **跨日時間顯示日期**：`TripClockFormat`（`TripPlansPanel.kt`）在時間不是「今天」時前面加 `EEE, MMM d`（`DateFormat.getBestDateTimePattern`，跟語系走），
+    方案卡片（出發、抵達、Leave by、首班車、遲到提醒）與方案詳情都用它。「今天」由 `TripPlansPanel` / `TripDetailsPanel` 的 `today` 參數決定，預設手機今天的日期
+  - 新增 5 個測試（全部 658 個），verify 通過（lint 0 issue）；其中 4 個在拿掉修正的程式下會失敗，另一個（今天的方案不加日期）是防止日期加過頭的守門測試
 
 ## 給下一個 session 的注意事項
 
@@ -599,6 +606,8 @@
   選起點模式下長按地圖也能設起點；✕ 回到 My location 並重新規劃；⇅ 對調後方案反過來，起點是 My location 時目的地顯示「My location (pinned)」
 - [ ] 第二次 review 修正：剛開 App（沒選目的地）時搜尋框上方就有「From: My location」，可先選起點再選目的地；
   Arrive by 選幾分鐘後的期限時不會出現已經開走的方案；剛切到 Depart at 的一瞬間日期按鈕是灰的，讀完後才可按，日期選擇器只能選範圍內的日子
+- [ ] 第三次 review 修正：Leave now 在末班車後的方案卡片顯示隔天日期（例如「Fri, Oct 2 6:56 AM」），今天的方案只有時間；
+  在 10:50:30 左右切到 Depart at，時間按鈕顯示 10:51；時刻表更新、今天不在新範圍時（不易遇到，可略過）預設日期是範圍第一天
 - [ ] F27 Arrive by：選目的地（例如 CMU），切到 Arrive by、選明天上午的日期時間，卡片顯示「Leave by …」，
   和 Google Maps 的「抵達時間」結果比對（同一班車或相近的出發時間）；Depart at 選一小時後的時間，方案只標 Scheduled；
   日期選擇器只能選時刻表範圍內的日子；切回 Leave now 回到現在的方案
@@ -774,3 +783,6 @@
   - 開工前 verify 失敗只因上述未提交程式的 ktlint 排序；完成後 verify 通過（642 個測試，lint 0 issue）
   - adb 沒有裝置，沒有安裝；需要實機驗收（見清單 F27、0.1.28、F22、F24）
   - 下一步：F23 步行段沿街道（FOSSGIS Valhalla）
+- 2026-10-04：**第三次 review 修正**（F27 的指定時間邊界）：日期限定在時刻表範圍內（預設值與只改時間都是）、跨日的方案時間顯示日期、
+  Depart at 預設往上取整分。見 F27 段落最後一項。verify 通過（658 個測試，lint 0 issue）；沒有裝到手機
+  - 下一步不變：實機驗收清單，然後 F23
