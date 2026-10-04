@@ -297,6 +297,16 @@ class DestinationViewModelTest {
     }
 
     @Test
+    fun editOrigin_noDestinationYetMapLongPressed_setsOriginOnly() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+
+        viewModel.editOrigin()
+        viewModel.onMapLongPress(PINNED)
+
+        assertEquals(DestinationUiState(origin = Destination(null, PINNED)), viewModel.state.value)
+    }
+
+    @Test
     fun editOrigin_searchesForOrigin() = runTest(dispatcher) {
         val viewModel = DestinationViewModel(FakeGeocoder())
 

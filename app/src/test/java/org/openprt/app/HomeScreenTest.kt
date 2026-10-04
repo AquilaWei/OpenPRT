@@ -42,6 +42,7 @@ import org.openprt.app.stop.StopTimesSource
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.ui.theme.OpenPrtTheme
 import org.openprt.app.ui.theme.ThemeMode
+import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
 class HomeScreenTest {
@@ -158,6 +159,7 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_permissionDenied_tellsUserDowntownIsShown() {
         composeRule.setContent {
             HomeScreen(
@@ -185,6 +187,7 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_timedOut_showsTimeoutMessage() {
         composeRule.setContent {
             HomeScreen(
@@ -212,6 +215,7 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_locatedAndStopsLoading_showsStopsLoadingMessage() {
         composeRule.setContent {
             HomeScreen(
@@ -237,6 +241,7 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_stopsFailed_showsStopsErrorMessage() {
         composeRule.setContent {
             HomeScreen(
@@ -585,3 +590,9 @@ class HomeScreenTest {
         override fun swapEndpoints() = Unit
     }
 }
+
+/**
+ * A phone-sized screen (the Galaxy S23's), for tests of the messages under the search box.
+ * Robolectric's default 470 dp tall screen has no room left for them once the From line shows.
+ */
+private const val PHONE_SCREEN = "w360dp-h780dp"

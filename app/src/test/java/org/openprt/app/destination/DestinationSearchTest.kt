@@ -243,7 +243,7 @@ class DestinationSearchTest {
     }
 
     @Test
-    fun destinationSearch_noDestinationOrOrigin_hasNoFromLine() {
+    fun destinationSearch_noDestinationYet_showsFromMyLocation() {
         composeRule.setContent {
             DestinationSearch(
                 DestinationUiState(),
@@ -254,7 +254,41 @@ class DestinationSearchTest {
             )
         }
 
-        composeRule.onNodeWithText("From: My location").assertDoesNotExist()
+        composeRule.onNodeWithText("From: My location").assertIsDisplayed()
+    }
+
+    @Test
+    fun destinationSearch_noDestinationYetFromClicked_editsOrigin() {
+        var edits = 0
+        composeRule.setContent {
+            DestinationSearch(
+                DestinationUiState(),
+                onQueryChanged = {},
+                onPlaceSelected = {},
+                onRetry = {},
+                onClearDestination = {},
+                onEditOrigin = { edits++ }
+            )
+        }
+
+        composeRule.onNodeWithText("From: My location").performClick()
+
+        assertEquals(1, edits)
+    }
+
+    @Test
+    fun destinationSearch_noDestinationYet_hasNoSwapButton() {
+        composeRule.setContent {
+            DestinationSearch(
+                DestinationUiState(),
+                onQueryChanged = {},
+                onPlaceSelected = {},
+                onRetry = {},
+                onClearDestination = {}
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Swap start and destination").assertDoesNotExist()
     }
 
     @Test

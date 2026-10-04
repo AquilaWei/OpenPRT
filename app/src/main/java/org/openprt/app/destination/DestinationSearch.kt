@@ -48,9 +48,9 @@ private val RESULTS_MAX_HEIGHT = 280.dp
  * below it. Once a destination is chosen the field itself shows it, with a button to clear it,
  * so the overlay stays short and leaves the map visible; tapping it searches again.
  *
- * Once there is a destination (or a chosen start) a "From" line sits above it: "My location"
- * until the user taps it ([onEditOrigin]) and picks a place or long-presses the map, with
- * buttons to go back to their location ([onClearOrigin]) and to swap the ends ([onSwap]).
+ * A "From" line always sits above it, so the start can be chosen before the destination: "My
+ * location" until the user taps it ([onEditOrigin]) and picks a place or long-presses the map,
+ * with buttons to go back to their location ([onClearOrigin]) and to swap the ends ([onSwap]).
  */
 @Composable
 fun DestinationSearch(
@@ -83,16 +83,14 @@ fun DestinationSearch(
                     DestinationBar(destination, onEdit = {}, onClearDestination)
                 }
             } else {
-                if (destination != null || state.origin != null) {
-                    OriginBar(
-                        origin = state.origin,
-                        canSwap = destination != null,
-                        onEdit = onEditOrigin,
-                        onClear = onClearOrigin,
-                        onSwap = onSwap
-                    )
-                    HorizontalDivider()
-                }
+                OriginBar(
+                    origin = state.origin,
+                    canSwap = destination != null,
+                    onEdit = onEditOrigin,
+                    onClear = onClearOrigin,
+                    onSwap = onSwap
+                )
+                HorizontalDivider()
                 if (destination != null && !editing && state.query.isEmpty()) {
                     DestinationBar(destination, onEdit = { editing = true }, onClearDestination)
                 } else {
