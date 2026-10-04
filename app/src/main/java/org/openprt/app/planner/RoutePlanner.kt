@@ -59,12 +59,31 @@ class RoutePlanner(
         if (access.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_ORIGIN)
         val egress = network.stopsWithin(destination, maxAccessWalkMeters)
         if (egress.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION)
-        val itineraries = RaptorSearch(departureSeconds, access, egress).run()
-        return if (itineraries.isEmpty()) {
-            PlanResult.NoRoute(NoRouteReason.NO_CONNECTION)
-        } else {
-            PlanResult.Found(itineraries)
-        }
+        return found(RaptorSearch(network, departureSeconds, access, egress).run())
+    }
+
+    /**
+     * Itineraries from [origin] to [destination] reaching it, last walk included, no later than
+     * [arrivalSeconds], each leaving as late as it can. Fewest rides first, and a plan with more
+     * rides only when it leaves strictly later than every plan kept before it. Never plans a
+     * walk-only trip.
+     *
+     * Runs the same search as [plan] on [TransitNetwork.mirrored], from the destination back in
+     * time, so transfers keep the same buffer; here the last bus has no buffer before the walk.
+     */
+    fun planArrivingBy(origin: LatLng, destination: LatLng, arrivalSeconds: Int): PlanResult {
+        val access = network.stopsWithin(origin, maxAccessWalkMeters)
+        if (access.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_ORIGIN)
+        val egress = network.stopsWithin(destination, maxAccessWalkMeters)
+        if (egress.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION)
+        val search = RaptorSearch(network.mirrored, -arrivalSeconds, egress, access)
+        return found(search.run().map { it.mirrored() })
+    }
+
+    private fun found(itineraries: List<Itinerary>): PlanResult = if (itineraries.isEmpty()) {
+        PlanResult.NoRoute(NoRouteReason.NO_CONNECTION)
+    } else {
+        PlanResult.Found(itineraries)
     }
 
     private fun walkSeconds(distanceMeters: Double): Int =
@@ -85,6 +104,7 @@ class RoutePlanner(
 
     /** One search; holds the per-round state, so it is used once and thrown away. */
     private inner class RaptorSearch(
+        private val network: TransitNetwork,
         private val departureSeconds: Int,
         private val access: List<NearStop>,
         private val egress: List<NearStop>
@@ -305,3 +325,20 @@ class RoutePlanner(
         const val NOT_QUEUED = -1
     }
 }
+
+/** An itinerary found on [TransitNetwork.mirrored], turned back into forward time and order. */
+private fun Itinerary.mirrored() = Itinerary(
+    legs.reversed().map { leg ->
+        when (leg) {
+            is WalkLeg ->
+                WalkLeg(leg.to, leg.from, leg.distanceMeters, -leg.endSeconds, -leg.startSeconds)
+
+            is RideLeg -> leg.copy(
+                from = leg.to,
+                to = leg.from,
+                startSeconds = -leg.endSeconds,
+                endSeconds = -leg.startSeconds
+            )
+        }
+    }
+)

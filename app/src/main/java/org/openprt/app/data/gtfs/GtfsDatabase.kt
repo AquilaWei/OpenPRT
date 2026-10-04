@@ -188,6 +188,20 @@ interface GtfsDao {
     @Query("SELECT * FROM calendar_dates WHERE date = :date")
     suspend fun getCalendarDatesOn(date: LocalDate): List<CalendarDateEntity>
 
+    /** The first day calendar.txt or calendar_dates.txt runs a service; null when empty. */
+    @Query(
+        "SELECT MIN(day) FROM (SELECT startDate AS day FROM calendar " +
+            "UNION ALL SELECT date AS day FROM calendar_dates WHERE added = 1)"
+    )
+    suspend fun getFirstServiceDate(): LocalDate?
+
+    /** The last day calendar.txt or calendar_dates.txt runs a service; null when empty. */
+    @Query(
+        "SELECT MAX(day) FROM (SELECT endDate AS day FROM calendar " +
+            "UNION ALL SELECT date AS day FROM calendar_dates WHERE added = 1)"
+    )
+    suspend fun getLastServiceDate(): LocalDate?
+
     /**
      * Boardable stop times at [stopId] at or after [afterSeconds] on trips of [serviceIds],
      * earliest first. Runs on the (stopId, departureSeconds) index.

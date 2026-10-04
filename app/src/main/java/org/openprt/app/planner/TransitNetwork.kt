@@ -46,7 +46,9 @@ internal data class NearStop(val stop: Int, val distanceMeters: Double)
  * Trips of one route that visit the same stops in the same order, earliest first. RAPTOR scans a
  * pattern as a unit, so it assumes trips of a pattern never overtake each other.
  */
-internal class Pattern(val routeId: String, val stops: IntArray, val trips: List<ScheduledTrip>) {
+internal class Pattern(val routeId: String, val stops: IntArray, trips: List<ScheduledTrip>) {
+    val trips: List<ScheduledTrip> = trips.sortedBy { it.stops.first().departureSeconds }
+
     /**
      * The first trip riders can board at [position] at or after [seconds], or null. Relies on the
      * no-overtaking assumption: the earliest trip at the first stop is the earliest everywhere.
@@ -55,7 +57,22 @@ internal class Pattern(val routeId: String, val stops: IntArray, val trips: List
         val stop = it.stops[position]
         stop.pickupAllowed && stop.departureSeconds >= seconds
     }
+
+    /** See [TransitNetwork.mirrored]. */
+    fun mirrored() = Pattern(routeId, stops.reversedArray(), trips.map { it.mirrored() })
 }
+
+private fun ScheduledTrip.mirrored() = copy(
+    stops = stops.reversed().map {
+        TripStop(
+            stopId = it.stopId,
+            arrivalSeconds = -it.departureSeconds,
+            departureSeconds = -it.arrivalSeconds,
+            pickupAllowed = it.dropOffAllowed,
+            dropOffAllowed = it.pickupAllowed
+        )
+    }
+)
 
 /** Where a pattern visits a stop: [position] in [Pattern.stops] of `patterns[pattern]`. */
 internal data class PatternVisit(val pattern: Int, val position: Int)
@@ -70,31 +87,46 @@ internal data class PatternVisit(val pattern: Int, val position: Int)
  * @throws IllegalArgumentException if a trip has fewer than two stops or visits a stop missing
  *   from [stops], or if two stops share an ID.
  */
-class TransitNetwork(
-    stops: List<TransitStop>,
-    trips: List<ScheduledTrip>,
-    maxTransferWalkMeters: Double = DEFAULT_MAX_TRANSFER_WALK_METERS
-) {
-    internal val stops: List<TransitStop> = stops.toList()
-    private val stopIndex: Map<String, Int> =
-        stops.withIndex().associate { (index, stop) -> stop.stopId to index }
-
-    internal val patterns: List<Pattern>
-    internal val patternsAtStop: List<List<PatternVisit>>
-
+class TransitNetwork private constructor(
+    internal val stops: List<TransitStop>,
+    internal val patterns: List<Pattern>,
     /** For each stop, the other stops within transfer walking distance. */
-    internal val transfers: List<List<NearStop>> = buildTransfers(maxTransferWalkMeters)
+    internal val transfers: List<List<NearStop>>
+) {
+    constructor(
+        stops: List<TransitStop>,
+        trips: List<ScheduledTrip>,
+        maxTransferWalkMeters: Double = DEFAULT_MAX_TRANSFER_WALK_METERS
+    ) : this(stops.toList(), trips, maxTransferWalkMeters, stopIndexOf(stops))
 
-    init {
-        require(stopIndex.size == stops.size) { "stop IDs must be unique" }
-        patterns = buildPatterns(trips)
-        val visits = List(stops.size) { mutableListOf<PatternVisit>() }
-        patterns.forEachIndexed { p, pattern ->
-            pattern.stops.forEachIndexed { position, stop ->
-                visits[stop] += PatternVisit(p, position)
+    private constructor(
+        stops: List<TransitStop>,
+        trips: List<ScheduledTrip>,
+        maxTransferWalkMeters: Double,
+        stopIndex: Map<String, Int>
+    ) : this(
+        stops,
+        buildPatterns(trips, stopIndex),
+        buildTransfers(stops, maxTransferWalkMeters)
+    )
+
+    internal val patternsAtStop: List<List<PatternVisit>> =
+        List(stops.size) { mutableListOf<PatternVisit>() }.also { visits ->
+            patterns.forEachIndexed { p, pattern ->
+                pattern.stops.forEachIndexed { position, stop ->
+                    visits[stop] += PatternVisit(p, position)
+                }
             }
         }
-        patternsAtStop = visits
+
+    /**
+     * This network with time running backwards: every trip is reversed and its times negated,
+     * boarding and getting off swap, and transfers stay as they are since walks go both ways.
+     * The earliest arrival in it is the latest departure here, so [RoutePlanner] plans "arrive
+     * by" trips with its usual forward search. Built on first use and kept, like the network.
+     */
+    internal val mirrored: TransitNetwork by lazy {
+        TransitNetwork(stops, patterns.map { it.mirrored() }, transfers)
     }
 
     /** Stops within [radiusMeters] of [point], nearest first (ties by stop order). */
@@ -106,8 +138,15 @@ class TransitNetwork(
             .filter { it.distanceMeters <= radiusMeters }
             .sortedWith(compareBy({ it.distanceMeters }, { it.stop }))
     }
+}
 
-    private fun buildPatterns(trips: List<ScheduledTrip>): List<Pattern> = trips
+private fun stopIndexOf(stops: List<TransitStop>): Map<String, Int> =
+    stops.withIndex().associate { (index, stop) -> stop.stopId to index }.also {
+        require(it.size == stops.size) { "stop IDs must be unique" }
+    }
+
+private fun buildPatterns(trips: List<ScheduledTrip>, stopIndex: Map<String, Int>): List<Pattern> =
+    trips
         .groupBy { trip ->
             require(trip.stops.size >= 2) { "trip ${trip.tripId} has fewer than two stops" }
             trip.routeId to trip.stops.map { stop ->
@@ -116,32 +155,25 @@ class TransitNetwork(
                 }
             }
         }
-        .map { (key, patternTrips) ->
-            Pattern(
-                routeId = key.first,
-                stops = key.second.toIntArray(),
-                trips = patternTrips.sortedBy { it.stops.first().departureSeconds }
-            )
-        }
+        .map { (key, patternTrips) -> Pattern(key.first, key.second.toIntArray(), patternTrips) }
 
-    // Sweeps stops in latitude order so each stop is only compared with stops in its latitude
-    // band, instead of with every other stop.
-    private fun buildTransfers(radiusMeters: Double): List<List<NearStop>> {
-        val result = List(stops.size) { mutableListOf<NearStop>() }
-        val byLatitude = stops.indices.sortedBy { stops[it].location.latitude }
-        val bandDegrees = Math.toDegrees(radiusMeters / EARTH_RADIUS_METERS)
-        for ((i, from) in byLatitude.withIndex()) {
-            val fromLocation = stops[from].location
-            for (to in byLatitude.subList(i + 1, byLatitude.size)) {
-                val toLocation = stops[to].location
-                if (toLocation.latitude - fromLocation.latitude > bandDegrees) break
-                val distance = haversineMeters(fromLocation, toLocation)
-                if (distance <= radiusMeters) {
-                    result[from] += NearStop(to, distance)
-                    result[to] += NearStop(from, distance)
-                }
+// Sweeps stops in latitude order so each stop is only compared with stops in its latitude
+// band, instead of with every other stop.
+private fun buildTransfers(stops: List<TransitStop>, radiusMeters: Double): List<List<NearStop>> {
+    val result = List(stops.size) { mutableListOf<NearStop>() }
+    val byLatitude = stops.indices.sortedBy { stops[it].location.latitude }
+    val bandDegrees = Math.toDegrees(radiusMeters / EARTH_RADIUS_METERS)
+    for ((i, from) in byLatitude.withIndex()) {
+        val fromLocation = stops[from].location
+        for (to in byLatitude.subList(i + 1, byLatitude.size)) {
+            val toLocation = stops[to].location
+            if (toLocation.latitude - fromLocation.latitude > bandDegrees) break
+            val distance = haversineMeters(fromLocation, toLocation)
+            if (distance <= radiusMeters) {
+                result[from] += NearStop(to, distance)
+                result[to] += NearStop(from, distance)
             }
         }
-        return result
     }
+    return result
 }

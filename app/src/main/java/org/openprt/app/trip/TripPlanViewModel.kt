@@ -5,15 +5,19 @@ import androidx.lifecycle.viewModelScope
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.openprt.app.data.gtfs.RideStopsSource
+import org.openprt.app.data.gtfs.TimetableDatesSource
 import org.openprt.app.data.gtfs.TripPlan
 import org.openprt.app.data.gtfs.TripPlanResult
 import org.openprt.app.data.gtfs.TripPlanSource
+import org.openprt.app.data.gtfs.TripTime
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.TrueTimeResult
 import org.openprt.app.data.truetime.orEmptyWhenNoData
@@ -54,7 +58,35 @@ data class TripOption(
     val boardingTime: Instant,
     val live: Boolean,
     /** The plan behind this row, for showing it on the map. */
-    val plan: TripPlan
+    val plan: TripPlan,
+    /** The "Arrive by" time the plan was made for; null for the other modes. */
+    val deadline: Instant? = null
+) {
+    /** A late first bus is expected to get the rider there after [deadline]. */
+    val late: Boolean get() = deadline != null && arrivalTime > deadline
+}
+
+/** How the user wants the trip timed. */
+enum class TripTimeMode {
+    /** Set off now; plans follow the clock. */
+    LEAVE_NOW,
+
+    /** Set off no earlier than a chosen time. */
+    DEPART_AT,
+
+    /** Get there no later than a chosen time, leaving as late as possible. */
+    ARRIVE_BY
+}
+
+/**
+ * The time controls above the plans. [at] is the chosen time, null only for
+ * [TripTimeMode.LEAVE_NOW]. [dates] are the days the timetable covers, for the date picker; null
+ * until they have been read or when there is no timetable.
+ */
+data class TripTimeUiState(
+    val mode: TripTimeMode = TripTimeMode.LEAVE_NOW,
+    val at: Instant? = null,
+    val dates: ClosedRange<LocalDate>? = null
 )
 
 /** Looking up the live bus of a ride the user tapped in a chosen trip. */
@@ -114,6 +146,12 @@ interface TripPlanActions {
 
     /** The screen has opened the live bus found by [openRide]. */
     fun onRideOpened()
+
+    /** Switches between Leave now, Depart at and Arrive by, and plans again. */
+    fun setTimeMode(mode: TripTimeMode)
+
+    /** Sets the Depart at / Arrive by time and plans again; ignored for Leave now. */
+    fun setTime(at: Instant)
 }
 
 /**
@@ -129,18 +167,29 @@ interface TripPlanActions {
  * The first bus of each option is looked up in TrueTime once, when the plans arrive; if that
  * fails the options keep their timetable times rather than failing the whole search.
  *
+ * Plans that set off more than [LIVE_HORIZON] from now are not looked up: TrueTime does not
+ * predict that far ahead.
+ *
  * A chosen option is drawn from the origin the plans were made from, not where the user is now.
  * Its rides are traced through the stops [rideStops] reads from the timetable.
+ *
+ * [time] holds the Leave now / Depart at / Arrive by choice, which outlives the destination;
+ * the days the timetable covers are read from [timetableDates] the first time a time is chosen.
  */
 class TripPlanViewModel(
     private val source: TripPlanSource,
     private val predictions: PredictionSource,
     private val rideStops: RideStopsSource,
-    private val clock: Clock
+    private val clock: Clock,
+    private val timetableDates: TimetableDatesSource = TimetableDatesSource { null }
 ) : ViewModel(),
     TripPlanActions {
     private val mutableState = MutableStateFlow<TripPlanUiState?>(null)
     val state: StateFlow<TripPlanUiState?> = mutableState.asStateFlow()
+
+    private val mutableTime = MutableStateFlow(TripTimeUiState())
+    val time: StateFlow<TripTimeUiState> = mutableTime.asStateFlow()
+    private var datesLoad: Job? = null
 
     private var userLocation: LatLng? = null
     private var chosenOrigin: LatLng? = null
@@ -175,6 +224,37 @@ class TripPlanViewModel(
 
     override fun retry() {
         if (destination != null) startPlanning()
+    }
+
+    override fun setTimeMode(mode: TripTimeMode) {
+        val current = mutableTime.value
+        if (mode == current.mode) return
+        val at = when (mode) {
+            TripTimeMode.LEAVE_NOW -> null
+
+            // Whole minutes, as the time picker shows them.
+            else -> current.at ?: clock.instant().truncatedTo(ChronoUnit.MINUTES)
+        }
+        mutableTime.value = current.copy(mode = mode, at = at)
+        if (mode != TripTimeMode.LEAVE_NOW) loadTimetableDates()
+        retry()
+    }
+
+    override fun setTime(at: Instant) {
+        val current = mutableTime.value
+        if (current.mode == TripTimeMode.LEAVE_NOW || at == current.at) return
+        mutableTime.value = current.copy(at = at)
+        retry()
+    }
+
+    private fun loadTimetableDates() {
+        if (datesLoad != null) return
+        datesLoad = viewModelScope.launch {
+            val dates = timetableDates.dates()
+            mutableTime.value = mutableTime.value.copy(dates = dates)
+            // No timetable yet: read again next time, it may have downloaded meanwhile.
+            if (dates == null) datesLoad = null
+        }
     }
 
     override fun select(option: TripOption) {
@@ -273,24 +353,47 @@ class TripPlanViewModel(
 
     private suspend fun plan(from: LatLng, to: LatLng): TripPlanUiState {
         val now = clock.instant()
-        return when (val result = source.plan(from, to, now)) {
-            is TripPlanResult.Found -> TripPlanUiState.Results(options(result.plans, now))
+        val choice = mutableTime.value
+        val time = when (choice.mode) {
+            TripTimeMode.LEAVE_NOW -> TripTime.DepartAt(now)
+            TripTimeMode.DEPART_AT -> TripTime.DepartAt(choice.at ?: now)
+            TripTimeMode.ARRIVE_BY -> TripTime.ArriveBy(choice.at ?: now)
+        }
+        return when (val result = source.plan(from, to, time)) {
+            is TripPlanResult.Found -> {
+                val deadline = (time as? TripTime.ArriveBy)?.time
+                TripPlanUiState.Results(options(result.plans, now, deadline))
+            }
+
             is TripPlanResult.NoRoute -> TripPlanUiState.NoRoute(result.reason)
+
             TripPlanResult.NoTimetable -> TripPlanUiState.NoTimetable
         }
     }
 
-    private suspend fun options(plans: List<TripPlan>, now: Instant): List<TripOption> {
-        val stopIds = plans.map { it.itinerary.rides.first().from.trueTimeStopId }.distinct()
-        val live = when (val result = predictions.predictions(stopIds).orEmptyWhenNoData()) {
-            is TrueTimeResult.Success -> result.value
+    private suspend fun options(
+        plans: List<TripPlan>,
+        now: Instant,
+        deadline: Instant?
+    ): List<TripOption> {
+        val soon = plans.filter { it.departureTime <= now + LIVE_HORIZON }
+        val stopIds = soon.map { it.itinerary.rides.first().from.trueTimeStopId }.distinct()
+        val live = if (stopIds.isEmpty()) {
+            emptyList()
+        } else {
+            when (val result = predictions.predictions(stopIds).orEmptyWhenNoData()) {
+                is TrueTimeResult.Success -> result.value
 
-            // The timetable alone still gives usable plans.
-            is TrueTimeResult.Failure -> emptyList()
+                // The timetable alone still gives usable plans.
+                is TrueTimeResult.Failure -> emptyList()
+            }
         }
-        return plans.map { it.toOption(live, now) }
+        return plans.map { it.toOption(if (it in soon) live else emptyList(), now, deadline) }
     }
 }
+
+/** How far ahead TrueTime predicts buses, about; later plans keep their timetable times. */
+private val LIVE_HORIZON: Duration = Duration.ofHours(1)
 
 /** How far a prediction may be from the scheduled boarding time to count as the same bus. */
 private val MAX_LIVE_OFFSET: Duration = Duration.ofMinutes(15)
@@ -298,9 +401,14 @@ private val MAX_LIVE_OFFSET: Duration = Duration.ofMinutes(15)
 /**
  * This plan as a list row. The first bus takes the time of the [predictions] entry for its route
  * at its boarding stop that the user can still walk to by [now] and that is closest to the
- * timetable, within [MAX_LIVE_OFFSET]; without one the timetable time stays.
+ * timetable, within [MAX_LIVE_OFFSET]; without one the timetable time stays. [deadline] is the
+ * "Arrive by" time, if any, so the row can warn when a late bus would miss it.
  */
-internal fun TripPlan.toOption(predictions: List<Prediction>, now: Instant): TripOption {
+internal fun TripPlan.toOption(
+    predictions: List<Prediction>,
+    now: Instant,
+    deadline: Instant? = null
+): TripOption {
     val firstRide = itinerary.rides.first()
     val scheduledBoarding = timeOf(firstRide.startSeconds)
     val walkToBus = Duration.ofSeconds(
@@ -331,7 +439,8 @@ internal fun TripPlan.toOption(predictions: List<Prediction>, now: Instant): Tri
         boardingStopName = firstRide.from.name,
         boardingTime = boardingTime,
         live = live != null,
-        plan = this
+        plan = this,
+        deadline = deadline
     )
 }
 

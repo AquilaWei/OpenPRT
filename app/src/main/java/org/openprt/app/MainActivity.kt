@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import java.time.Clock
 import org.openprt.app.data.gtfs.RoomScheduledTripSource
 import org.openprt.app.data.gtfs.RoomStopScheduleSource
+import org.openprt.app.data.gtfs.RoomTimetableDatesSource
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.fromSettings
 import org.openprt.app.data.truetime.keyChecker
@@ -77,7 +78,8 @@ class MainActivity : ComponentActivity() {
                     app.tripPlanRepository,
                     trueTime::getPredictions,
                     app.rideStops,
-                    Clock.systemUTC()
+                    Clock.systemUTC(),
+                    RoomTimetableDatesSource(app.gtfsDao)
                 )
             }
             initializer { ApiKeyViewModel(app.apiKeySettings, TrueTimeClient.keyChecker()) }
@@ -100,6 +102,7 @@ class MainActivity : ComponentActivity() {
             val destinationState by destinationViewModel.state.collectAsStateWithLifecycle()
             val tripPlanViewModel: TripPlanViewModel = viewModel(factory = viewModelFactory)
             val tripPlanState by tripPlanViewModel.state.collectAsStateWithLifecycle()
+            val tripTimeState by tripPlanViewModel.time.collectAsStateWithLifecycle()
             val apiKeyViewModel: ApiKeyViewModel = viewModel(factory = viewModelFactory)
             val apiKeyState by apiKeyViewModel.state.collectAsStateWithLifecycle()
             // Bar icons follow the app's theme, which may differ from the phone's. The home
@@ -210,6 +213,7 @@ class MainActivity : ComponentActivity() {
                         destinationActions = destinationViewModel,
                         tripPlanState = tripPlanState,
                         tripPlanActions = tripPlanViewModel,
+                        tripTimeState = tripTimeState,
                         onRelocate = locationViewModel::relocate,
                         onDepartureClick = detailsViewModel::open,
                         onCloseDetails = detailsViewModel::close,

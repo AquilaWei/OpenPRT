@@ -22,6 +22,24 @@ data class ScheduledDeparture(
     val departureTime: Instant get() = serviceTime(serviceDate, departureSeconds)
 }
 
+/** The days the imported timetable covers; an interface so screens can be tested with a fake. */
+fun interface TimetableDatesSource {
+    /**
+     * From the first to the last day the timetable runs any service, both included, or null when
+     * no timetable has been imported. Days inside the range may still have no service.
+     */
+    suspend fun dates(): ClosedRange<LocalDate>?
+}
+
+/** [TimetableDatesSource] over the imported GTFS calendar. */
+class RoomTimetableDatesSource(private val dao: GtfsDao) : TimetableDatesSource {
+    override suspend fun dates(): ClosedRange<LocalDate>? {
+        val first = dao.getFirstServiceDate() ?: return null
+        val last = dao.getLastServiceDate() ?: return null
+        return first..last
+    }
+}
+
 /**
  * Looks up scheduled departures in the imported GTFS timetable.
  *

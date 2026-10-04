@@ -61,7 +61,11 @@ class TripPlanRepositoryTest {
 
     @Test
     fun plan_weekdayMorningCmuToSteelPlaza_ridesTheNextTripBetweenThem() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         assertEquals(
             TripPlanResult.Found(
@@ -92,30 +96,46 @@ class TripPlanRepositoryTest {
 
     @Test
     fun plan_weekdayMorning_arrivalTimeIsOnTheServiceDay() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         assertEquals(Instant.parse("2026-10-01T11:30:00Z"), plans(result).single().arrivalTime)
     }
 
     @Test
     fun plan_twiceOnTheSameServiceDay_buildsTheNetworkOnce() = runTest {
-        repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
-        repository.plan(CMU.location, STEEL_PLAZA.location, Instant.parse("2026-10-01T12:00:00Z"))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(Instant.parse("2026-10-01T12:00:00Z"))
+        )
 
         assertEquals(listOf(THURSDAY), source.builtDays)
     }
 
     @Test
     fun plan_onTheNextServiceDay_buildsItsNetwork() = runTest {
-        repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
-        repository.plan(CMU.location, STEEL_PLAZA.location, Instant.parse("2026-10-02T11:00:00Z"))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(Instant.parse("2026-10-02T11:00:00Z"))
+        )
 
         assertEquals(listOf(THURSDAY, FRIDAY), source.builtDays)
     }
 
     @Test
     fun plan_afterMidnight_ridesThePreviousServiceDaysLateTrip() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, FRIDAY_00_30)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(FRIDAY_00_30)
+        )
 
         assertEquals(
             listOf(RideLeg("T4", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 88_800, 90_600)),
@@ -125,21 +145,105 @@ class TripPlanRepositoryTest {
 
     @Test
     fun plan_afterMidnight_planBelongsToThePreviousServiceDay() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, FRIDAY_00_30)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(FRIDAY_00_30)
+        )
 
         assertEquals(THURSDAY, plans(result).single().serviceDate)
     }
 
     @Test
     fun plan_afterMidnight_arrivesAt0110OnTheCalendarDay() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, FRIDAY_00_30)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(FRIDAY_00_30)
+        )
 
         assertEquals(Instant.parse("2026-10-02T05:10:00Z"), plans(result).single().arrivalTime)
     }
 
     @Test
+    fun plan_arriveByMorning_ridesTheLatestTripThatArrivesInTime() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(THURSDAY_08_45)
+        )
+
+        assertEquals(
+            listOf(RideLeg("T2", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 28_800, 30_600)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_arriveByAfterMidnight_ridesThePreviousServiceDaysLastTrip() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(FRIDAY_01_30)
+        )
+
+        assertEquals(
+            listOf(RideLeg("T4", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 88_800, 90_600)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_arriveByAfterMidnight_planBelongsToThePreviousServiceDay() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(FRIDAY_01_30)
+        )
+
+        assertEquals(THURSDAY, plans(result).single().serviceDate)
+    }
+
+    @Test
+    fun plan_arriveByBeforeTheFirstTrip_returnsNoConnection() = runTest {
+        // Monday 06:00 EDT, before T1 reaches Steel Plaza; nothing runs on Sunday night.
+        val arriveBy = Instant.parse("2026-10-05T10:00:00Z")
+
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(arriveBy)
+        )
+
+        assertEquals(TripPlanResult.NoRoute(NoRouteReason.NO_CONNECTION), result)
+    }
+
+    @Test
+    fun plan_departAtThenArriveByOnTheSameDay_buildsTheNetworkOnce() = runTest {
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(THURSDAY_08_45))
+
+        assertEquals(listOf(THURSDAY), source.builtDays)
+    }
+
+    @Test
+    fun plan_arriveByOnAnotherDayTwice_buildsThatDaysNetworkOnce() = runTest {
+        val fridayMorning = Instant.parse("2026-10-02T12:45:00Z")
+
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(THURSDAY_08_45))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(fridayMorning))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(fridayMorning))
+
+        assertEquals(listOf(THURSDAY, FRIDAY), source.builtDays)
+    }
+
+    @Test
     fun plan_destinationFarFromEveryStop_returnsNoRoute() = runTest {
-        val result = repository.plan(CMU.location, LatLng(40.6, -80.2), THURSDAY_06_50)
+        val result = repository.plan(
+            CMU.location,
+            LatLng(40.6, -80.2),
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         assertEquals(TripPlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION), result)
     }
@@ -149,7 +253,11 @@ class TripPlanRepositoryTest {
         // Thursday 2026-10-29, after calendar.txt's last date, 2026-10-24.
         val departAt = Instant.parse("2026-10-29T10:50:00Z")
 
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, departAt)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(departAt)
+        )
 
         assertEquals(TripPlanResult.NoRoute(NoRouteReason.NO_CONNECTION), result)
     }
@@ -159,7 +267,11 @@ class TripPlanRepositoryTest {
         val empty = inMemoryDatabase()
         val emptyRepository = TripPlanRepository(RoomTransitNetworkSource(empty.gtfsDao()))
 
-        val result = emptyRepository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
+        val result = emptyRepository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         empty.close()
         assertEquals(TripPlanResult.NoTimetable, result)
@@ -186,9 +298,11 @@ class TripPlanRepositoryTest {
         val THURSDAY: LocalDate = LocalDate.of(2026, 10, 1)
         val FRIDAY: LocalDate = LocalDate.of(2026, 10, 2)
 
-        // 06:50 and 00:30 New York time (EDT, UTC-4).
+        // New York time (EDT, UTC-4).
         val THURSDAY_06_50: Instant = Instant.parse("2026-10-01T10:50:00Z")
         val FRIDAY_00_30: Instant = Instant.parse("2026-10-02T04:30:00Z")
+        val THURSDAY_08_45: Instant = Instant.parse("2026-10-01T12:45:00Z")
+        val FRIDAY_01_30: Instant = Instant.parse("2026-10-02T05:30:00Z")
 
         val CMU = TransitStop(
             "8312",

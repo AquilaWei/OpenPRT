@@ -24,9 +24,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.openprt.app.data.gtfs.RideStopsSource
+import org.openprt.app.data.gtfs.TimetableDatesSource
 import org.openprt.app.data.gtfs.TripPlan
 import org.openprt.app.data.gtfs.TripPlanResult
 import org.openprt.app.data.gtfs.TripPlanSource
+import org.openprt.app.data.gtfs.TripTime
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.PredictionType
 import org.openprt.app.data.truetime.TrueTimeError
@@ -73,7 +75,7 @@ class TripPlanViewModelTest {
         viewModel.onDestinationChanged(THERE)
         advanceUntilIdle()
 
-        assertEquals(listOf(PlanCall(HERE, THERE, NOW)), source.calls)
+        assertEquals(listOf(PlanCall(HERE, THERE, LEAVE_NOW)), source.calls)
     }
 
     @Test
@@ -166,7 +168,7 @@ class TripPlanViewModelTest {
         viewModel.onLocationChanged(HERE)
         advanceUntilIdle()
 
-        assertEquals(listOf(PlanCall(HERE, THERE, NOW)), source.calls)
+        assertEquals(listOf(PlanCall(HERE, THERE, LEAVE_NOW)), source.calls)
     }
 
     @Test
@@ -277,7 +279,7 @@ class TripPlanViewModelTest {
         assertFalse(option.live)
     }
 
-    private data class PlanCall(val origin: LatLng, val destination: LatLng, val departAt: Instant)
+    private data class PlanCall(val origin: LatLng, val destination: LatLng, val time: TripTime)
 
     @Test
     fun select_option_isShownAsSelected() = runTest(dispatcher) {
@@ -422,7 +424,7 @@ class TripPlanViewModelTest {
         viewModel.onEndpointsChanged(MIDDLE, THERE)
         advanceUntilIdle()
 
-        assertEquals(listOf(PlanCall(MIDDLE, THERE, NOW)), source.calls)
+        assertEquals(listOf(PlanCall(MIDDLE, THERE, LEAVE_NOW)), source.calls)
     }
 
     @Test
@@ -433,7 +435,7 @@ class TripPlanViewModelTest {
         viewModel.onEndpointsChanged(MIDDLE, THERE)
         advanceUntilIdle()
 
-        assertEquals(listOf(PlanCall(MIDDLE, THERE, NOW)), source.calls)
+        assertEquals(listOf(PlanCall(MIDDLE, THERE, LEAVE_NOW)), source.calls)
     }
 
     @Test
@@ -446,7 +448,7 @@ class TripPlanViewModelTest {
         viewModel.onLocationChanged(HERE)
         advanceUntilIdle()
 
-        assertEquals(listOf(PlanCall(MIDDLE, THERE, NOW)), source.calls)
+        assertEquals(listOf(PlanCall(MIDDLE, THERE, LEAVE_NOW)), source.calls)
     }
 
     @Test
@@ -461,7 +463,7 @@ class TripPlanViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf(PlanCall(MIDDLE, THERE, NOW), PlanCall(HERE, THERE, NOW)),
+            listOf(PlanCall(MIDDLE, THERE, LEAVE_NOW), PlanCall(HERE, THERE, LEAVE_NOW)),
             source.calls
         )
     }
@@ -480,7 +482,7 @@ class TripPlanViewModelTest {
         advanceUntilIdle()
 
         assertEquals(
-            listOf(PlanCall(HERE, THERE, NOW), PlanCall(THERE, HERE, NOW)),
+            listOf(PlanCall(HERE, THERE, LEAVE_NOW), PlanCall(THERE, HERE, LEAVE_NOW)),
             source.calls
         )
     }
@@ -496,6 +498,141 @@ class TripPlanViewModelTest {
         advanceUntilIdle()
 
         assertEquals(1, source.calls.size)
+    }
+
+    @Test
+    fun setTimeMode_arriveBy_plansArrivingByTheClockTime() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+        advanceUntilIdle()
+
+        assertEquals(PlanCall(HERE, THERE, TripTime.ArriveBy(NOW)), source.calls.last())
+    }
+
+    @Test
+    fun setTime_departAt_plansSettingOffAtThatTime() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+
+        viewModel.setTime(Instant.parse("2026-10-02T12:30:00Z"))
+        advanceUntilIdle()
+
+        assertEquals(
+            PlanCall(HERE, THERE, TripTime.DepartAt(Instant.parse("2026-10-02T12:30:00Z"))),
+            source.calls.last()
+        )
+    }
+
+    @Test
+    fun setTime_arriveBy_keepsTheModeAndShowsTheTime() = runTest(dispatcher) {
+        val viewModel = plannedViewModel(NO_PREDICTIONS)
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+
+        viewModel.setTime(Instant.parse("2026-10-02T12:30:00Z"))
+
+        assertEquals(TripTimeMode.ARRIVE_BY, viewModel.time.value.mode)
+        assertEquals(Instant.parse("2026-10-02T12:30:00Z"), viewModel.time.value.at)
+    }
+
+    @Test
+    fun setTime_leaveNow_isIgnored() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+
+        viewModel.setTime(Instant.parse("2026-10-02T12:30:00Z"))
+        advanceUntilIdle()
+
+        assertEquals(1, source.calls.size)
+    }
+
+    @Test
+    fun setTimeMode_optionSelected_clearsTheSelection() = runTest(dispatcher) {
+        val source = FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(DIRECT_PLAN))))
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+        viewModel.select(viewModel.results().options.single())
+
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+        advanceUntilIdle()
+
+        assertNull(viewModel.results().selected)
+    }
+
+    @Test
+    fun setTimeMode_backToLeaveNow_plansFromTheClockAgain() = runTest(dispatcher) {
+        val source = FakePlanSource()
+        val viewModel = plannedViewModel(NO_PREDICTIONS, source)
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+        advanceUntilIdle()
+
+        viewModel.setTimeMode(TripTimeMode.LEAVE_NOW)
+        advanceUntilIdle()
+
+        assertEquals(PlanCall(HERE, THERE, LEAVE_NOW), source.calls.last())
+    }
+
+    @Test
+    fun setTimeMode_departAt_readsTheTimetableDates() = runTest(dispatcher) {
+        val dates = LocalDate.of(2026, 9, 27)..LocalDate.of(2026, 11, 21)
+        val viewModel = TripPlanViewModel(
+            FakePlanSource(),
+            NO_PREDICTIONS,
+            STRAIGHT_RIDES,
+            CLOCK,
+            TimetableDatesSource { dates }
+        )
+
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+        advanceUntilIdle()
+
+        assertEquals(dates, viewModel.time.value.dates)
+    }
+
+    @Test
+    fun setTime_planLeavesMoreThanAnHourFromNow_doesNotAskTrueTime() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(TrueTimeResult.Success(emptyList()))
+        val source =
+            FakePlanSource(CompletableDeferred(TripPlanResult.Found(listOf(TOMORROW_PLAN))))
+        val viewModel = TripPlanViewModel(source, predictions, STRAIGHT_RIDES, CLOCK)
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+        viewModel.setTime(Instant.parse("2026-10-02T10:50:00Z"))
+        viewModel.onLocationChanged(HERE)
+
+        viewModel.onDestinationChanged(THERE)
+        advanceUntilIdle()
+
+        assertEquals(emptyList<List<String>>(), predictions.requests)
+    }
+
+    @Test
+    fun setTimeMode_arriveByFirstBusLatePastTheDeadline_marksTheOptionLate() = runTest(dispatcher) {
+        // The plan gets there at 11:31:40Z; five minutes late it misses 11:32Z.
+        val predictions = FakePredictionSource(
+            TrueTimeResult.Success(listOf(prediction("61C", "8312", "2026-10-01T11:05:00Z")))
+        )
+        val viewModel = plannedViewModel(predictions)
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+
+        viewModel.setTime(Instant.parse("2026-10-01T11:32:00Z"))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.results().options.single().late)
+    }
+
+    @Test
+    fun setTimeMode_arriveByFirstBusOnTime_isNotLate() = runTest(dispatcher) {
+        val predictions = FakePredictionSource(
+            TrueTimeResult.Success(listOf(prediction("61C", "8312", "2026-10-01T11:00:00Z")))
+        )
+        val viewModel = plannedViewModel(predictions)
+        viewModel.setTimeMode(TripTimeMode.ARRIVE_BY)
+
+        viewModel.setTime(Instant.parse("2026-10-01T11:32:00Z"))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.results().options.single().late)
     }
 
     /** A view model that has planned [DIRECT_PLAN] from HERE to THERE. */
@@ -524,9 +661,9 @@ class TripPlanViewModelTest {
         override suspend fun plan(
             origin: LatLng,
             destination: LatLng,
-            departAt: Instant
+            time: TripTime
         ): TripPlanResult {
-            calls += PlanCall(origin, destination, departAt)
+            calls += PlanCall(origin, destination, time)
             try {
                 return answer.await()
             } catch (e: CancellationException) {
@@ -549,6 +686,7 @@ class TripPlanViewModelTest {
     private companion object {
         val NOW: Instant = Instant.parse("2026-10-01T10:50:00Z")
         val CLOCK: Clock = Clock.fixed(NOW, ZoneOffset.UTC)
+        val LEAVE_NOW = TripTime.DepartAt(NOW)
         val HERE = LatLng(40.4443, -79.9532)
         val THERE = LatLng(40.4406, -79.9959)
         val NO_PREDICTIONS = PredictionSource { TrueTimeResult.Success(emptyList()) }
@@ -571,6 +709,9 @@ class TripPlanViewModelTest {
                 )
             )
         )
+
+        /** [DIRECT_PLAN] a day later, more than an hour from [NOW]. */
+        val TOMORROW_PLAN = DIRECT_PLAN.copy(serviceDate = LocalDate.of(2026, 10, 2))
 
         fun prediction(route: String, stopId: String, time: String) = Prediction(
             generatedAt = NOW,

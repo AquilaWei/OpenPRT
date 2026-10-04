@@ -57,7 +57,10 @@ enum class NoRouteReason {
 }
 
 sealed interface PlanResult {
-    /** At least one itinerary, fewest rides first; each later one arrives strictly earlier. */
+    /**
+     * At least one itinerary, fewest rides first; each later one arrives strictly earlier, or
+     * for [RoutePlanner.planArrivingBy] leaves strictly later.
+     */
     data class Found(val itineraries: List<Itinerary>) : PlanResult
 
     data class NoRoute(val reason: NoRouteReason) : PlanResult

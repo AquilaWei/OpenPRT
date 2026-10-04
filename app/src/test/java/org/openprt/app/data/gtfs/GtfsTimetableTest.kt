@@ -56,6 +56,29 @@ class GtfsTimetableTest {
         server.close()
     }
 
+    // calendar.txt runs 2026-06-28 to 2026-10-24; calendar_dates' Labor Day is inside that.
+    @Test
+    fun timetableDates_importedFeed_spansTheCalendar() = runTest {
+        val dates = RoomTimetableDatesSource(database.gtfsDao()).dates()
+
+        assertEquals(LocalDate.of(2026, 6, 28)..LocalDate.of(2026, 10, 24), dates)
+    }
+
+    @Test
+    fun timetableDates_nothingImported_isNull() = runTest {
+        val empty = Room
+            .inMemoryDatabaseBuilder(
+                ApplicationProvider.getApplicationContext(),
+                GtfsDatabase::class.java
+            )
+            .build()
+
+        val dates = RoomTimetableDatesSource(empty.gtfsDao()).dates()
+
+        empty.close()
+        assertEquals(null, dates)
+    }
+
     @Test
     fun departuresAfter_weekdayMorning_returnsLaterTripsEarliestFirst() = runTest {
         // 07:15:00, just after T1 leaves this stop at 07:10.

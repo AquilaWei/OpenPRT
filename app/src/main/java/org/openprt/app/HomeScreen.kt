@@ -34,6 +34,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import java.time.Instant
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.DeparturesPanel
 import org.openprt.app.departures.DeparturesUiState
@@ -62,6 +63,8 @@ import org.openprt.app.trip.TripOption
 import org.openprt.app.trip.TripPlanActions
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.trip.TripPlansPanel
+import org.openprt.app.trip.TripTimeMode
+import org.openprt.app.trip.TripTimeUiState
 import org.openprt.app.ui.theme.LocalOpenPrtColors
 import org.openprt.app.ui.theme.OpenPrtTheme
 import org.openprt.app.ui.theme.ThemeMode
@@ -90,7 +93,7 @@ private val DETAILS_SHEET_PEEK_HEIGHT = 300.dp
  * destination. Both go to [destinationActions]. While [tripPlanState] is set (a destination is
  * chosen), the sheet lists the ways there instead of the nearby departures. Tapping one shows it
  * leg by leg and on the map; those requests go to [tripPlanActions], and system back returns to
- * the list.
+ * the list. Above the ways, [tripTimeState] shows the Leave now / Depart at / Arrive by choice.
  *
  * Tapping a stop on the map calls [onStopClick]; while [stopState] is set, the sheet lists that
  * stop's buses (over the ways there, under a departure's details, so backing out of a departure
@@ -122,6 +125,7 @@ fun HomeScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
+    tripTimeState: TripTimeUiState = TripTimeUiState(),
     stopState: StopDeparturesUiState? = null,
     onStopClick: (StopMarker) -> Unit = {},
     onScheduledClick: (StopDeparture) -> Unit = {},
@@ -204,7 +208,8 @@ fun HomeScreen(
                     onScheduledClick = onScheduledClick
                 )
 
-                tripPlanState != null -> TripPlansPanel(tripPlanState, tripPlanActions)
+                tripPlanState != null ->
+                    TripPlansPanel(tripPlanState, tripPlanActions, time = tripTimeState)
 
                 else -> DeparturesPanel(departuresState, onDepartureClick)
             }
@@ -431,4 +436,8 @@ internal object NoTripPlanActions : TripPlanActions {
     override fun openRide(ride: RideLeg) = Unit
 
     override fun onRideOpened() = Unit
+
+    override fun setTimeMode(mode: TripTimeMode) = Unit
+
+    override fun setTime(at: Instant) = Unit
 }

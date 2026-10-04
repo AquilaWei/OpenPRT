@@ -37,14 +37,15 @@ import org.openprt.app.ui.displayName
 /**
  * The ways to the chosen destination, shown in the home screen's bottom sheet in place of the
  * nearby departures. Tapping an option shows it leg by leg ([TripDetailsPanel]); the other
- * requests, such as planning again when the timetable was missing, go to [actions]. Times are
- * shown in [zone].
+ * requests, such as planning again when the timetable was missing or another [time], go to
+ * [actions]. Times are shown, and picked, in [zone].
  */
 @Composable
 fun TripPlansPanel(
     state: TripPlanUiState,
     actions: TripPlanActions,
     modifier: Modifier = Modifier,
+    time: TripTimeUiState = TripTimeUiState(),
     zone: ZoneId = ZoneId.systemDefault()
 ) {
     val selected = (state as? TripPlanUiState.Results)?.selected
@@ -58,6 +59,7 @@ fun TripPlansPanel(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
+        TripTimeControls(time, actions, zone, modifier = Modifier.padding(bottom = 8.dp))
         when (state) {
             TripPlanUiState.Planning -> PanelText(stringResource(R.string.trip_planning))
 
@@ -98,7 +100,8 @@ private fun OptionList(options: List<TripOption>, onSelect: (TripOption) -> Unit
 }
 
 /**
- * One way to go: total time and clock times on top, the legs, then the first bus. The chevron
+ * One way to go: total time and clock times on top, the legs, then the first bus. For "Arrive
+ * by" it starts with when to leave and warns when a late first bus may miss the deadline. The chevron
  * says the card opens; riders did not find out by themselves that it could be tapped.
  */
 @Composable
@@ -106,6 +109,17 @@ private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () 
     InfoCard(onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
+                if (option.deadline != null) {
+                    Text(
+                        text = stringResource(
+                            R.string.trip_leave_by,
+                            time.format(option.departureTime)
+                        ),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
                 TripSummary(option, time)
                 Legs(option.legs)
                 Text(
@@ -123,6 +137,16 @@ private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () 
                         MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
+                if (option.late && option.deadline != null) {
+                    Text(
+                        text = stringResource(
+                            R.string.trip_may_be_late,
+                            time.format(option.deadline)
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
             Icon(
                 painter = painterResource(R.drawable.ic_chevron_right),

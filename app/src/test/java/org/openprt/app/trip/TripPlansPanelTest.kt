@@ -167,7 +167,7 @@ class TripPlansPanelTest {
         }
 
         composeRule
-            .onNodeWithText("No buses connect these places for the rest of today's timetable.")
+            .onNodeWithText("No buses in the timetable connect these places at this time.")
             .assertIsDisplayed()
     }
 
@@ -270,6 +270,98 @@ class TripPlansPanelTest {
         assertEquals(listOf("closeSelection"), actions.calls)
     }
 
+    @Test
+    fun tripPlansPanel_arriveByClicked_reportsTheMode() {
+        val actions = RecordingActions()
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), actions, zone = UTC)
+        }
+
+        composeRule.onNodeWithText("Arrive by").performClick()
+
+        assertEquals(listOf("setTimeMode ARRIVE_BY"), actions.calls)
+    }
+
+    @Test
+    fun tripPlansPanel_leaveNow_hasNoDateOrTimeButtons() {
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.Results(TWO_OPTIONS), RecordingActions(), zone = UTC)
+        }
+
+        composeRule.onNodeWithContentDescription("Change the date").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Change the time").assertDoesNotExist()
+    }
+
+    @Test
+    fun tripPlansPanel_departAt_showsTheChosenDateAndTime() {
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Planning,
+                RecordingActions(),
+                time = DEPART_AT_NOON,
+                zone = UTC
+            )
+        }
+
+        composeRule.onNodeWithText("Oct 2, 2026").assertIsDisplayed()
+        composeRule.onNodeWithText("12:30", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_noRoute_stillOffersTheTimeChoice() {
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.NoRoute(NoRouteReason.NO_CONNECTION),
+                RecordingActions(),
+                time = DEPART_AT_NOON,
+                zone = UTC
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Change the time").assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_arriveByOption_saysWhenToLeave() {
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(ARRIVE_BY_OPTION)),
+                RecordingActions(),
+                zone = UTC
+            )
+        }
+
+        composeRule.onNodeWithText("Leave by 10:56", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_arriveByOptionOnTime_hasNoLateWarning() {
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Results(listOf(ARRIVE_BY_OPTION)),
+                RecordingActions(),
+                zone = UTC
+            )
+        }
+
+        composeRule.onNodeWithText("running late", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun tripPlansPanel_arriveByOptionLate_warnsItMayMissTheDeadline() {
+        val late = ARRIVE_BY_OPTION.copy(arrivalTime = Instant.parse("2026-10-01T11:36:00Z"))
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.Results(listOf(late)), RecordingActions(), zone = UTC)
+        }
+
+        composeRule
+            .onNodeWithText(
+                "The first bus is running late, so you may arrive after 11:32",
+                substring = true
+            )
+            .assertIsDisplayed()
+    }
+
     private class RecordingActions : TripPlanActions {
         val calls = mutableListOf<String>()
 
@@ -291,6 +383,14 @@ class TripPlansPanelTest {
 
         override fun onRideOpened() {
             calls += "onRideOpened"
+        }
+
+        override fun setTimeMode(mode: TripTimeMode) {
+            calls += "setTimeMode $mode"
+        }
+
+        override fun setTime(at: Instant) {
+            calls += "setTime $at"
         }
     }
 
@@ -345,6 +445,13 @@ class TripPlansPanelTest {
         )
 
         val TWO_OPTIONS = listOf(DIRECT, WITH_TRANSFER)
+
+        val ARRIVE_BY_OPTION = DIRECT.copy(deadline = Instant.parse("2026-10-01T11:32:00Z"))
+
+        val DEPART_AT_NOON = TripTimeUiState(
+            mode = TripTimeMode.DEPART_AT,
+            at = Instant.parse("2026-10-02T12:30:00Z")
+        )
 
         val SELECTED = TripPlanUiState.Results(
             TWO_OPTIONS,
