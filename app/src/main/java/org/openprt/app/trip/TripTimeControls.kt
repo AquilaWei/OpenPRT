@@ -43,8 +43,9 @@ import org.openprt.app.R
 
 /**
  * Leave now / Depart at / Arrive by above the ways there. For the last two, a date button and a
- * time button open pickers; the date picker only offers the days the timetable covers, once
- * they are known. Choices go to [actions]; dates and times are read and shown in [zone].
+ * time button open pickers; the date button waits until the days the timetable covers are known,
+ * and only those days can be picked. Choices go to [actions]; dates and times are read and shown
+ * in [zone].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +87,11 @@ private fun TripTimeMode.labelRes(): Int = when (this) {
     TripTimeMode.ARRIVE_BY -> R.string.trip_time_arrive_by
 }
 
-/** Shows [current]'s date; picking another keeps its time of day. */
+/**
+ * Shows [current]'s date; picking another keeps its time of day. Disabled until [dates] are known,
+ * so no day outside the timetable can be chosen, and OK stays disabled while the selection is
+ * outside them, as the current date may be.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DateButton(
@@ -98,26 +103,28 @@ private fun DateButton(
     val description = stringResource(R.string.trip_time_change_date)
     OutlinedButton(
         onClick = { open = true },
+        enabled = dates != null,
         modifier = Modifier.semantics { contentDescription = description }
     ) {
         Text(current.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)))
     }
-    if (!open) return
+    if (!open || dates == null) return
     // The picker works in UTC midnights, whatever the zone.
     val state = rememberDatePickerState(
-        initialSelectedDateMillis = current.toLocalDate().utcMillis(),
+        initialSelectedDateMillis = current.toLocalDate().takeIf { it in dates }?.utcMillis(),
         selectableDates = TimetableDates(dates)
     )
+    val picked = state.selectedDateMillis?.utcDate()?.takeIf { it in dates }
     DatePickerDialog(
         onDismissRequest = { open = false },
         confirmButton = {
-            TextButton(onClick = {
-                open = false
-                state.selectedDateMillis?.let { millis ->
-                    val date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                    onPick(date.atTime(current.toLocalTime()))
-                }
-            }) { Text(stringResource(R.string.trip_time_ok)) }
+            TextButton(
+                onClick = {
+                    open = false
+                    if (picked != null) onPick(picked.atTime(current.toLocalTime()))
+                },
+                enabled = picked != null
+            ) { Text(stringResource(R.string.trip_time_ok)) }
         },
         dismissButton = {
             TextButton(onClick = { open = false }) {
@@ -164,14 +171,16 @@ private fun TimeButton(current: LocalDateTime, onPick: (LocalDateTime) -> Unit) 
     )
 }
 
-/** Only the days in [dates] can be picked; any day while they are unknown. */
+/** Only the days in [dates] can be picked. */
 @OptIn(ExperimentalMaterial3Api::class)
-private class TimetableDates(private val dates: ClosedRange<LocalDate>?) : SelectableDates {
-    override fun isSelectableDate(utcTimeMillis: Long): Boolean = dates == null ||
-        Instant.ofEpochMilli(utcTimeMillis).atZone(ZoneOffset.UTC).toLocalDate() in dates
+private class TimetableDates(private val dates: ClosedRange<LocalDate>) : SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis.utcDate() in dates
 
     override fun isSelectableYear(year: Int): Boolean =
-        dates == null || year in dates.start.year..dates.endInclusive.year
+        year in dates.start.year..dates.endInclusive.year
 }
 
 private fun LocalDate.utcMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun Long.utcDate(): LocalDate =
+    Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()

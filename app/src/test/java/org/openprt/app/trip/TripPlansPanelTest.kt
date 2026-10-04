@@ -2,6 +2,7 @@ package org.openprt.app.trip
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -305,6 +306,50 @@ class TripPlansPanelTest {
 
         composeRule.onNodeWithText("Oct 2, 2026").assertIsDisplayed()
         composeRule.onNodeWithText("12:30", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_timetableDatesUnknown_dateButtonIsDisabled() {
+        composeRule.setContent {
+            TripPlansPanel(
+                TripPlanUiState.Planning,
+                RecordingActions(),
+                time = DEPART_AT_NOON,
+                zone = UTC
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Change the date").assertIsNotEnabled()
+    }
+
+    @Test
+    fun tripPlansPanel_chosenDateOutsideTheTimetable_cannotBeConfirmed() {
+        val time = DEPART_AT_NOON.copy(
+            dates = LocalDate.of(2026, 10, 5)..LocalDate.of(2026, 11, 21)
+        )
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.Planning, RecordingActions(), time = time, zone = UTC)
+        }
+
+        composeRule.onNodeWithContentDescription("Change the date").performClick()
+
+        composeRule.onNodeWithText("OK").assertIsNotEnabled()
+    }
+
+    @Test
+    fun tripPlansPanel_chosenDateInTheTimetableConfirmed_setsTheTime() {
+        val actions = RecordingActions()
+        val time = DEPART_AT_NOON.copy(
+            dates = LocalDate.of(2026, 9, 27)..LocalDate.of(2026, 11, 21)
+        )
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.Planning, actions, time = time, zone = UTC)
+        }
+
+        composeRule.onNodeWithContentDescription("Change the date").performClick()
+        composeRule.onNodeWithText("OK").performClick()
+
+        assertEquals(listOf("setTime 2026-10-02T12:30:00Z"), actions.calls)
     }
 
     @Test
