@@ -996,3 +996,6 @@
   - 本機預設分支是 `master`，這一輪的工作只在 `hb/7-openprt`，`master` 還沒有；要先把它併回 `master` 再推
   - 使用者建好 repo 後的指令：`git remote add origin https://github.com/AquilaWei/OpenPRT.git`、
     `git push -u origin master`、`git push origin v0.1.32`（tag 在 `12d936a`）
+- 2026-10-05：**F19 仍卡在 GitHub repo**，沒有改程式。開工前 verify 通過，`scripts/test-release-scripts.sh` 全部通過
+  - 再問一次 GitHub repo 怎麼處理，仍沒有回答；沒建 repo、沒推送，F19 維持 `passes: false`，tag `v0.1.32` 仍在 `12d936a`
+  - 剩下的步驟都要使用者回答或親自做，照上一條的指令即可；在那之前再開 session 也只會重複這一條
