@@ -2,115 +2,143 @@
 
 ![version](https://img.shields.io/badge/version-0.1.36-blue)
 
-**匹茲堡公車（Pittsburgh Regional Transit, PRT）乘車資訊 App**，先做 Android，iOS 之後再處理。
+**A free, open-source bus and light rail app for Pittsburgh Regional Transit (PRT).** Android for now.
 
-> 目前是 **0.1.36 開發版**：主畫面是地圖，顯示你的位置與 400 公尺內的公車站牌，移動時跟著更新（拒絕定位時改用 Downtown Pittsburgh）；下方的「Nearby departures」面板列出走得到、趕得上的附近班次（公車與輕軌 T 線），每 30 秒更新；點地圖上的站牌會列出該站接下來的班次（有即時預測用即時時間，沒有 key 或沒有預測時改用時刻表並標示「Scheduled」，點時刻表班次會列出它接下來停靠的站牌與時間），左下角的圖示按鈕會打開**地圖圖例**，說明每種顏色與圖示的意思；點一班車會在地圖上畫出它的路線、沿線站牌，標出你要上車的站牌，並顯示這班車的即時位置與還有幾分鐘到站（每 15 秒更新）。地圖上方的搜尋框可以找匹茲堡地區的目的地，或長按地圖直接選點；搜尋框上方的「From」欄位預設「My location」，也可以搜尋地址或長按地圖改用別的起點，⇅ 按鈕對調起訖點；下方面板會改列出最多三個乘車方案，上方可切換 **Leave now / Depart at / Arrive by**（後兩者可選時刻表有效範圍內的日期與時間，Arrive by 會找出最晚出發、仍能準時抵達的方案並標示「Leave by …」，第一班車即時誤點可能趕不上時會提醒）（總分鐘數、出發 / 抵達時間、轉乘次數、各段路線與步行時間），第一班車有即時預測時改用即時時間並標示「Live」，點一個方案會在地圖上畫出沿街道的步行路線（虛線，並更新步行分鐘）與公車路線、列出每一段，並可查看那班公車的即時位置。即時班次需要 TrueTime API key，第一次開 App 時會引導你輸入（見下方說明）。外觀用 PRT 的深藍 + 金黃，有**淺色與深色**兩種（預設跟隨手機，右上角半圓圖示可切換），地圖也會跟著變深色。
+See which buses you can catch from where you are standing, follow your bus live on the map, and plan a trip
+across Pittsburgh — no ads, no account, no analytics.
 
-## 做什麼
+## What it does
 
-- 📍 **附近班次**：依手機定位找出附近站牌，列出最趕得上、等最少的班次並自動更新；公車與**輕軌 T 線**（Red / Blue / Silver Line）一起列出
-- 🚌 **班次詳情**：點擊班次後在地圖上顯示路線、站牌、公車即時位置與預估抵達時間
-- 🧭 **路線規劃**：選擇目的地（起點預設是你的位置，也可以輸入地址）後規劃乘車路線，提供時間預估、班次與轉乘資訊；可指定出發時間或抵達時間
+- 📍 **Nearby departures** — the buses and **T light rail** (Red, Blue and Silver Line) you can still walk to and
+  catch, soonest first, updated every 30 seconds
+- 🚏 **Tap any stop** on the map to see its next departures, live when PRT has a prediction and from the
+  timetable when not
+- 🚌 **Follow a bus** — tap a departure to see its route, its stops and where the bus is right now, with the
+  minutes until it reaches your stop
+- 🧭 **Plan a trip** — search for a place (or long-press the map), optionally start from an address instead of
+  your location, and get up to three ways to get there with walking, transfers and times.
+  Choose **Leave now**, **Depart at** or **Arrive by**; walking legs follow real streets on the map
+- 🌙 **Light and dark themes** — follows your phone, or pick one with the half-circle button at the top
+- 📶 **Works on a bad connection** — shows the last departures it got when you are offline, and keeps the bus
+  timetable on your phone
 
-資料來源：PRT TrueTime 即時 API 與 PRT GTFS 靜態時刻表（[開發者資源頁](https://www.rideprt.org/business-resources/web-developer-resources/)上的 `gtfs.zip`，公開下載、不需 key）。
-地圖用 **[MapLibre](https://maplibre.org/)** 搭配 **[OpenFreeMap](https://openfreemap.org/)** 的 OpenStreetMap 圖磚，免費、**不需要地圖 API key**。
-目的地搜尋用 **[Photon](https://photon.komoot.io/)**（OpenStreetMap 地理編碼），同樣免費、不需 key。
-方案的步行路線用 **[FOSSGIS Valhalla](https://valhalla1.openstreetmap.de/)**（OpenStreetMap 步行路線）沿街道畫出，也免費、不需 key；選定方案時會把各步行段的起訖座標送到該服務，查不到或 5 秒內沒回應時改畫直線。
+## Install
 
-> 第一次開啟時 App 會下載 GTFS 站牌與時刻表資料（下載約 22 MB，存進手機後約佔 **75 MB**），之後才會在地圖上顯示附近站牌。
-> 資料超過 7 天時，App 會在**有網路時於背景重新下載**（每天檢查一次）；下載失敗時繼續用手機上原本的資料。
-
-## 下載安裝
-
-1. 到 GitHub 專案的 **[Releases](https://github.com/AquilaWei/OpenPRT/releases)** 頁面，打開最新版本
-2. 下載符合手機的 APK：
-   - **`OpenPRT-vX.Y.Z-arm64-v8a.apk`**：近幾年的 Android 手機幾乎都是這個（最小）
-   - `OpenPRT-vX.Y.Z-armeabi-v7a.apk`：較舊的 32 位元手機
-   - `OpenPRT-vX.Y.Z-universal.apk`：不確定時用這個，所有手機都能裝，但檔案約 60 MB（arm64 版約 24 MB）
-3. （選用）確認檔案沒有損壞：與同名的 `.sha256` 比對
+1. Open the **[Releases](https://github.com/AquilaWei/OpenPRT/releases)** page and pick the latest version
+2. Download the APK that fits your phone:
+   - **`OpenPRT-vX.Y.Z-arm64-v8a.apk`** — almost every Android phone from the last several years (smallest, about 24 MB)
+   - `OpenPRT-vX.Y.Z-armeabi-v7a.apk` — older 32-bit phones
+   - `OpenPRT-vX.Y.Z-universal.apk` — not sure? This one works on every phone, but it is about 60 MB
+3. (Optional) Check the download is intact against the matching `.sha256` file:
 
    ```bash
    sha256sum -c OpenPRT-vX.Y.Z-arm64-v8a.apk.sha256
    ```
 
-4. 在手機上打開 APK，依提示允許「安裝不明來源的應用程式」後安裝
+4. Open the APK on your phone and allow "install unknown apps" when asked
 
-> 手機上若已裝了自己建置的 debug 版，簽章不同無法直接覆蓋，要先解除安裝（會清掉 App 裡輸入的 key 與下載的時刻表）。
+> On first launch the app downloads PRT's stops and timetable (about 22 MB, about **75 MB** once stored).
+> It refreshes them **in the background on Wi-Fi or mobile data** when they are more than 7 days old, and keeps
+> the old copy if a download fails.
 
-## 需求
+> If you installed a debug build you compiled yourself, uninstall it first: it is signed differently, so the
+> release cannot install over it. Uninstalling clears the key you entered and the downloaded timetable.
 
-- **JDK 21 以上**（只裝了 JRE 或其他版本也可以，Gradle 會自動下載 JDK 21 toolchain）
-- **Android SDK**，含 platform **android-37** 與 build-tools 36（已接受授權時，Gradle 會自動下載缺少的套件）
+### Live times need a free PRT TrueTime key
 
-在專案根目錄建立 `local.properties`（不進 git），指定 SDK 路徑：
+Live departures and bus positions come from the **PRT TrueTime API**, which needs a personal key:
+
+1. Create an account at **[PRT TrueTime](https://truetime.rideprt.org/bustime/home.jsp)** and sign in
+2. Request a real-time API key as described on the **My Account** page
+3. **Paste the key on the welcome screen** the first time you open the app and tap **Save key**;
+   the app checks it with TrueTime before saving
+   - To change it later, tap the **key icon** at the top right of the map
+   - Or tap **Skip for now**: stops, place search and timetable-based trip planning work without a key
+
+The key stays in the app's private storage on your phone; it is not backed up and is only sent to PRT.
+
+## Where the data comes from
+
+All free, none needs a key except TrueTime:
+
+- **PRT TrueTime** — live predictions and bus positions
+- **PRT GTFS** — stops and the timetable, the `gtfs.zip` on PRT's
+  [developer resources page](https://www.rideprt.org/business-resources/web-developer-resources/)
+- **[MapLibre](https://maplibre.org/)** with **[OpenFreeMap](https://openfreemap.org/)** OpenStreetMap tiles — the map
+- **[Photon](https://photon.komoot.io/)** — place search (OpenStreetMap geocoding)
+- **[FOSSGIS Valhalla](https://valhalla1.openstreetmap.de/)** — walking routes along streets. When you open a trip, the
+  start and end of each walk are sent to this service; if it does not answer within 5 seconds the walk is drawn
+  as a straight line
+
+## Build from source
+
+### Requirements
+
+- **JDK 21 or newer** (any JDK or JRE works; Gradle downloads the JDK 21 toolchain itself)
+- **Android SDK** with platform **android-37** and build-tools 36 (Gradle downloads missing packages once the
+  licenses are accepted)
+
+Create `local.properties` in the project root (never committed) with your SDK path:
 
 ```properties
 sdk.dir=/path/to/Android/Sdk
 ```
 
-### PRT TrueTime API key
+**For development only (optional):** add `PRT_API_KEY=your-key` to `local.properties` and debug builds will carry
+that key and skip the welcome screen; a key entered in the app wins. **Do not commit this file or paste it into
+issues or chats.** Everything builds and the tests run without any key.
 
-即時班次與公車位置來自 **PRT TrueTime API**（`https://truetime.rideprt.org/bustime/api/v3/`），需要個人 API key：
+### Build and test
 
-1. 到 **[PRT TrueTime](https://truetime.rideprt.org/bustime/home.jsp)** 註冊帳號並登入
-2. 照 **My Account** 頁面上的說明申請 real-time API key
-3. **第一次開 App 時在歡迎畫面貼上 key**，按 **Save key**；App 會先向 TrueTime 確認 key 有效才儲存
-   - 之後要換 key：點主畫面右上角的 **鑰匙圖示**
-   - 也可以先按 **Skip for now**：站牌、目的地搜尋與時刻表路線規劃不需要 key，只有即時資料需要
-
-- key 只存在手機上 App 的私有儲存空間（不會備份、不會上傳到 PRT 以外的地方）
-- **開發用（選用）**：在 `local.properties` 加上 `PRT_API_KEY=你的key`，debug 版就會內建這個 key、不顯示歡迎畫面；
-  App 內輸入的 key 優先。這個檔案**不要 commit，也不要貼到 issue 或對話中**
-- 沒有任何 key 也能建置與跑測試
-
-## 建置與測試
-
-完整檢查（與 CI 相同）：
+The full check, the same one CI runs:
 
 ```bash
 ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug
 ```
 
-| 指令 | 用途 |
+| Command | What it does |
 |---|---|
-| `./gradlew ktlintFormat` | 自動修正 Kotlin 排版 |
-| `./gradlew testDebugUnitTest` | 單元測試（含 Robolectric Compose 測試） |
-| `./gradlew lintDebug` | Android Lint，warning 一律視為錯誤 |
-| `./gradlew assembleDebug` | 產出 `app/build/outputs/apk/debug/app-debug.apk` |
-| `./gradlew installDebug` | 安裝到已連接的手機或模擬器 |
-| `./gradlew assembleRelease` | 依 ABI 分開的 release APK；沒有簽章設定時產出未簽章的 `*-release-unsigned.apk` |
-| `scripts/test-release-scripts.sh` | 發佈腳本（release notes 擷取、版號檢查）的測試 |
+| `./gradlew ktlintFormat` | Fixes Kotlin formatting |
+| `./gradlew testDebugUnitTest` | Unit tests, including Robolectric Compose tests |
+| `./gradlew lintDebug` | Android Lint; every warning is an error |
+| `./gradlew assembleDebug` | Builds `app/build/outputs/apk/debug/app-debug.apk` |
+| `./gradlew installDebug` | Installs on a connected phone or emulator |
+| `./gradlew assembleRelease` | Per-ABI release APKs; unsigned (`*-release-unsigned.apk`) without a signing setup |
+| `scripts/test-release-scripts.sh` | Tests for the release scripts (release notes extraction, version check) |
 
-## 參與開發
+## Contributing
 
-- **版號只寫在 `gradle.properties`**（`VERSION_NAME` / `VERSION_CODE`），App 從那裡讀取
-- 排版由 ktlint 決定、Lint warning 視為錯誤，送出前先跑上面的完整檢查
-- 每次 push / PR 都會由 GitHub Actions（`.github/workflows/ci.yml`）跑同一組檢查
-- 版本變更記錄在 [CHANGELOG.md](CHANGELOG.md)
+- **The version lives only in `gradle.properties`** (`VERSION_NAME` / `VERSION_CODE`); the app reads it from there
+- ktlint decides formatting and Lint warnings are errors, so run the full check above before sending changes
+- GitHub Actions (`.github/workflows/ci.yml`) runs the same check on every push and pull request
+- Changes are recorded in [CHANGELOG.md](CHANGELOG.md)
 
-### 發佈新版本
+### Publishing a release
 
-推送 `v*` tag 時，GitHub Actions（`.github/workflows/release.yml`）會跑同一組檢查、建置簽章 APK、
-附上 SHA256，並用 CHANGELOG 對應版本的段落當 release notes 建立 GitHub Release。
+Pushing a `v*` tag makes GitHub Actions (`.github/workflows/release.yml`) run the same check, build signed APKs,
+attach SHA256 files and create a GitHub Release whose notes are that version's CHANGELOG section.
 
-1. 改 `gradle.properties` 的版號與 README 的版本 badge，CHANGELOG 加上該版段落（`scripts/check-version.sh` 會檢查 badge）
-2. 推送 tag（tag 必須等於 `v` + `VERSION_NAME`，否則 workflow 會失敗；下面的指令直接從 `gradle.properties` 讀版號）：
+1. Bump the version in `gradle.properties` and the README badge, and add the version's CHANGELOG section
+   (`scripts/check-version.sh` checks the badge)
+2. Push the tag. It must be `v` + `VERSION_NAME` or the workflow fails; this reads the version for you:
 
    ```bash
    version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)" && git tag "v$version" && git push origin "v$version"
    ```
 
-**第一次發佈前**，在 repo 的 *Settings → Secrets and variables → Actions* 設定以下 secrets（簽章金鑰**不要 commit**，`.gitignore` 已排除 `*.jks` / `*.keystore`）：
+**Before the first release**, add these secrets under the repo's *Settings → Secrets and variables → Actions*
+(**never commit the signing key**; `.gitignore` excludes `*.jks` and `*.keystore`):
 
-| Secret | 內容 |
+| Secret | Value |
 |---|---|
-| `OPENPRT_KEYSTORE_BASE64` | 簽章金鑰檔的 base64，例如 `base64 -w0 release.jks` 的輸出 |
-| `OPENPRT_KEYSTORE_PASSWORD` | 金鑰庫密碼 |
-| `OPENPRT_KEY_ALIAS` | 金鑰別名 |
-| `OPENPRT_KEY_PASSWORD` | 金鑰密碼 |
-| `PRT_API_KEY`（選用） | 內建到 APK 的 TrueTime key。**公開發佈時不要設**：任何人都能從 APK 取出 key，App 會請使用者自己輸入 |
+| `OPENPRT_KEYSTORE_BASE64` | The keystore file in base64, e.g. the output of `base64 -w0 release.jks` |
+| `OPENPRT_KEYSTORE_PASSWORD` | Keystore password |
+| `OPENPRT_KEY_ALIAS` | Key alias |
+| `OPENPRT_KEY_PASSWORD` | Key password |
+| `PRT_API_KEY` (optional) | A TrueTime key built into the APK. **Leave it unset for public releases**: anyone can pull the key out of an APK, and without it the app asks each user for their own |
 
-產生簽章金鑰（自己執行，密碼不要貼到任何地方；**金鑰檔要另外備份**，弄丟後就無法發佈能覆蓋安裝的更新）：
+Create a signing key yourself (do not paste the password anywhere; **back up the keystore separately** — without
+it you cannot publish updates that install over earlier versions):
 
 ```bash
 keytool -genkeypair -keystore release.jks -alias openprt -keyalg RSA -keysize 4096 -validity 10000
