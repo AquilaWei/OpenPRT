@@ -636,6 +636,9 @@
   - **日期範圍重讀**：`GtfsUpdater.lastImport` 改成 `StateFlow<Instant?>`。`TripPlanViewModel(timetableUpdates = …)` 每次有新值時，
     若已讀過日期或目前不是 Leave now 就重讀；畫面停在「沒有時刻表」時也自動重新規劃
   - 新增 18 個測試（全部 763 個）；空表、日期重讀、過期警示消失、NoTimetable 重新規劃這幾個測試在拿掉修正後確認會失敗
+- **第二次 review 修正（2026-10-05）**：面板開著時第一次下載失敗，原本會一直停在「hasn't finished」（失敗只改了一個變數，ViewModel 只聽成功）。
+  `GtfsUpdater.lastImportFailed` 改成 `StateFlow<Boolean>`，`TripPlanViewModel(importFailures = …)` 收到新值時，畫面若是 `NoTimetable` 就只換
+  `importFailed`（失敗 → 下載失敗；重新開始下載 → 還在下載），不重新規劃。新增 3 個測試（全部 766 個），兩個切換測試在拿掉修正後確認會失敗
 
 ## 給下一個 session 的注意事項
 
@@ -910,5 +913,9 @@
   - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
 - 2026-10-05：**F18 review 修正**：只有標頭的 feed 不再清空時刻表；時刻表過期時首頁提示；空資料庫且下載失敗時方案面板說下載失敗；
   背景更新後 Depart at / Arrive by 的可選日期重讀。見 F18 段落「review 修正」。verify 通過（763 個測試，lint 0 issue）；沒有裝到手機
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 第二次 review 修正**：方案面板開著時第一次下載失敗，訊息會從「還沒下載完」換成「下載失敗」，重新下載時換回來。
+  見 F18 段落「第二次 review 修正」。verify 通過（766 個測試，lint 0 issue）；沒有裝到手機
   - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
   - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
