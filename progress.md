@@ -602,6 +602,33 @@
 - 新增 16 個測試（全部 721 個）：`MergedPredictionSourceTest`（9）、附近班次合併兩個 feed（1）、詳情問對的 feed（2）、client 送 / 標記 Light Rail（2）、
   站牌面板與方案 Live bus 帶著 feed（2）。新測試用到新的 `feed` API，舊程式下無法編譯（等同失敗）
 
+## 可靠性與離線狀態（F18 決定）
+
+- **錯誤訊息**：`TrueTimeResult.kt` 新增 `ApiProblem` 與 `TrueTimeError.Api.problem`，從 TrueTime 的 `msg` 文字判斷：
+  含「key」→ `INVALID_KEY`（與 `ApiKeyChecker` 原本的規則相同，改成共用）；含「transaction」→ `QUOTA_EXCEEDED`（BusTime 文件的訊息是
+  「Transaction limit for current day has been exceeded.」，**未用真實 key 實測**）；其他 → `OTHER`，照舊引用 TrueTime 原文
+  - 附近班次（`DeparturesPanel.FailureText`）：Network → 「You're offline.」、key 無效 → 換 key 的說明、配額 → 明天恢復；後面照舊接「Showing departures from …」
+  - 班次詳情：Network 且有舊資料 → 「You're offline. Showing data from …」；`trueTimeErrorReason` 加 key 無效與配額兩種原因（詳情路線、站牌面板共用）
+  - 保留上次資料本來就有（`NearbyDeparturesViewModel`、`DepartureDetailsViewModel` 失敗時只改 status / error），這次補上離線的 ViewModel 與畫面測試
+- **GTFS 更新**：`data/gtfs/GtfsUpdater.kt`
+  - `GtfsImportLog`：最後一次成功匯入的時間存在 SharedPreferences（`gtfs` 檔），**不放 Room**，避免改 schema 讓所有人重新下載。
+    0.1.31 以前的安裝沒有紀錄 → 視為過期，第一次背景檢查就會重新下載一次
+  - `GtfsUpdater`：唯一的匯入入口，`importIfEmpty()`（附近站牌，原本 `NearbyStopRepository` 的鎖搬過來）與 `updateIfOlderThan(7 天)`（背景）共用一個 `Mutex`。
+    兩者同時觸發時，後拿到鎖的那個看到資料已在 / 剛記錄過時間，就不下載。只有成功才記錄時間
+  - `GtfsUpdateWorker`：**每天**一次的 `PeriodicWorkRequest`（unique、`KEEP`、`NetworkType.CONNECTED`），資料滿 7 天才真的下載，
+    所以資料最多比 7 天再舊約一天。選每天檢查而不是每 7 天排一次：週期 7 天時，剛匯入完的那次檢查會略過，最舊會到 14 天。
+    結果：成功 / 不需要 → success；Network / Timeout → retry（WorkManager 退避）；HTTP 錯誤 / 壞掉的 feed → failure（隔天再試，不重複下載 22 MB）
+  - 約束只有「需要網路」，**沒有限 Wi-Fi**：22 MB 可能用到行動數據，但只限 Wi-Fi 的話沒 Wi-Fi 的人永遠不會更新。若使用者在意可改 `UNMETERED`
+  - WorkManager 改成第一次用到時才初始化（manifest 移除 `WorkManagerInitializer`，`OpenPrtApplication` 實作 `Configuration.Provider` 並給 `GtfsUpdateWorkerFactory`），
+    worker 才拿得到 App 的 `GtfsUpdater`（同一把鎖）。排程放在 `MainActivity.onCreate`，不放 `Application.onCreate`，Robolectric 測試才不會啟動 WorkManager
+- **規劃快取失效**：`TripPlanRepository` 多一個 `feedVersion: () -> Any?`（App 傳 `gtfsUpdater.lastImport`），值變了就丟掉所有已建的 planner
+- 新增依賴：WorkManager 2.12.0（`work-runtime-ktx`、測試用 `work-testing`）
+- 新增 24 個測試（全部 745 個）：`GtfsUpdaterTest`（7）、`GtfsUpdateWorkerTest`（7，排程週期、需要網路、重複排程只一個、過期下載、未過期不下載、HTTP 失敗、連不上 retry）、
+  `ApiProblemTest`（3）、附近班次畫面（3）、詳情畫面（2）、詳情 ViewModel 離線（1）、規劃快取失效（1）。
+  「同時觸發只下載一次」與「更新後重建 network」兩個測試在拿掉鎖 / 拿掉 `planners.clear()` 後確認會失敗
+- **沒做**：description 提到的「GTFS 資料過期」提示畫面（steps 沒要求）。現在資料過期時背景會更新，但如果一直更新失敗，畫面不會說時刻表過期；
+  `TripPlanViewModel` 讀過一次的時刻表日期範圍（Depart at / Arrive by 的可選日期）在 GTFS 更新後也不會重讀，要等 App 重開
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -669,6 +696,10 @@
 - [ ] F17 站在輕軌站附近（例如 Steel Plaza、Station Square）：附近班次出現 RED / BLUE / SLVR，分鐘數與月台看板一致；
   點一班輕軌，地圖畫出輕軌路線、列車位置每 15 秒移動、到站分鐘合理；點輕軌站站牌，面板標 Live 且列出輕軌班次；
   規劃一個第一段坐輕軌的方案（例如 Downtown → South Hills Village），卡片的首班車標「Live」（若一直是 scheduled，代表輕軌 rt 和 GTFS route_id 不同）
+- [ ] F18 關掉網路（飛航模式）30 秒內，附近班次上方出現「You're offline. Showing departures from …」且列表還在；打開一班車的詳情時關網路，出現「You're offline. Showing data from …」；
+  開網路後自動恢復。在 App 內輸入亂打的 key 存檔（Save without checking），附近班次出現換 key 的說明。
+  背景更新：`adb shell dumpsys jobscheduler | grep -A5 openprt` 看得到每天一次、需要網路的工作；
+  想立刻測可用 `adb shell cmd jobscheduler run -f org.openprt.app <job id>`（0.1.30 以前裝的手機沒有匯入時間，第一次執行就會重新下載）
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -861,3 +892,9 @@
   - adb 沒有試，沒有裝到手機；需要實機驗收（見清單 F17 以及 F23、F27、0.1.28、F22、F24）
   - F19 仍等使用者回答 questions
   - 下一步：F18 可靠性與離線狀態
+- 2026-10-04：**F18 完成**（版號 0.1.31，tag `v0.1.31` 只在本機）。離線、key 無效、每日配額用完各有說明並保留上次資料；GTFS 匯入時間記錄、
+  每天檢查、滿 7 天在有網路時背景重新下載（WorkManager），與首次匯入共用 `GtfsUpdater` 的鎖；更新後規劃快取失效，見 F18 段落。
+  開工前 verify 通過；完成後 verify 通過（745 個測試，lint 0 issue）
+  - 沒有裝到手機；需要實機驗收（見清單 F18 以及 F17、F23、F27、0.1.28、F22、F24）
+  - 「時刻表過期」的提示畫面沒做（見 F18 段落最後一項）
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
