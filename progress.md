@@ -463,6 +463,20 @@
 - 圖例新增 `RINGED_CENTER_DOT`（起點）與 `PIN`（目的地）；共 786 個測試，verify 通過。
   裝到手機，深色主題實際操作 Cathedral of Learning → CMU，截圖確認紫點、紅色圖釘與鏡頭範圍正確
 
+## Apple 簡約風（0.1.37，使用者 2026-10-05 要求）
+
+- 使用者要「參考蘋果簡約風重新設計」，並把 README 改成英文（面向匹茲堡使用者）。取代 F21 的 PRT 深藍 + 金黃：
+  只留**一個藍色重點色**（淺色 `#0066CC`、深色 `#4DA3FF`，是 iOS 系統藍調暗到 AA），金色只剩「上車站」（地圖上車站、時間軸、Board here）
+- 顏色在 `ui/theme/Color.kt`：iOS grouped 背景（淺色 `#F2F2F7` 底 + 白卡片、深色黑底 + `#1C1C1E` 卡片），次要文字 `#636366` / `#AEAEB2`，
+  `surfaceTint` 等於 surface，浮起來的元件靠陰影不靠染色；`ThemeContrastTest` 的 28 組對比都過
+- `ui/theme/Type.kt`：標題 SemiBold、字距略收；圓角 6 / 10 / 12 / 16 / 24 dp。字型仍用手機的（SF Pro 不能隨 Android App 散布）
+- 元件：卡片拿掉外框；上方列白底（深色黑底）黑字；地圖兩顆按鈕改成白色圓形、藍色圖示；搜尋框白卡片加陰影；
+  Leave now / Depart at / Arrive by 改成 iOS 分段控制（灰色軌道、選中的是白色、沒有勾勾）
+- 狀態列圖示改成跟主題（`SystemBarStyle.auto`）：原本上方列是深藍所以一律白色圖示，改白底後看不到
+- 卡片內距試過 16 dp，Robolectric 預設小螢幕上班次詳情的「Board here」被擠出畫面（2 個測試失敗），維持 12 dp
+- 站牌圖示在 zoom 12–15 之間從 0.5 倍放大到原尺寸，規劃方案縮小地圖時不再疊成一團
+- CHANGELOG 從 0.1.37 起用英文寫（release notes 給匹茲堡使用者看），舊段落維持中文
+
 ## 卡片化介面與方向切換（F25 決定）
 
 - 共用元件 `ui/Cards.kt`：`InfoCard`（surface 底 + outlineVariant 外框，兩種主題都分得開）、`MinutesPill`（primaryContainer）、
@@ -784,6 +798,8 @@
 - [x] 0.1.35 起點與終點標記：From 選了地址（例如 Cathedral of Learning）後地圖出現紫色圓點、選了目的地後是紅色圖釘，畫面同時框住兩者；
   淺色主題也看得清楚；圖例有「Starting point you chose」與圖釘
 - [x] 0.1.36 清除起點或目的地：規劃好方案後按任一邊的 ✕，回到一開始的畫面（From: My location、Where to?、附近班次）
+- [ ] 0.1.37 Apple 簡約風：淺色 / 深色主題的主畫面、附近班次、站牌面板、班次詳情、方案列表與方案詳情、API key 畫面看起來一致清爽，
+  文字都讀得清楚；淺色主題頂部的時間與電量看得到；縮小地圖時站牌不會疊成一團
 
 ## 狀態
 
@@ -1068,3 +1084,5 @@
   - 和 F22 step「清除起點回到 My location 並以目前位置重新規劃」的關係：`TripPlanViewModel.onEndpointsChanged(null, 目的地)` 仍會以目前位置規劃
     （對調回 My location 時用到，測試還在），只是畫面上的 ✕ 不再走這條路；這是使用者的新決定，feature_list 的 step 沒改
   - 本機 tag `v0.1.34`、`v0.1.35`、`v0.1.36` 都沒推；全部驗收通過後可以升 0.2.0
+- 2026-10-05：**0.1.37 Apple 簡約風 + 英文 README**（使用者要求），見「Apple 簡約風」。verify 通過（788 個測試，lint 0 issue）；
+  裝到手機，淺色與深色主題截圖確認主畫面、方案列表、分段控制與狀態列。**等使用者看過 0.1.37 再升 0.2.0**；本機 tag `v0.1.34`–`v0.1.37` 都沒推
