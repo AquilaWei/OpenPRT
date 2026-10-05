@@ -649,6 +649,13 @@
     一次規劃不會混用兩份時刻表
   - 新增 2 個測試（全部 768 個）：讀到一半時另一條執行緒匯入新 feed，方案仍是開始讀的那份（拿掉 transaction 後確認會失敗）；
     那次匯入完成後下一次規劃改用新 feed。原本用假 `feedVersion` 的測試改成真的重新匯入
+- **第四次 review 修正（2026-10-05）**：站牌時刻表與可選日期也是連續好幾個查詢，背景更新在中間提交會混用新舊資料
+  （班次暫時消失、路線名稱或日期範圍錯）。改成：
+  - `RoomStopScheduleSource(database)` 一次查詢（站牌、三個服務日的日曆與班次、路線名稱）放在同一個 `withTransaction`
+  - `GtfsTimetable(database).departuresAfter` 的日曆與班次查詢也包在 transaction 裡（單獨呼叫時同樣一致；巢狀時沿用外層的）
+  - `RoomTimetableDatesSource(database)` 起日、迄日同一個 transaction 讀；`OpenPrtApplication.gtfsDatabase` 改成公開給 `MainActivity` 用
+  - 新增 3 個測試（全部 771 個）：讀到一半時另一條執行緒匯入新 feed（日期往後一週／T1 提早一小時／路線改名），結果仍是開始讀的那份；
+    三個都在拿掉 transaction 後確認會失敗
 
 ## 給下一個 session 的注意事項
 
@@ -934,5 +941,10 @@
 - 2026-10-05：**F18 第三次 review 修正**：規劃器一次建網路的所有查詢與 import id 放在同一個資料庫 transaction，背景更新不會讓方案混用新舊時刻表；
   快取改用資料庫裡的 import id 判斷版本。見 F18 段落「第三次 review 修正」。verify 通過（768 個測試，lint 0 issue）；沒有裝到手機
   - schema 升到 4，已裝的手機升級後會重新下載一次時刻表
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 第四次 review 修正**：站牌時刻表（`RoomStopScheduleSource`、`GtfsTimetable`）與可選日期（`RoomTimetableDatesSource`）
+  的多次查詢放進同一個資料庫 transaction，背景更新不會讓它們混用新舊時刻表。見 F18 段落「第四次 review 修正」。
+  verify 通過（771 個測試，lint 0 issue）；沒有裝到手機
   - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
   - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
