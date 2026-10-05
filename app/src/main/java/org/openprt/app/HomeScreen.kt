@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
@@ -176,7 +177,13 @@ fun HomeScreen(
         topBar = {
             val brand = LocalOpenPrtColors.current
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                // A plain bar with a semibold title, like an iOS navigation bar.
+                title = {
+                    Text(
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = brand.appBar,
                     titleContentColor = brand.onAppBar,
@@ -251,10 +258,12 @@ fun HomeScreen(
                     )
                 )
             }
+            // Round map buttons in the card color with a soft shadow, like Apple Maps'.
             SmallFloatingActionButton(
                 onClick = { legendOpen = true },
+                shape = CircleShape,
                 containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
+                contentColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
             ) {
                 Icon(
@@ -264,8 +273,9 @@ fun HomeScreen(
             }
             FloatingActionButton(
                 onClick = onRelocate,
-                containerColor = LocalOpenPrtColors.current.accent,
-                contentColor = LocalOpenPrtColors.current.onAccent,
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             ) {
                 Icon(

@@ -23,13 +23,18 @@ fun ThemeMode.isDark(systemDark: Boolean): Boolean = when (this) {
     ThemeMode.DARK -> true
 }
 
-/** OpenPRT's navy-and-gold Material theme, light or dark as [mode] says. */
+/** OpenPRT's plain, Apple-style Material theme, light or dark as [mode] says. */
 @Composable
 fun OpenPrtTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
     val dark = mode.isDark(isSystemInDarkTheme())
     CompositionLocalProvider(
         LocalOpenPrtColors provides if (dark) DarkBrandColors else LightBrandColors
     ) {
-        MaterialTheme(colorScheme = if (dark) DarkColors else LightColors, content = content)
+        MaterialTheme(
+            colorScheme = if (dark) DarkColors else LightColors,
+            typography = OpenPrtTypography,
+            shapes = OpenPrtShapes,
+            content = content
+        )
     }
 }

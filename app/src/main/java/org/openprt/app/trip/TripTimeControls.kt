@@ -10,6 +10,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -59,12 +60,30 @@ fun TripTimeControls(
         modifier = modifier.padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // An iOS-style segmented control: a gray track with the chosen option raised in the card
+        // color, no check mark and no borders between options.
+        val track = MaterialTheme.colorScheme.surfaceVariant
+        val segmentColors = SegmentedButtonDefaults.colors(
+            activeContainerColor = MaterialTheme.colorScheme.surface,
+            activeContentColor = MaterialTheme.colorScheme.onSurface,
+            activeBorderColor = track,
+            inactiveContainerColor = track,
+            inactiveContentColor = MaterialTheme.colorScheme.onSurface,
+            inactiveBorderColor = track
+        )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             TripTimeMode.entries.forEachIndexed { index, mode ->
                 SegmentedButton(
                     selected = mode == time.mode,
                     onClick = { actions.setTimeMode(mode) },
-                    shape = SegmentedButtonDefaults.itemShape(index, TripTimeMode.entries.size)
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index,
+                        TripTimeMode.entries.size,
+                        MaterialTheme.shapes.small
+                    ),
+                    colors = segmentColors,
+                    border = SegmentedButtonDefaults.borderStroke(track, 2.dp),
+                    icon = {}
                 ) {
                     Text(stringResource(mode.labelRes()))
                 }

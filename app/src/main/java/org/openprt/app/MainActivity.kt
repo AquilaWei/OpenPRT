@@ -129,16 +129,12 @@ class MainActivity : ComponentActivity() {
             val tripTimeState by tripPlanViewModel.time.collectAsStateWithLifecycle()
             val apiKeyViewModel: ApiKeyViewModel = viewModel(factory = viewModelFactory)
             val apiKeyState by apiKeyViewModel.state.collectAsStateWithLifecycle()
-            // Bar icons follow the app's theme, which may differ from the phone's. The home
-            // screen's top bar is navy in the light theme too, so its status icons stay white.
-            val lightStatusIcons = dark || !apiKeyState.visible
-            LaunchedEffect(dark, lightStatusIcons) {
+            // Bar icons follow the app's theme, which may differ from the phone's: every screen,
+            // the home screen's plain top bar included, is light in the light theme.
+            LaunchedEffect(dark) {
                 enableEdgeToEdge(
-                    statusBarStyle = if (lightStatusIcons) {
-                        SystemBarStyle.dark(Color.TRANSPARENT)
-                    } else {
-                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                    },
+                    statusBarStyle =
+                        SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
                     navigationBarStyle =
                         SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 )

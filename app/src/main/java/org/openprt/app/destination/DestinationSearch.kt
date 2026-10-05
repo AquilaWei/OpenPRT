@@ -71,8 +71,8 @@ fun DestinationSearch(
     Surface(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         shape = MaterialTheme.shapes.large,
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 6.dp
     ) {
         Column {
             val destination = state.destination

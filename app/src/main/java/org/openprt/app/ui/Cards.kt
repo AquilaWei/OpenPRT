@@ -1,7 +1,6 @@
 package org.openprt.app.ui
 
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,8 +30,9 @@ import androidx.compose.ui.unit.dp
 import org.openprt.app.R
 
 /**
- * One block of related information in a bottom-sheet panel. Outlined so cards stay apart from
- * each other and from the sheet in both themes. With [onClick] the whole card can be tapped.
+ * One block of related information in a bottom-sheet panel: a borderless card in the surface
+ * color on the sheet's grouped background, like an iOS inset list. With [onClick] the whole
+ * card can be tapped.
  */
 @Composable
 fun InfoCard(
@@ -40,12 +40,11 @@ fun InfoCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = MaterialTheme.shapes.medium
     val colors = CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface
     )
-    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     val inner: @Composable ColumnScope.() -> Unit = {
         Column(modifier = Modifier.padding(12.dp), content = content)
     }
@@ -54,7 +53,6 @@ fun InfoCard(
             modifier.fillMaxWidth(),
             shape = shape,
             colors = colors,
-            border = border,
             content = inner
         )
     } else {
@@ -63,7 +61,6 @@ fun InfoCard(
             modifier = modifier.fillMaxWidth(),
             shape = shape,
             colors = colors,
-            border = border,
             content = inner
         )
     }

@@ -39,6 +39,7 @@ import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineDasharray
@@ -82,6 +83,11 @@ private const val USER_HALO_OPACITY = 0.25f
 private const val FOLLOW_ZOOM = 16.0
 
 private const val ORIGIN_CENTER_RADIUS = 4f
+
+// Stop signs are full size from street level (FOLLOW_ZOOM is 16) and half size at city level.
+private const val SMALL_SIGN_ZOOM = 12f
+private const val SMALL_SIGN_SCALE = 0.5f
+private const val FULL_SIGN_ZOOM = 15f
 
 // Half a 48 dp touch target, so a stop dot is as easy to hit as a button.
 private val STOP_TOUCH_RADIUS = 24.dp
@@ -468,10 +474,21 @@ private fun addTripLayers(style: Style, palette: MapPalette) {
     )
 }
 
-/** Every stop sign is drawn, even crowded together downtown, since each one can be tapped. */
+/**
+ * Every stop sign is drawn, even crowded together downtown, since each one can be tapped. Zoomed
+ * out to frame a trip, the signs shrink so they do not pile up into one blob.
+ */
 private fun stopSignLayer(id: String, source: String, image: String) =
     SymbolLayer(id, source).withProperties(
         iconImage(image),
+        iconSize(
+            Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(SMALL_SIGN_ZOOM, SMALL_SIGN_SCALE),
+                Expression.stop(FULL_SIGN_ZOOM, 1f)
+            )
+        ),
         iconAllowOverlap(true),
         iconIgnorePlacement(true)
     )
