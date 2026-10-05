@@ -1019,3 +1019,12 @@
     `gh secret set OPENPRT_KEY_PASSWORD -R AquilaWei/OpenPRT`；金鑰檔另外備份
   - 設好後：`git push origin v0.1.33` → 確認 release workflow 綠燈、Release 有 4 個 APK 與 4 個 `.sha256` → 從 Release 安裝 `arm64-v8a` 並啟動，
     F19 才改 `passes: true`，並拿掉 README「下載安裝」與 CHANGELOG 的「還不能下載」提醒
+- 2026-10-05：**第一次發佈 v0.1.33 成功**（使用者要求 session 直接執行）：https://github.com/AquilaWei/OpenPRT/releases/tag/v0.1.33
+  - session 用 `keytool` 產生 PKCS12 金鑰（RSA 4096，alias `openprt`，密碼是 `openssl rand` 產生的亂數），金鑰與密碼存在本機 `~/.openprt-release/`（權限 700 / 600，不在 repo 裡）；
+    用 `gh secret set` 從檔案寫入四個簽章 secret，密碼沒有出現在指令、log 或對話。**使用者要自己把這個資料夾備份到別處**，弄丟就不能發佈能覆蓋安裝的更新
+  - 憑證 SHA-256：`96:74:7A:54:49:30:3A:3F:4E:45:63:82:B1:11:7E:28:C0:3C:E8:53:72:11:97:B2:62:5E:4A:FE:E8:A1:2D:A7`
+  - release workflow 第一次在 GitHub 上跑就綠燈（`apksigner` 路徑、`gh release create --verify-tag` 的假設都成立）；Release 有 4 個 APK 與 4 個 `.sha256`，
+    下載回本機 `sha256sum -c` 全部 OK，`apksigner verify` 的簽章憑證與上面一致
+  - README 拿掉「還沒有可下載的版本」，Releases 連到 repo；順便把 README 的 GTFS 連結換成 PRT 開發者資源頁（舊網址 0.1.33 起就是 404）、開頭版號改 0.1.33
+  - **還沒裝到手機**：手機上是 debug 版，簽章不同要先解除安裝，會清掉 App 內的 key 與時刻表；問使用者要不要這樣做，沒有回答，所以沒動手機。
+    F19 維持 `passes: false`，等從 Release 安裝 `arm64-v8a` 並啟動成功才改
