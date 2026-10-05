@@ -1009,3 +1009,13 @@
   - 4 個新測試，拿掉修正時 4 個都失敗；完整 verify 775 個測試通過。實機上裝 debug 版後站牌與附近即時班次都出來了
   - 0.1.32 從沒發佈，本機 tag `v0.1.32` 不會再用；第一次發佈改用 `v0.1.33`
   - 下一步：使用者設定簽章 secret → 推 `v0.1.33` → 確認 Release 有 4 個 APK 與 4 個 `.sha256` → 從 Release 安裝 `arm64-v8a` 並啟動，F19 才算完成
+- 2026-10-05：**F19 仍等簽章 secret**，沒有改程式。開工前 verify 通過；repo 的 CI 綠燈，`gh secret list` 是空的，還沒有任何 Release
+  - 問使用者要自己設 secret 還是讓 session 產生金鑰並設定，沒有回答（非互動 session）；簽章金鑰要使用者自己保管備份，所以沒有代為產生、沒推 tag
+  - 本機 tag `v0.1.33` 在 `24813c8`（0.1.33 的 CHANGELOG 已在），推送時用它即可，不用移動
+  - 使用者自己執行（密碼由 `gh` 互動輸入，不會出現在指令或 log）：
+    `keytool -genkeypair -keystore ~/openprt-release.jks -alias openprt -keyalg RSA -keysize 4096 -validity 10000`、
+    `base64 -w0 ~/openprt-release.jks | gh secret set OPENPRT_KEYSTORE_BASE64 -R AquilaWei/OpenPRT`、
+    `gh secret set OPENPRT_KEYSTORE_PASSWORD -R AquilaWei/OpenPRT`、`gh secret set OPENPRT_KEY_ALIAS -R AquilaWei/OpenPRT`（輸入 `openprt`）、
+    `gh secret set OPENPRT_KEY_PASSWORD -R AquilaWei/OpenPRT`；金鑰檔另外備份
+  - 設好後：`git push origin v0.1.33` → 確認 release workflow 綠燈、Release 有 4 個 APK 與 4 個 `.sha256` → 從 Release 安裝 `arm64-v8a` 並啟動，
+    F19 才改 `passes: true`，並拿掉 README「下載安裝」與 CHANGELOG 的「還不能下載」提醒
