@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.openprt.app.data.gtfs.RideStopsSource
 import org.openprt.app.data.gtfs.TimetableDatesSource
@@ -226,6 +227,10 @@ interface TripPlanActions {
  * the days the timetable covers are read from [timetableDates] the first time a time is chosen.
  * Once they are known, a chosen time on a day outside them moves to the nearest covered day at
  * the same time of day, read in [zone], so no search runs on a day with no timetable.
+ *
+ * While the panel says the timetable is missing, [importFailures] switches it between "still
+ * downloading" and "download failed" as the first download fails or starts again, and
+ * [timetableUpdates] plans again once a download succeeds.
  */
 class TripPlanViewModel(
     private val source: TripPlanSource,
@@ -235,7 +240,8 @@ class TripPlanViewModel(
     private val timetableDates: TimetableDatesSource = TimetableDatesSource { null },
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val walkRouter: WalkRouter = WalkRouter { from, to -> WalkPath.Straight(from, to) },
-    private val timetableUpdates: Flow<Any?> = emptyFlow()
+    private val timetableUpdates: Flow<Any?> = emptyFlow(),
+    private val importFailures: Flow<Boolean> = emptyFlow()
 ) : ViewModel(),
     TripPlanActions {
     private val mutableState = MutableStateFlow<TripPlanUiState?>(null)
@@ -266,6 +272,17 @@ class TripPlanViewModel(
                     loadTimetableDates()
                 }
                 if (mutableState.value is TripPlanUiState.NoTimetable) retry()
+            }
+        }
+        viewModelScope.launch {
+            importFailures.collect { failed ->
+                mutableState.update { state ->
+                    if (state is TripPlanUiState.NoTimetable) {
+                        state.copy(importFailed = failed)
+                    } else {
+                        state
+                    }
+                }
             }
         }
     }

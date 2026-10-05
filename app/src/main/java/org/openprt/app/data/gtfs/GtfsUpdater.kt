@@ -58,13 +58,14 @@ class GtfsUpdater(
      */
     val lastImport: StateFlow<Instant?> = mutableLastImport.asStateFlow()
 
+    private val mutableLastImportFailed = MutableStateFlow(false)
+
     /**
      * True when the most recent import, finished or not, failed; false while one is running and
-     * after one succeeds. With an empty database this tells "still downloading" from "failed".
+     * after one succeeds. With an empty database this tells "still downloading" from "failed",
+     * and screens collect it to switch from one to the other while they stay open.
      */
-    @Volatile
-    var lastImportFailed: Boolean = false
-        private set
+    val lastImportFailed: StateFlow<Boolean> = mutableLastImportFailed.asStateFlow()
 
     /**
      * Imports the feed when the database has no stops (first launch, or after a schema change
@@ -94,11 +95,11 @@ class GtfsUpdater(
     }
 
     private suspend fun importAndRecord(): GtfsImportResult {
-        lastImportFailed = false
+        mutableLastImportFailed.value = false
         val result = try {
             importer.import()
         } catch (e: IOException) {
-            lastImportFailed = true
+            mutableLastImportFailed.value = true
             throw e
         }
         if (result is GtfsImportResult.Success) {
@@ -106,7 +107,7 @@ class GtfsUpdater(
             log.record(now)
             mutableLastImport.value = now
         } else {
-            lastImportFailed = true
+            mutableLastImportFailed.value = true
         }
         return result
     }

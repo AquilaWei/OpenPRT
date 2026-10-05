@@ -153,7 +153,7 @@ class GtfsUpdaterTest {
 
         updater.importIfEmpty()
 
-        assertTrue(updater.lastImportFailed)
+        assertTrue(updater.lastImportFailed.value)
     }
 
     @Test
@@ -164,7 +164,7 @@ class GtfsUpdaterTest {
 
         updater.importIfEmpty()
 
-        assertFalse(updater.lastImportFailed)
+        assertFalse(updater.lastImportFailed.value)
     }
 
     @Test

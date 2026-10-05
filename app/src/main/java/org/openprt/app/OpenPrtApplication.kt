@@ -62,7 +62,7 @@ class OpenPrtApplication :
         TripPlanRepository(
             RoomTransitNetworkSource(gtfsDatabase.gtfsDao()),
             feedVersion = { gtfsUpdater.lastImport.value },
-            importFailed = { gtfsUpdater.lastImportFailed }
+            importFailed = { gtfsUpdater.lastImportFailed.value }
         )
     }
 

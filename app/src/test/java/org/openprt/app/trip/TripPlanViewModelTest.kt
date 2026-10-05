@@ -848,6 +848,64 @@ class TripPlanViewModelTest {
     }
 
     @Test
+    fun importFails_whileShowingStillDownloading_showsTheDownloadFailed() = runTest(dispatcher) {
+        val failures = MutableStateFlow(false)
+        val viewModel = TripPlanViewModel(
+            FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable(false))),
+            NO_PREDICTIONS,
+            STRAIGHT_RIDES,
+            CLOCK,
+            importFailures = failures
+        )
+        viewModel.onLocationChanged(HERE)
+        viewModel.onDestinationChanged(THERE)
+        advanceUntilIdle()
+
+        failures.value = true
+        advanceUntilIdle()
+
+        assertEquals(TripPlanUiState.NoTimetable(importFailed = true), viewModel.state.value)
+    }
+
+    @Test
+    fun importStartsAgain_whileShowingTheDownloadFailed_showsStillDownloading() =
+        runTest(dispatcher) {
+            val failures = MutableStateFlow(true)
+            val viewModel = TripPlanViewModel(
+                FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable(true))),
+                NO_PREDICTIONS,
+                STRAIGHT_RIDES,
+                CLOCK,
+                importFailures = failures
+            )
+            viewModel.onLocationChanged(HERE)
+            viewModel.onDestinationChanged(THERE)
+            advanceUntilIdle()
+
+            failures.value = false
+            advanceUntilIdle()
+
+            assertEquals(TripPlanUiState.NoTimetable(importFailed = false), viewModel.state.value)
+        }
+
+    @Test
+    fun importFails_withoutADestination_staysEmpty() = runTest(dispatcher) {
+        val failures = MutableStateFlow(false)
+        val viewModel = TripPlanViewModel(
+            FakePlanSource(),
+            NO_PREDICTIONS,
+            STRAIGHT_RIDES,
+            CLOCK,
+            importFailures = failures
+        )
+
+        failures.value = true
+        advanceUntilIdle()
+
+        assertEquals(null, viewModel.state.value)
+    }
+
+    @Test
     fun setTimeMode_departAtTodayBeforeTheTimetable_plansOnItsFirstDay() = runTest(dispatcher) {
         val source = FakePlanSource()
         val viewModel = TripPlanViewModel(

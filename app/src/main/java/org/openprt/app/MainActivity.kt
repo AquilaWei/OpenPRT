@@ -102,7 +102,8 @@ class MainActivity : ComponentActivity() {
                     Clock.systemUTC(),
                     RoomTimetableDatesSource(app.gtfsDao),
                     walkRouter = app.walkRouter,
-                    timetableUpdates = app.gtfsUpdater.lastImport
+                    timetableUpdates = app.gtfsUpdater.lastImport,
+                    importFailures = app.gtfsUpdater.lastImportFailed
                 )
             }
             initializer { ApiKeyViewModel(app.apiKeySettings, TrueTimeClient.keyChecker()) }
