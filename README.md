@@ -1,6 +1,6 @@
 # OpenPRT
 
-![version](https://img.shields.io/badge/version-0.1.32-blue)
+![version](https://img.shields.io/badge/version-0.1.33-blue)
 
 **匹茲堡公車（Pittsburgh Regional Transit, PRT）乘車資訊 App**，先做 Android，iOS 之後再處理。
 
