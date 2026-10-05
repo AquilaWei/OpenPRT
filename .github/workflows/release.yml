@@ -1,7 +1,7 @@
 name: Release
 
 # Publishes signed APKs for a version tag. Push the tag only after the version bump commit:
-#   git tag v0.1.31 && git push origin v0.1.31
+#   version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)" && git tag "v$version" && git push origin "v$version"
 on:
   push:
     tags:

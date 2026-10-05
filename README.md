@@ -22,6 +22,9 @@
 
 ## 下載安裝
 
+> **還沒有可下載的版本**：專案還沒放上 GitHub，release workflow 也還沒實際跑過。第一次發佈並驗證能安裝、啟動之前，請照下方「需求」與「建置與測試」自己建置安裝。
+> 以下是發佈後的下載方式。
+
 1. 到 GitHub 專案的 **Releases** 頁面，打開最新版本
 2. 下載符合手機的 APK：
    - **`OpenPRT-vX.Y.Z-arm64-v8a.apk`**：近幾年的 Android 手機幾乎都是這個（最小）
@@ -94,10 +97,10 @@ sdk.dir=/path/to/Android/Sdk
 附上 SHA256，並用 CHANGELOG 對應版本的段落當 release notes 建立 GitHub Release。
 
 1. 改 `gradle.properties` 的版號與 README 的版本 badge，CHANGELOG 加上該版段落（`scripts/check-version.sh` 會檢查 badge）
-2. 推送 tag（tag 必須等於 `v` + `VERSION_NAME`，否則 workflow 會失敗）：
+2. 推送 tag（tag 必須等於 `v` + `VERSION_NAME`，否則 workflow 會失敗；下面的指令直接從 `gradle.properties` 讀版號）：
 
    ```bash
-   git tag v0.1.31 && git push origin v0.1.31
+   version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)" && git tag "v$version" && git push origin "v$version"
    ```
 
 **第一次發佈前**，在 repo 的 *Settings → Secrets and variables → Actions* 設定以下 secrets（簽章金鑰**不要 commit**，`.gitignore` 已排除 `*.jks` / `*.keystore`）：
