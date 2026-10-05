@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
             initializer {
                 MapViewModel(
                     app.nearbyStopRepository,
-                    timetableDates = RoomTimetableDatesSource(app.gtfsDao),
+                    timetableDates = RoomTimetableDatesSource(app.gtfsDatabase),
                     timetableUpdates = app.gtfsUpdater.lastImport
                 )
             }
@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
             initializer {
                 StopDeparturesViewModel(
                     predictions,
-                    RoomStopScheduleSource(app.gtfsDao),
+                    RoomStopScheduleSource(app.gtfsDatabase),
                     RoomScheduledTripSource(app.gtfsDao),
                     Clock.systemUTC()
                 )
@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
                     predictions,
                     app.rideStops,
                     Clock.systemUTC(),
-                    RoomTimetableDatesSource(app.gtfsDao),
+                    RoomTimetableDatesSource(app.gtfsDatabase),
                     walkRouter = app.walkRouter,
                     timetableUpdates = app.gtfsUpdater.lastImport,
                     importFailures = app.gtfsUpdater.lastImportFailed

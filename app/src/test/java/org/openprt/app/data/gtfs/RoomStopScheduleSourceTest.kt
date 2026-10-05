@@ -5,7 +5,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
 import java.time.LocalDate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okio.Buffer
@@ -36,13 +42,9 @@ class RoomStopScheduleSourceTest {
                 GtfsDatabase::class.java
             )
             .build()
-        source = RoomStopScheduleSource(database.gtfsDao())
+        source = RoomStopScheduleSource(database)
         server.enqueue(MockResponse.Builder().body(Buffer().write(zipOf(fixtureFeedFiles))).build())
-        GtfsImporter(
-            database,
-            downloadDir = temporaryFolder.root,
-            feedUrl = server.url("/GTFS.zip")
-        ).import()
+        importer().import()
     }
 
     @After
@@ -74,6 +76,19 @@ class RoomStopScheduleSourceTest {
             departures
         )
     }
+
+    // Thursday 07:15; the new feed renames route 61C to 61X.
+    @Test
+    fun departures_whileAnImportCommitsBetweenReads_namesRoutesOfTheTimetableItStartedReading() =
+        runTest {
+            val dao = ImportingAfterFirstDeparturesDao(database.gtfsDao())
+
+            val departures = RoomStopScheduleSource(database, dao)
+                .departures("2635", Instant.parse("2026-10-01T11:15:00Z"), 1)
+            dao.import!!.await()
+
+            assertEquals(listOf("61C"), departures.map { it.route })
+        }
 
     // Friday 00:45: Thursday's T4 still runs, at 24:50 on Thursday's service day.
     @Test
@@ -156,5 +171,45 @@ class RoomStopScheduleSourceTest {
     @Test
     fun getStopsByTrueTimeId_stopIdOfCodedStop_findsNothing() = runTest {
         assertEquals(emptyList<StopEntity>(), database.gtfsDao().getStopsByTrueTimeId("10"))
+    }
+
+    private fun importer() = GtfsImporter(
+        database,
+        downloadDir = temporaryFolder.root,
+        feedUrl = server.url("/GTFS.zip")
+    )
+
+    /**
+     * Starts importing [renamedRouteFeed] after the first service day's departures are read, and
+     * gives the import a second to commit before the remaining reads. Reads sharing a transaction
+     * hold the import back until they finish.
+     */
+    private inner class ImportingAfterFirstDeparturesDao(private val real: GtfsDao) :
+        GtfsDao by real {
+        var import: Deferred<GtfsImportResult>? = null
+
+        override suspend fun getDeparturesAfter(
+            stopId: String,
+            afterSeconds: Int,
+            serviceIds: Collection<String>,
+            limit: Int
+        ): List<StopDepartureRow> {
+            val departures = real.getDeparturesAfter(stopId, afterSeconds, serviceIds, limit)
+            if (import == null) {
+                server.enqueue(
+                    MockResponse.Builder().body(Buffer().write(zipOf(renamedRouteFeed))).build()
+                )
+                import = CoroutineScope(Dispatchers.IO).async { importer().import() }
+                withContext(Dispatchers.IO) { withTimeoutOrNull(1_000) { import!!.await() } }
+            }
+            return departures
+        }
+    }
+
+    private companion object {
+        val renamedRouteFeed = fixtureFeedFiles + (
+            "routes.txt" to fixtureFeedFiles.getValue("routes.txt")
+                .replace("61C,PRT,61C,", "61C,PRT,61X,")
+            )
     }
 }

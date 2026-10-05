@@ -28,7 +28,7 @@ import org.openprt.app.walk.WalkRouter
 class OpenPrtApplication :
     Application(),
     Configuration.Provider {
-    private val gtfsDatabase: GtfsDatabase by lazy { GtfsDatabase.create(this) }
+    val gtfsDatabase: GtfsDatabase by lazy { GtfsDatabase.create(this) }
 
     val gtfsDao: GtfsDao get() = gtfsDatabase.gtfsDao()
 

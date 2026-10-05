@@ -1,5 +1,6 @@
 package org.openprt.app.data.gtfs
 
+import androidx.room.withTransaction
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -31,12 +32,20 @@ fun interface TimetableDatesSource {
     suspend fun dates(): ClosedRange<LocalDate>?
 }
 
-/** [TimetableDatesSource] over the imported GTFS calendar. */
-class RoomTimetableDatesSource(private val dao: GtfsDao) : TimetableDatesSource {
-    override suspend fun dates(): ClosedRange<LocalDate>? {
-        val first = dao.getFirstServiceDate() ?: return null
-        val last = dao.getLastServiceDate() ?: return null
-        return first..last
+/**
+ * [TimetableDatesSource] over the imported GTFS calendar in [database]. Both ends are read in one
+ * transaction, so a background import committing meanwhile cannot pair one feed's first day with
+ * another's last.
+ */
+class RoomTimetableDatesSource(
+    private val database: GtfsDatabase,
+    // Tests wrap the DAO to act between its reads.
+    private val dao: GtfsDao = database.gtfsDao()
+) : TimetableDatesSource {
+    override suspend fun dates(): ClosedRange<LocalDate>? = database.withTransaction {
+        val first = dao.getFirstServiceDate() ?: return@withTransaction null
+        val last = dao.getLastServiceDate() ?: return@withTransaction null
+        first..last
     }
 }
 
@@ -45,9 +54,13 @@ class RoomTimetableDatesSource(private val dao: GtfsDao) : TimetableDatesSource 
  *
  * Queries one service day at a time. A trip of yesterday's service day can still run after
  * midnight (times past 24:00:00), so a caller asking "what leaves after 00:30 today" should also
- * ask for yesterday's service day after 24:30:00.
+ * ask for yesterday's service day after 24:30:00. The reads of one call share a transaction, so a
+ * background import committing meanwhile cannot mix one feed's calendar with another's trips.
  */
-class GtfsTimetable(private val dao: GtfsDao) {
+class GtfsTimetable(
+    private val database: GtfsDatabase,
+    private val dao: GtfsDao = database.gtfsDao()
+) {
     /**
      * Up to [limit] departures from [stopId] at or after [afterSeconds] on [serviceDate],
      * earliest first (ties by route, then trip). Skips stops where riders cannot board, such as
@@ -58,14 +71,14 @@ class GtfsTimetable(private val dao: GtfsDao) {
         serviceDate: LocalDate,
         afterSeconds: Int,
         limit: Int = DEFAULT_LIMIT
-    ): List<ScheduledDeparture> {
+    ): List<ScheduledDeparture> = database.withTransaction {
         val serviceIds = activeServiceIds(
             serviceDate,
             dao.getCalendarsCovering(serviceDate),
             dao.getCalendarDatesOn(serviceDate)
         )
-        if (serviceIds.isEmpty()) return emptyList()
-        return dao.getDeparturesAfter(stopId, afterSeconds, serviceIds, limit).map {
+        if (serviceIds.isEmpty()) return@withTransaction emptyList()
+        dao.getDeparturesAfter(stopId, afterSeconds, serviceIds, limit).map {
             ScheduledDeparture(
                 tripId = it.tripId,
                 routeId = it.routeId,

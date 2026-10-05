@@ -1,5 +1,6 @@
 package org.openprt.app.data.gtfs
 
+import androidx.room.withTransaction
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -59,12 +60,25 @@ fun interface StopScheduleSource {
  * [StopScheduleSource] over the imported GTFS timetable. Besides today's service day it also
  * asks yesterday's, whose trips can still run after midnight (times past 24:00:00), and
  * tomorrow's, so the list is not empty once today's last bus has left.
+ *
+ * Every read of one call shares a transaction in [database], so a background import committing
+ * meanwhile cannot pair one feed's stops and calendars with another's trips and routes.
  */
 class RoomStopScheduleSource(
-    private val dao: GtfsDao,
-    private val timetable: GtfsTimetable = GtfsTimetable(dao)
+    private val database: GtfsDatabase,
+    // Tests wrap the DAO to act between its reads.
+    private val dao: GtfsDao = database.gtfsDao(),
+    private val timetable: GtfsTimetable = GtfsTimetable(database, dao)
 ) : StopScheduleSource {
     override suspend fun departures(
+        trueTimeStopId: String,
+        after: Instant,
+        limit: Int
+    ): List<StopScheduleEntry> = database.withTransaction {
+        readDepartures(trueTimeStopId, after, limit)
+    }
+
+    private suspend fun readDepartures(
         trueTimeStopId: String,
         after: Instant,
         limit: Int
