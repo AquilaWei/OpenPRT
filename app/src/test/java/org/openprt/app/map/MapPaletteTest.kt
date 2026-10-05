@@ -92,6 +92,40 @@ class MapPaletteTest {
         assertTrue(contrast(palette.boardingStopGlyph, palette.boardingStop) >= 3.0)
     }
 
+    @Test
+    fun mapPalette_light_originColorIsUnlikeEveryOtherMarker() {
+        val palette = mapPalette(dark = false)
+
+        assertEquals(
+            emptyList<String>(),
+            listOf(
+                palette.user,
+                palette.stop,
+                palette.boardingStop,
+                palette.destination,
+                palette.bus,
+                palette.routeLine
+            ).filter { it == palette.origin }
+        )
+    }
+
+    @Test
+    fun mapPalette_dark_originColorIsUnlikeEveryOtherMarker() {
+        val palette = mapPalette(dark = true)
+
+        assertEquals(
+            emptyList<String>(),
+            listOf(
+                palette.user,
+                palette.stop,
+                palette.boardingStop,
+                palette.destination,
+                palette.bus,
+                palette.routeLine
+            ).filter { it == palette.origin }
+        )
+    }
+
     private fun contrast(foreground: String, background: String): Double {
         val lighter = maxOf(hex(foreground).luminance(), hex(background).luminance())
         val darker = minOf(hex(foreground).luminance(), hex(background).luminance())

@@ -2,6 +2,7 @@ package org.openprt.app.map
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -25,6 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -36,8 +40,14 @@ enum class LegendSymbol {
     /** A small ringed circle, like the stops along a route. */
     DOT,
 
-    /** A large ringed circle, like the user and the destination. */
+    /** A large ringed circle, like the user. */
     LARGE_DOT,
+
+    /** A large ringed circle with a dot of its ring color in the middle, like a chosen start. */
+    RINGED_CENTER_DOT,
+
+    /** A map pin, like the destination. */
+    PIN,
 
     /** A nearby stop's sign: a ringed rounded square with a bus glyph. */
     STOP_SIGN,
@@ -71,6 +81,12 @@ data class LegendEntry(
 fun mapLegend(palette: MapPalette): List<LegendEntry> = listOf(
     LegendEntry(LegendSymbol.LARGE_DOT, R.string.legend_user, palette.user, palette.markerOutline),
     LegendEntry(
+        LegendSymbol.RINGED_CENTER_DOT,
+        R.string.legend_origin,
+        palette.origin,
+        palette.markerOutline
+    ),
+    LegendEntry(
         LegendSymbol.STOP_SIGN,
         R.string.legend_stop,
         palette.stop,
@@ -100,7 +116,7 @@ fun mapLegend(palette: MapPalette): List<LegendEntry> = listOf(
         palette.busGlyph
     ),
     LegendEntry(
-        LegendSymbol.LARGE_DOT,
+        LegendSymbol.PIN,
         R.string.legend_destination,
         palette.destination,
         palette.markerOutline
@@ -148,6 +164,27 @@ private fun LegendSwatch(entry: LegendEntry) {
         LegendSymbol.DOT -> RingedDot(12.dp, 2.dp, color, outline)
 
         LegendSymbol.LARGE_DOT -> RingedDot(20.dp, 3.dp, color, outline)
+
+        // The map's origin layers: a 10 dp dot with a 3 dp ring and a 4 dp center.
+        LegendSymbol.RINGED_CENTER_DOT -> Canvas(Modifier.size(26.dp)) {
+            val radius = size.minDimension / 2
+            drawCircle(outline, radius)
+            drawCircle(color, radius - 3.dp.toPx())
+            drawCircle(outline, 4.dp.toPx())
+        }
+
+        LegendSymbol.PIN -> {
+            val context = LocalContext.current
+            val pin = remember(entry) {
+                pinBitmap(context, entry.color, entry.outline ?: "#FFFFFF").asImageBitmap()
+            }
+            Image(
+                bitmap = pin,
+                // Decorative: the label next to it says what it is.
+                contentDescription = null,
+                modifier = Modifier.size(width = 21.dp, height = 28.dp)
+            )
+        }
 
         LegendSymbol.BUS -> GlyphBadge(28.dp, 2.dp, CircleShape, color, outline, entry.glyph)
 

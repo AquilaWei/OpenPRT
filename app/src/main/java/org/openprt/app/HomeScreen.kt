@@ -149,7 +149,8 @@ fun HomeScreen(
             trip = trip,
             overlayPadding = overlayPadding,
             selectedStop = stopState?.stop?.position.takeIf { detailsState == null },
-            onStopClick = onStopClick
+            onStopClick = onStopClick,
+            origin = destinationState.origin?.location
         )
     }
 ) {

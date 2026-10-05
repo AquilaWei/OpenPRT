@@ -145,6 +145,7 @@
     <string name="legend_title">Map legend</string>
     <string name="legend_close">Close</string>
     <string name="legend_user">You</string>
+    <string name="legend_origin">Starting point you chose</string>
     <string name="legend_stop">Bus stop near you. Tap one to see its buses.</string>
     <string name="legend_route_stop">Stop on the bus\'s route</string>
     <string name="legend_boarding_stop">Stop to board at, or the stop you tapped</string>

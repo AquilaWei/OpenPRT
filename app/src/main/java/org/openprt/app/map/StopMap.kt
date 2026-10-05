@@ -34,6 +34,7 @@ import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconAnchor
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
@@ -61,6 +62,7 @@ private const val ROUTE_STOPS_SOURCE = "route-stops"
 private const val BOARDING_STOP_SOURCE = "boarding-stop"
 private const val BUS_SOURCE = "bus"
 private const val DESTINATION_SOURCE = "destination"
+private const val ORIGIN_SOURCE = "origin"
 private const val SELECTED_STOP_SOURCE = "selected-stop"
 private const val TRIP_WALK_SOURCE = "trip-walks"
 private const val TRIP_RIDE_SOURCE = "trip-rides"
@@ -70,6 +72,7 @@ private const val BUS_BADGE_IMAGE = "bus-badge"
 private const val BUS_HEADING_IMAGE = "bus-heading"
 private const val STOP_SIGN_IMAGE = "stop-sign"
 private const val BOARDING_STOP_SIGN_IMAGE = "boarding-stop-sign"
+private const val DESTINATION_PIN_IMAGE = "destination-pin"
 
 // Wider than the bus badge (18 dp with its ring), so a bus on top of the rider leaves a rim.
 private const val USER_HALO_RADIUS = 26f
@@ -77,6 +80,8 @@ private const val USER_HALO_OPACITY = 0.25f
 
 // Street level: a 400 m stop radius fills most of a phone screen.
 private const val FOLLOW_ZOOM = 16.0
+
+private const val ORIGIN_CENTER_RADIUS = 4f
 
 // Half a 48 dp touch target, so a stop dot is as easy to hit as a button.
 private val STOP_TOUCH_RADIUS = 24.dp
@@ -93,9 +98,10 @@ private val ROUTE_FIT_PADDING = 48.dp
  * The selected [bus], when reported, is drawn on top of everything, the user dot included, as a
  * bus badge with an arrow pointing where it is heading; the camera does not follow it.
  *
- * A [destination], when set, is drawn as a red dot and, while no route is shown, the camera fits
- * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
- * reports the pressed spot through [onLongPress].
+ * A [destination], when set, is drawn as a red pin, and a chosen [origin] (null when the trip
+ * starts from the user) as a ringed dot in its own color. While no route is shown, the camera
+ * fits the origin, or [center] without one, and the destination instead of zooming in on [center].
+ * Long-pressing the map reports the pressed spot through [onLongPress].
  *
  * Tapping near one of [stops] or a stop of [route] reports that stop through [onStopClick];
  * [selectedStop], the stop whose buses are shown, is drawn large like a boarding stop.
@@ -124,7 +130,8 @@ fun StopMap(
     trip: TripMapLayers? = null,
     overlayPadding: PaddingValues = PaddingValues(),
     selectedStop: LatLng? = null,
-    onStopClick: (StopMarker) -> Unit = {}
+    onStopClick: (StopMarker) -> Unit = {},
+    origin: LatLng? = null
 ) {
     val context = LocalContext.current
     val fitPadding = fitPaddingPx(overlayPadding)
@@ -195,6 +202,9 @@ fun StopMap(
     LaunchedEffect(style, destination) {
         style?.setPoints(DESTINATION_SOURCE, listOfNotNull(destination))
     }
+    LaunchedEffect(style, origin) {
+        style?.setPoints(ORIGIN_SOURCE, listOfNotNull(origin))
+    }
     LaunchedEffect(style, userLocation) {
         style?.setPoints(USER_SOURCE, listOfNotNull(userLocation))
     }
@@ -203,18 +213,19 @@ fun StopMap(
     // the search results that covered the map, and the fit has to be redone without them.
     LaunchedEffect(
         center,
+        origin,
         destination,
         route == null,
         trip == null,
-        fitPadding.top.takeIf { destination != null }
+        fitPadding.top.takeIf { destination != null || origin != null }
     ) {
         if (center == null || route != null || trip != null) return@LaunchedEffect
-        val update = if (destination == null || destination == center) {
-            CameraUpdateFactory.newLatLngZoom(center.toMapLibre(), FOLLOW_ZOOM)
+        val points = cameraPoints(center, origin, destination)
+        val update = if (points.size == 1) {
+            CameraUpdateFactory.newLatLngZoom(points.single().toMapLibre(), FOLLOW_ZOOM)
         } else {
             val bounds = LatLngBounds.Builder()
-                .include(center.toMapLibre())
-                .include(destination.toMapLibre())
+                .apply { points.forEach { include(it.toMapLibre()) } }
                 .build()
             fitPadding.boundsUpdate(bounds)
         }
@@ -303,7 +314,7 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
 
 /**
  * Layers are drawn in the order added: route line, stops, route stops, trip, boarding stop,
- * selected stop, destination, user, bus.
+ * selected stop, origin, destination, user, bus.
  */
 private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette) {
     listOf(
@@ -316,6 +327,7 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
         TRIP_BOARDING_SOURCE,
         BOARDING_STOP_SOURCE,
         SELECTED_STOP_SOURCE,
+        ORIGIN_SOURCE,
         DESTINATION_SOURCE,
         BUS_SOURCE,
         USER_SOURCE
@@ -362,9 +374,29 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
     style.addLayer(
         stopSignLayer("selected-stop-layer", SELECTED_STOP_SOURCE, BOARDING_STOP_SIGN_IMAGE)
     )
-    // Red, the usual map color for "where you are going".
+    // A ringed dot with a white center, the usual "start here" mark, in a color no other
+    // marker uses, so a chosen start is not mistaken for the user or a stop.
     style.addLayer(
-        largeMarkerLayer("destination-layer", DESTINATION_SOURCE, palette.destination, palette)
+        largeMarkerLayer("origin-layer", ORIGIN_SOURCE, palette.origin, palette)
+    )
+    style.addLayer(
+        CircleLayer("origin-center-layer", ORIGIN_SOURCE).withProperties(
+            circleRadius(ORIGIN_CENTER_RADIUS),
+            circleColor(palette.markerOutline)
+        )
+    )
+    // A red pin, the usual map mark for "where you are going"; its point sits on the place.
+    style.addImage(
+        DESTINATION_PIN_IMAGE,
+        pinBitmap(context, palette.destination, palette.markerOutline)
+    )
+    style.addLayer(
+        SymbolLayer("destination-layer", DESTINATION_SOURCE).withProperties(
+            iconImage(DESTINATION_PIN_IMAGE),
+            iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+            iconAllowOverlap(true),
+            iconIgnorePlacement(true)
+        )
     )
     // Above the stops but under the bus: when the bus reaches the rider, the bus is what they
     // are watching. The halo is wider than the bus badge, so the rider still shows around it.
