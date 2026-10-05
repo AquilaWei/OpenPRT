@@ -329,4 +329,70 @@ class GtfsImporterTest {
         assertEquals(fixtureStops, dao.getAllStops())
         assertEquals(fixtureRoutes, dao.getAllRoutes())
     }
+
+    private fun importerWithFeedPage() = GtfsImporter(
+        database,
+        downloadDir = temporaryFolder.root,
+        feedUrl = server.url("/fallback/GTFS.zip"),
+        feedPageUrl = server.url("/developer-resources/")
+    )
+
+    private fun enqueuePage(html: String) {
+        server.enqueue(MockResponse.Builder().body(html).build())
+    }
+
+    @Test
+    fun import_whenFeedPageLinksAZip_downloadsTheLinkedZip() = runTest {
+        enqueuePage("""<a href="/contentassets/abc123/gtfs.zip">GTFS</a>""")
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        // Timeouts so a missing request fails the test instead of hanging it.
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertEquals(
+            "/contentassets/abc123/gtfs.zip",
+            server.takeRequest(1, TimeUnit.SECONDS)?.url?.encodedPath
+        )
+    }
+
+    @Test
+    fun import_whenFeedPageLinksAZip_storesItsStops() = runTest {
+        enqueuePage("""<a href="/contentassets/abc123/gtfs.zip">GTFS</a>""")
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        assertEquals(fixtureStops, dao.getAllStops())
+    }
+
+    @Test
+    fun import_whenFeedPageHasNoZipLink_downloadsTheFallbackUrl() = runTest {
+        enqueuePage("""<a href="/about-us/">About</a>""")
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        // Timeouts so a missing request fails the test instead of hanging it.
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertEquals(
+            "/fallback/GTFS.zip",
+            server.takeRequest(1, TimeUnit.SECONDS)?.url?.encodedPath
+        )
+    }
+
+    @Test
+    fun import_whenFeedPageIsMissing_downloadsTheFallbackUrl() = runTest {
+        server.enqueue(MockResponse.Builder().code(404).build())
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        // Timeouts so a missing request fails the test instead of hanging it.
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertEquals(
+            "/fallback/GTFS.zip",
+            server.takeRequest(1, TimeUnit.SECONDS)?.url?.encodedPath
+        )
+    }
 }

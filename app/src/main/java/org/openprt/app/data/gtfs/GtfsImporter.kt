@@ -60,12 +60,17 @@ sealed interface GtfsImportError {
  * slow or failed download never holds the database open. The tables are then emptied and
  * refilled in one transaction, streaming rows in batches because stop_times.txt is about 80 MB
  * of text. A broken feed rolls the transaction back, leaving the previous data untouched.
+ *
+ * PRT publishes each new feed under a new hashed URL, so a fixed URL stops working when the
+ * next feed comes out. With [feedPageUrl] set, the zip link is read from that page before each
+ * download; [feedUrl] is used when the page can't be loaded or has no `gtfs.zip` link.
  */
 class GtfsImporter(
     private val database: GtfsDatabase,
     private val downloadDir: File,
     private val httpClient: OkHttpClient = defaultHttpClient(),
     private val feedUrl: HttpUrl = DEFAULT_FEED_URL.toHttpUrl(),
+    private val feedPageUrl: HttpUrl? = null,
     // The download and the zip are read with blocking I/O.
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
@@ -81,7 +86,8 @@ class GtfsImporter(
     }
 
     private suspend fun download(target: File): GtfsImportError? = try {
-        httpClient.newCall(Request.Builder().url(feedUrl).build()).executeAsync().use { response ->
+        val url = linkedFeedUrl() ?: feedUrl
+        httpClient.newCall(Request.Builder().url(url).build()).executeAsync().use { response ->
             if (!response.isSuccessful) return GtfsImportError.Http(response.code)
             target.sink().buffer().use { it.writeAll(response.body.source()) }
         }
@@ -91,6 +97,23 @@ class GtfsImporter(
         GtfsImportError.Timeout
     } catch (e: IOException) {
         GtfsImportError.Network(e)
+    }
+
+    /**
+     * The `gtfs.zip` link on [feedPageUrl], or `null` when there is no page, it can't be loaded
+     * or it has no such link. Errors here are not reported: [feedUrl] is tried next, and its
+     * download reports the failure if the network is really down.
+     */
+    private suspend fun linkedFeedUrl(): HttpUrl? {
+        val page = feedPageUrl ?: return null
+        return try {
+            httpClient.newCall(Request.Builder().url(page).build()).executeAsync().use { response ->
+                if (!response.isSuccessful) return null
+                FEED_LINK.find(response.body.string())?.let { page.resolve(it.groupValues[1]) }
+            }
+        } catch (e: IOException) {
+            null
+        }
     }
 
     private suspend fun store(zipFile: File): GtfsImportResult = try {
@@ -143,8 +166,15 @@ class GtfsImporter(
     }
 
     companion object {
-        /** Linked from https://www.rideprt.org/business-center/developer-resources/ */
-        const val DEFAULT_FEED_URL = "https://www.rideprt.org/developerresources/GTFS.zip"
+        /** Where PRT links the current feed; the link changes with each new feed. */
+        const val DEFAULT_FEED_PAGE_URL =
+            "https://www.rideprt.org/business-resources/web-developer-resources/"
+
+        /** The feed linked from [DEFAULT_FEED_PAGE_URL] in October 2026; used when the page fails. */
+        const val DEFAULT_FEED_URL =
+            "https://www.rideprt.org/contentassets/1bda11b1f5f1408d8e8f99db6d5ebe75/gtfs.zip"
+
+        private val FEED_LINK = Regex("""href="([^"]*gtfs\.zip)"""", RegexOption.IGNORE_CASE)
 
         fun defaultHttpClient(): OkHttpClient = OkHttpClient
             .Builder()

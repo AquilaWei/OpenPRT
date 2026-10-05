@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.33] - 2026-10-05
+
+### 修正
+
+- 站牌和時刻表下載不了，地圖上沒有站牌、也規劃不了路線（畫面寫「Couldn't load bus stops」「Couldn't download the bus timetable」）：
+  PRT 改了網站，舊的下載網址失效。App 現在每次下載前先到 PRT 的開發者資源頁找最新的時刻表連結，之後 PRT 換新時刻表時也不會再斷；
+  那一頁讀不到時改用目前已知的網址
+
 ## [0.1.32] - 2026-10-05
 
 ### 新增

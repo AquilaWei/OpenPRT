@@ -3,6 +3,7 @@ package org.openprt.app
 import android.app.Application
 import android.content.Context
 import androidx.work.Configuration
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.openprt.app.data.gtfs.GtfsDao
 import org.openprt.app.data.gtfs.GtfsDatabase
 import org.openprt.app.data.gtfs.GtfsImportLog
@@ -36,7 +37,11 @@ class OpenPrtApplication :
     val gtfsUpdater: GtfsUpdater by lazy {
         GtfsUpdater(
             gtfsDatabase.gtfsDao(),
-            GtfsImporter(gtfsDatabase, cacheDir),
+            GtfsImporter(
+                gtfsDatabase,
+                cacheDir,
+                feedPageUrl = GtfsImporter.DEFAULT_FEED_PAGE_URL.toHttpUrl()
+            ),
             GtfsImportLog(getSharedPreferences(GtfsImportLog.PREFS_NAME, Context.MODE_PRIVATE))
         )
     }
