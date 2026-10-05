@@ -83,7 +83,7 @@
         "README 版本 badge 與 gradle.properties 版號一致",
         "實機驗收清單：從 GitHub Release 下載 APK 安裝後可正常啟動"
       ],
-      "passes": false
+      "passes": true
     }
   ],
   "verify": "ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk} ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug",

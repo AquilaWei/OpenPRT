@@ -23,7 +23,7 @@
 | 4 | F23 | 步行段沿街道（FOSSGIS Valhalla） | 只改方案地圖的步行線與分鐘，獨立 |
 | 5 | F17 | 輕軌 T 線 | 待使用者確認是否保留；附近班次、站牌班次（F24）、詳情都要合併兩個 feed，所以排在 F24 之後 |
 | 6 | F18 | 離線 / key 失效 / 配額 / GTFS 過期 + 每週背景更新 | 要涵蓋前面所有畫面的錯誤狀態，所以放在功能都做完之後 |
-| 7 | F19 | tag 觸發的 release APK | 需要 GitHub repo（目前沒有 remote），待使用者回答 |
+| 7 | F19 | tag 觸發的 release APK | 2026-10-05 完成（0.1.32）；GitHub repo 問題沒回答，照建議選項做、由使用者建 repo 與 secrets |
 
 - verify 指令不變，2026-10-03 規劃時在本 worktree 跑過（結果見「狀態」最後一筆）
 - F27 若一個 session 做不完：先做「RoutePlanner 反向搜尋 + Repository」（前兩條 steps），UI 留到下一個 session；
@@ -657,6 +657,29 @@
   - 新增 3 個測試（全部 771 個）：讀到一半時另一條執行緒匯入新 feed（日期往後一週／T1 提早一小時／路線改名），結果仍是開始讀的那份；
     三個都在拿掉 transaction 後確認會失敗
 
+## 發佈流程（F19 決定）
+
+- GitHub repo 的問題（questions 第三題）一直沒有回答；照建議選項「使用者自己建 repo 並設定 secrets」做，**不建 repo、不推送**。
+  repo 端的檔案都能在本機驗證，只有實際在 GitHub 上跑一次 release 要等使用者建好 repo
+- `.github/workflows/release.yml`：只在推送 `v*` tag 時觸發。順序：`scripts/check-version.sh "$GITHUB_REF_NAME"`（tag 與 README badge 都要等於
+  `VERSION_NAME`）→ `scripts/test-release-scripts.sh` → 與 CI 相同的 verify → 擷取 release notes → 還原金鑰 → `assembleRelease` →
+  改名 `OpenPRT-vX.Y.Z-<abi>.apk`、`apksigner verify`、每個 APK 一個 `.sha256` → `gh release create --notes-file`
+- 簽章：`app/build.gradle.kts` 只從環境變數讀（`OPENPRT_KEYSTORE_FILE`、`OPENPRT_KEYSTORE_PASSWORD`、`OPENPRT_KEY_ALIAS`、`OPENPRT_KEY_PASSWORD`）；
+  沒設 `OPENPRT_KEYSTORE_FILE` 就不建 signing config，`assembleRelease` 產出未簽章 APK、照樣成功。workflow 從 secret
+  `OPENPRT_KEYSTORE_BASE64` 解碼到 `$RUNNER_TEMP`，secret 沒設時直接失敗，不會發佈未簽章 APK
+- `PRT_API_KEY`：`local.properties` 優先，再讀環境變數（workflow 從同名 secret 傳入）。**公開發佈不要設這個 secret**：APK 裡的 key 任何人都取得到，
+  還會讓所有人共用使用者的每日配額；沒設時 App 照 F20 請使用者自己輸入。README 有寫
+- 大小：依 ABI 分割（arm64-v8a 約 24 MB、armeabi-v7a 約 20 MB、x86_64 約 24 MB）加 universal（約 60 MB）；debug APK 是 65 MB，主要是四份 MapLibre 原生庫。
+  分割只在任務名稱含 `Release` 時開啟（`gradle.startParameter.taskNames`），`assembleDebug` / `installDebug` 仍是單一 `app-debug.apk`。
+  **沒開 R8 minify**：沒實機測過 Room / kotlinx.serialization / MapLibre 的 keep 規則，怕發佈版閃退；之後要再壓大小可以評估
+- `scripts/changelog-section.sh VERSION [CHANGELOG]`：印出 `## [VERSION]` 到下一個 `## ` 之間的內容（去掉前後空行）；找不到或是空段落時失敗。
+  `## [0.1.3]` 不會被 `0.1.31` 誤配（比對含 `]`）
+- `scripts/test-release-scripts.sh`：9 個測試（擷取中間 / 最後一段、空段落、不存在的版本、badge 與 tag 一致 / 不一致），CI 與 release workflow 都會跑。
+  把比對改成不含 `]` 時確認「空段落」測試會失敗
+- 本機驗證過：沒有 secret 的 `assembleRelease` 成功（未簽章）；用 /tmp 裡臨時產生的金鑰設好環境變數後產出 4 個簽章 APK，
+  照 workflow 的改名、`apksigner verify`、`sha256sum` 步驟跑過，`sha256sum -c` 全部 OK。**release workflow 本身沒有在 GitHub 上跑過**
+- 簽章後的 release 版與 debug 版簽章不同，手機上已有 debug 版時要先解除安裝（會清掉 App 內 key 與時刻表），README 有寫
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -732,7 +755,9 @@
   清除 App 資料後開飛航模式啟動，再設定目的地，方案面板應說「Couldn't download the bus timetable…」；
   從 0.1.31 以前的版本升級安裝後第一次開 App 會重新下載時刻表（schema 4），下載完附近班次與規劃正常；
   用上面的 `jobscheduler run -f` 觸發背景更新後立刻規劃幾次，方案正常、不會閃退
-- [ ] （新 F19）從 Release 下載 APK 安裝並啟動
+- [ ] （新 F19）從 Release 下載 APK 安裝並啟動。先照 README「發佈新版本」建 GitHub repo、設定四個簽章 secrets（`PRT_API_KEY` 不要設），
+  推送 main 與 tag 後確認 Release workflow 綠燈、Release 頁面有 4 個 APK 與 4 個 `.sha256`、notes 是 CHANGELOG 該版段落；
+  手機先解除安裝 debug 版，下載 `arm64-v8a` 版安裝，啟動後出現輸入 key 的歡迎畫面、地圖與附近站牌正常
 
 ## 狀態
 
@@ -948,3 +973,9 @@
   verify 通過（771 個測試，lint 0 issue）；沒有裝到手機
   - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
   - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F19 完成**（版號 0.1.32，tag `v0.1.32` 只在本機）。推送 `v*` tag 時的 release workflow、依 ABI 分割的簽章 APK、SHA256、
+  CHANGELOG 擷取的 release notes、README 下載方式與 badge 檢查，見「發佈流程（F19 決定）」。開工前 verify 通過；完成後 verify 通過
+  （771 個測試，lint 0 issue），`scripts/test-release-scripts.sh` 9 個測試通過
+  - GitHub repo 問題仍沒回答：照建議選項做，沒有建 repo、沒有推送；release workflow 沒在 GitHub 上跑過
+  - `feature_list.json` 的功能全部 `passes: true`；仍**不能升 0.2.0**，要等使用者照實機驗收清單（F18、F17、F23、F27、0.1.28、F22、F24、F19）驗收
+  - 下一步：使用者建 GitHub repo、設定 secrets、推送 main 與 `v0.1.32`，再做實機驗收
