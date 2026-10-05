@@ -639,6 +639,16 @@
 - **第二次 review 修正（2026-10-05）**：面板開著時第一次下載失敗，原本會一直停在「hasn't finished」（失敗只改了一個變數，ViewModel 只聽成功）。
   `GtfsUpdater.lastImportFailed` 改成 `StateFlow<Boolean>`，`TripPlanViewModel(importFailures = …)` 收到新值時，畫面若是 `NoTimetable` 就只換
   `importFailed`（失敗 → 下載失敗；重新開始下載 → 還在下載），不重新規劃。新增 3 個測試（全部 766 個），兩個切換測試在拿掉修正後確認會失敗
+- **第三次 review 修正（2026-10-05）**：規劃器建網路時連續讀日曆、站牌、班次、停靠時間，背景更新可能在中間提交，組出新舊混合的方案；
+  快取版本又是另外讀的 SharedPreferences 匯入時間。改成：
+  - 資料庫新增 `imports` 表（`GtfsImportEntity`，AUTOINCREMENT id），匯入在同一個 transaction 寫一列；schema 3 → 4，
+    已裝的手機升級後資料表被清掉，**會重新下載一次時刻表**（`importIfEmpty`）
+  - `TransitNetworkSource.networks(daysToBuild)`：`RoomTransitNetworkSource(database)` 在一個 `withTransaction` 裡先讀 import id，
+    再讀 `daysToBuild(importId)` 挑出的所有日子，回傳 `TimetableNetworks(importId, networks)`；匯入與這些讀取互相等待，不會交錯
+  - `TripPlanRepository` 拿掉 `feedVersion`，改用讀到的 import id 標記快取：id 變了就清掉所有 planner，這次要的每一天都從新資料讀，
+    一次規劃不會混用兩份時刻表
+  - 新增 2 個測試（全部 768 個）：讀到一半時另一條執行緒匯入新 feed，方案仍是開始讀的那份（拿掉 transaction 後確認會失敗）；
+    那次匯入完成後下一次規劃改用新 feed。原本用假 `feedVersion` 的測試改成真的重新匯入
 
 ## 給下一個 session 的注意事項
 
@@ -712,7 +722,9 @@
   背景更新：`adb shell dumpsys jobscheduler | grep -A5 openprt` 看得到每天一次、需要網路的工作；
   想立刻測可用 `adb shell cmd jobscheduler run -f org.openprt.app <job id>`（0.1.30 以前裝的手機沒有匯入時間，第一次執行就會重新下載）
   時刻表過期提示無法在手機上自然重現（PRT 的 feed 通常涵蓋到未來），可把手機日期調到時刻表最後一天之後再開 App，首頁應出現「The bus timetable on this phone ended on …」；
-  清除 App 資料後開飛航模式啟動，再設定目的地，方案面板應說「Couldn't download the bus timetable…」
+  清除 App 資料後開飛航模式啟動，再設定目的地，方案面板應說「Couldn't download the bus timetable…」；
+  從 0.1.31 以前的版本升級安裝後第一次開 App 會重新下載時刻表（schema 4），下載完附近班次與規劃正常；
+  用上面的 `jobscheduler run -f` 觸發背景更新後立刻規劃幾次，方案正常、不會閃退
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -917,5 +929,10 @@
   - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
 - 2026-10-05：**F18 第二次 review 修正**：方案面板開著時第一次下載失敗，訊息會從「還沒下載完」換成「下載失敗」，重新下載時換回來。
   見 F18 段落「第二次 review 修正」。verify 通過（766 個測試，lint 0 issue）；沒有裝到手機
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 第三次 review 修正**：規劃器一次建網路的所有查詢與 import id 放在同一個資料庫 transaction，背景更新不會讓方案混用新舊時刻表；
+  快取改用資料庫裡的 import id 判斷版本。見 F18 段落「第三次 review 修正」。verify 通過（768 個測試，lint 0 issue）；沒有裝到手機
+  - schema 升到 4，已裝的手機升級後會重新下載一次時刻表
   - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
   - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
