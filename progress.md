@@ -755,7 +755,7 @@
   清除 App 資料後開飛航模式啟動，再設定目的地，方案面板應說「Couldn't download the bus timetable…」；
   從 0.1.31 以前的版本升級安裝後第一次開 App 會重新下載時刻表（schema 4），下載完附近班次與規劃正常；
   用上面的 `jobscheduler run -f` 觸發背景更新後立刻規劃幾次，方案正常、不會閃退
-- [ ] （新 F19）從 Release 下載 APK 安裝並啟動。先照 README「發佈新版本」建 GitHub repo、設定四個簽章 secrets（`PRT_API_KEY` 不要設），
+- [x] （新 F19，2026-10-05 使用者在手機上裝 Release 的 arm64-v8a 版並測試正常）從 Release 下載 APK 安裝並啟動。先照 README「發佈新版本」建 GitHub repo、設定四個簽章 secrets（`PRT_API_KEY` 不要設），
   推送 main 與 tag 後確認 Release workflow 綠燈、Release 頁面有 4 個 APK 與 4 個 `.sha256`、notes 是 CHANGELOG 該版段落；
   手機先解除安裝 debug 版，下載 `arm64-v8a` 版安裝，啟動後出現輸入 key 的歡迎畫面、地圖與附近站牌正常
 
@@ -1028,3 +1028,5 @@
   - README 拿掉「還沒有可下載的版本」，Releases 連到 repo；順便把 README 的 GTFS 連結換成 PRT 開發者資源頁（舊網址 0.1.33 起就是 404）、開頭版號改 0.1.33
   - **還沒裝到手機**：手機上是 debug 版，簽章不同要先解除安裝，會清掉 App 內的 key 與時刻表；問使用者要不要這樣做，沒有回答，所以沒動手機。
     F19 維持 `passes: false`，等從 Release 安裝 `arm64-v8a` 並啟動成功才改
+- 2026-10-05：**F19 完成**。使用者把 v0.1.33 Release 的 `arm64-v8a` 版裝到手機並回報「測試都正確」；用 adb 拉回手機上的 APK 確認簽章憑證就是 release 金鑰、版本 0.1.33。
+  `feature_list.json` 全部 `passes: true`；仍要等使用者確認累積清單的其他實機項目才升 0.2.0
