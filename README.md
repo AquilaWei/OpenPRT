@@ -1,6 +1,6 @@
 # OpenPRT
 
-![version](https://img.shields.io/badge/version-0.1.37-blue)
+![version](https://img.shields.io/badge/version-0.2.0-blue)
 
 **A free, open-source bus and light rail app for Pittsburgh Regional Transit (PRT).** Android for now.
 

@@ -2,6 +2,28 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.0] - 2026-10-05
+
+The first version checked end to end on a phone: nearby departures, live buses, tapping stops, trip planning
+with Leave now / Depart at / Arrive by, starting from an address, walking routes along streets, T light rail,
+offline mode and the light and dark themes.
+
+### Changed since 0.1.33
+
+- **A cleaner, Apple-style look**: gray backgrounds with white cards (black and dark gray in the dark theme), one
+  blue accent color, round map buttons and an iOS-style Leave now / Depart at / Arrive by switch
+- **Bus stops are stop-sign icons** instead of dots; the stop you tapped or will board at is a larger gold sign.
+  The icons shrink when you zoom out
+- **A starting point you chose is marked on the map** with a purple dot, the destination is a red pin, and the map
+  frames both
+- The status bar stays readable on the white top bar in the light theme
+- The README is in English
+
+### Fixed since 0.1.33
+
+- Tapping ✕ next to the start or the destination after planning a trip left the trip on screen (clearing the
+  start re-planned it from your location). Either ✕ now starts over: from your location, with no destination
+
 ## [0.1.37] - 2026-10-05
 
 ### Changed
