@@ -2,6 +2,17 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.37] - 2026-10-05
+
+### Changed
+
+- A cleaner, Apple-style look: light gray backgrounds with white cards (black and dark gray in the dark theme),
+  no card outlines, one blue accent color, semibold titles, a plain top bar and round white map buttons
+- **Leave now / Depart at / Arrive by** is now an iOS-style segmented control
+- The status bar icons are dark in the light theme, so the time and battery stay readable on the white top bar
+- Bus stop icons shrink when the map is zoomed out, so they no longer pile up
+- The README is now in English
+
 ## [0.1.36] - 2026-10-05
 
 ### 修正
