@@ -990,3 +990,9 @@
   - 用 AskUserQuestion 再問一次 GitHub repo 怎麼處理，沒有回答（非互動 session）；建外部 repo 要先確認，所以沒建、沒推送
   - F19 維持 `passes: false`；剩下的都要使用者自己做：建 repo、設定 keystore 四個簽章 secret
     （公開發佈**不要設定** `PRT_API_KEY`，否則個人 key 會內建進 APK）、推送 main 與 `v0.1.32`、確認 workflow 綠燈、從 Release 安裝 `arm64-v8a` 版並啟動
+- 2026-10-04：**F19 仍卡在 GitHub repo**，沒有改程式。開工前 verify 通過
+  - 用 `gh` 確認 `AquilaWei/OpenPRT` 還不存在（`gh` 已登入 AquilaWei），本機仍沒有 remote
+  - 再問一次 GitHub repo 怎麼處理，仍沒有回答；沒建 repo、沒推送，F19 維持 `passes: false`
+  - 本機預設分支是 `master`，這一輪的工作只在 `hb/7-openprt`，`master` 還沒有；要先把它併回 `master` 再推
+  - 使用者建好 repo 後的指令：`git remote add origin https://github.com/AquilaWei/OpenPRT.git`、
+    `git push -u origin master`、`git push origin v0.1.32`（tag 在 `12d936a`）
