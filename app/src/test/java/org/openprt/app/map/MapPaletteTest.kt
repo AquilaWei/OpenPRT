@@ -64,6 +64,34 @@ class MapPaletteTest {
         assertTrue(contrast(palette.busGlyph, palette.bus) >= 3.0)
     }
 
+    @Test
+    fun mapPalette_light_stopGlyphStandsOutOnStopSign() {
+        val palette = mapPalette(dark = false)
+
+        assertTrue(contrast(palette.stopGlyph, palette.stop) >= 3.0)
+    }
+
+    @Test
+    fun mapPalette_dark_stopGlyphStandsOutOnStopSign() {
+        val palette = mapPalette(dark = true)
+
+        assertTrue(contrast(palette.stopGlyph, palette.stop) >= 3.0)
+    }
+
+    @Test
+    fun mapPalette_light_boardingStopGlyphStandsOutOnGoldSign() {
+        val palette = mapPalette(dark = false)
+
+        assertTrue(contrast(palette.boardingStopGlyph, palette.boardingStop) >= 3.0)
+    }
+
+    @Test
+    fun mapPalette_dark_boardingStopGlyphStandsOutOnGoldSign() {
+        val palette = mapPalette(dark = true)
+
+        assertTrue(contrast(palette.boardingStopGlyph, palette.boardingStop) >= 3.0)
+    }
+
     private fun contrast(foreground: String, background: String): Double {
         val lighter = maxOf(hex(foreground).luminance(), hex(background).luminance())
         val darker = minOf(hex(foreground).luminance(), hex(background).luminance())

@@ -13,12 +13,19 @@ class MapLegendTest {
         assertEquals(
             listOf(
                 LegendEntry(LegendSymbol.LARGE_DOT, R.string.legend_user, "#1A73E8", "#FFFFFF"),
-                LegendEntry(LegendSymbol.DOT, R.string.legend_stop, "#17365F", "#FFFFFF"),
                 LegendEntry(
-                    LegendSymbol.LARGE_DOT,
+                    LegendSymbol.STOP_SIGN,
+                    R.string.legend_stop,
+                    "#17365F",
+                    "#FFFFFF",
+                    "#FFFFFF"
+                ),
+                LegendEntry(
+                    LegendSymbol.LARGE_STOP_SIGN,
                     R.string.legend_boarding_stop,
                     "#F2A900",
-                    "#FFFFFF"
+                    "#FFFFFF",
+                    "#17365F"
                 ),
                 LegendEntry(LegendSymbol.DOT, R.string.legend_route_stop, "#FFFFFF", "#17365F"),
                 LegendEntry(LegendSymbol.LINE, R.string.legend_route, "#17365F"),
@@ -42,12 +49,19 @@ class MapLegendTest {
         assertEquals(
             listOf(
                 LegendEntry(LegendSymbol.LARGE_DOT, R.string.legend_user, "#4C8DF6", "#FFFFFF"),
-                LegendEntry(LegendSymbol.DOT, R.string.legend_stop, "#D5E3FF", "#111318"),
                 LegendEntry(
-                    LegendSymbol.LARGE_DOT,
+                    LegendSymbol.STOP_SIGN,
+                    R.string.legend_stop,
+                    "#D5E3FF",
+                    "#111318",
+                    "#111318"
+                ),
+                LegendEntry(
+                    LegendSymbol.LARGE_STOP_SIGN,
                     R.string.legend_boarding_stop,
                     "#FFC72C",
-                    "#FFFFFF"
+                    "#FFFFFF",
+                    "#111318"
                 ),
                 LegendEntry(LegendSymbol.DOT, R.string.legend_route_stop, "#111318", "#D5E3FF"),
                 LegendEntry(LegendSymbol.LINE, R.string.legend_route, "#D5E3FF"),

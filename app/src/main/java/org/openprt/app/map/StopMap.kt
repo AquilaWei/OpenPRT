@@ -68,6 +68,8 @@ private const val TRIP_BOARDING_SOURCE = "trip-boarding"
 private const val TRIP_ALIGHTING_SOURCE = "trip-alighting"
 private const val BUS_BADGE_IMAGE = "bus-badge"
 private const val BUS_HEADING_IMAGE = "bus-heading"
+private const val STOP_SIGN_IMAGE = "stop-sign"
+private const val BOARDING_STOP_SIGN_IMAGE = "boarding-stop-sign"
 
 // Wider than the bus badge (18 dp with its ring), so a bus on top of the rider leaves a rim.
 private const val USER_HALO_RADIUS = 26f
@@ -326,14 +328,23 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
             lineJoin(Property.LINE_JOIN_ROUND)
         )
     )
-    style.addLayer(
-        CircleLayer("stops-layer", STOPS_SOURCE).withProperties(
-            circleRadius(6f),
-            circleColor(palette.stop),
-            circleStrokeColor(palette.stopOutline),
-            circleStrokeWidth(2f)
+    // Stop signs rather than dots, so a stop reads as a bus stop at a glance (user feedback,
+    // 2026-10-05). Stops along a route line stay dots: a sign at every one would bury the line.
+    style.addImage(
+        STOP_SIGN_IMAGE,
+        stopSignBitmap(context, STOP_SIGN_DP, palette.stop, palette.stopOutline, palette.stopGlyph)
+    )
+    style.addImage(
+        BOARDING_STOP_SIGN_IMAGE,
+        stopSignBitmap(
+            context,
+            LARGE_STOP_SIGN_DP,
+            palette.boardingStop,
+            palette.markerOutline,
+            palette.boardingStopGlyph
         )
     )
+    style.addLayer(stopSignLayer("stops-layer", STOPS_SOURCE, STOP_SIGN_IMAGE))
     style.addLayer(
         CircleLayer("route-stops-layer", ROUTE_STOPS_SOURCE).withProperties(
             circleRadius(4f),
@@ -345,11 +356,11 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
     addTripLayers(style, palette)
     // Larger and gold so the stop to walk to stands out from the rest of the route.
     style.addLayer(
-        largeMarkerLayer("boarding-stop-layer", BOARDING_STOP_SOURCE, palette.boardingStop, palette)
+        stopSignLayer("boarding-stop-layer", BOARDING_STOP_SOURCE, BOARDING_STOP_SIGN_IMAGE)
     )
     // The tapped stop looks like a boarding stop: it is where the listed buses are boarded.
     style.addLayer(
-        largeMarkerLayer("selected-stop-layer", SELECTED_STOP_SOURCE, palette.boardingStop, palette)
+        stopSignLayer("selected-stop-layer", SELECTED_STOP_SOURCE, BOARDING_STOP_SIGN_IMAGE)
     )
     // Red, the usual map color for "where you are going".
     style.addLayer(
@@ -421,9 +432,17 @@ private fun addTripLayers(style: Style, palette: MapPalette) {
         )
     )
     style.addLayer(
-        largeMarkerLayer("trip-boarding-layer", TRIP_BOARDING_SOURCE, palette.boardingStop, palette)
+        stopSignLayer("trip-boarding-layer", TRIP_BOARDING_SOURCE, BOARDING_STOP_SIGN_IMAGE)
     )
 }
+
+/** Every stop sign is drawn, even crowded together downtown, since each one can be tapped. */
+private fun stopSignLayer(id: String, source: String, image: String) =
+    SymbolLayer(id, source).withProperties(
+        iconImage(image),
+        iconAllowOverlap(true),
+        iconIgnorePlacement(true)
+    )
 
 private fun largeMarkerLayer(id: String, source: String, color: String, palette: MapPalette) =
     CircleLayer(id, source).withProperties(

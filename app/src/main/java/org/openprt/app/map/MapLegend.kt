@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -31,11 +33,17 @@ import org.openprt.app.R
 
 /** How a legend entry is drawn, matching the shape of its map layer. */
 enum class LegendSymbol {
-    /** A small ringed circle, like the stops. */
+    /** A small ringed circle, like the stops along a route. */
     DOT,
 
-    /** A large ringed circle, like the user, the boarding stop and the destination. */
+    /** A large ringed circle, like the user and the destination. */
     LARGE_DOT,
+
+    /** A nearby stop's sign: a ringed rounded square with a bus glyph. */
+    STOP_SIGN,
+
+    /** The bigger sign of the boarding or tapped stop. */
+    LARGE_STOP_SIGN,
 
     /** The bus badge: a ringed disc with a bus glyph. */
     BUS,
@@ -46,7 +54,7 @@ enum class LegendSymbol {
 /**
  * One kind of map marker and what it means. Colors are the `#RRGGBB` strings of the
  * [MapPalette] the map layers are drawn with: [color] fills the symbol, [outline] rings it and
- * [glyph] colors the bus drawn on the bus badge.
+ * [glyph] colors the bus drawn on the bus badge and the stop signs.
  */
 data class LegendEntry(
     val symbol: LegendSymbol,
@@ -62,12 +70,19 @@ data class LegendEntry(
  */
 fun mapLegend(palette: MapPalette): List<LegendEntry> = listOf(
     LegendEntry(LegendSymbol.LARGE_DOT, R.string.legend_user, palette.user, palette.markerOutline),
-    LegendEntry(LegendSymbol.DOT, R.string.legend_stop, palette.stop, palette.stopOutline),
     LegendEntry(
-        LegendSymbol.LARGE_DOT,
+        LegendSymbol.STOP_SIGN,
+        R.string.legend_stop,
+        palette.stop,
+        palette.stopOutline,
+        palette.stopGlyph
+    ),
+    LegendEntry(
+        LegendSymbol.LARGE_STOP_SIGN,
         R.string.legend_boarding_stop,
         palette.boardingStop,
-        palette.markerOutline
+        palette.markerOutline,
+        palette.boardingStopGlyph
     ),
     LegendEntry(
         LegendSymbol.DOT,
@@ -134,21 +149,14 @@ private fun LegendSwatch(entry: LegendEntry) {
 
         LegendSymbol.LARGE_DOT -> RingedDot(20.dp, 3.dp, color, outline)
 
-        LegendSymbol.BUS -> Box(
-            modifier = Modifier
-                .size(28.dp)
-                .border(2.dp, outline, CircleShape)
-                .background(color, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            // Decorative: the label next to it says what it is.
-            Icon(
-                painter = painterResource(R.drawable.ic_bus),
-                contentDescription = null,
-                tint = entry.glyph?.toColor() ?: Color.White,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        LegendSymbol.BUS -> GlyphBadge(28.dp, 2.dp, CircleShape, color, outline, entry.glyph)
+
+        // The map's sign sizes (STOP_SIGN_DP, LARGE_STOP_SIGN_DP) and proportions (StopSign.kt).
+        LegendSymbol.STOP_SIGN ->
+            GlyphBadge(22.dp, 2.dp, RoundedCornerShape(25), color, outline, entry.glyph)
+
+        LegendSymbol.LARGE_STOP_SIGN ->
+            GlyphBadge(30.dp, 3.dp, RoundedCornerShape(25), color, outline, entry.glyph)
 
         LegendSymbol.LINE, LegendSymbol.DASHED_LINE -> Canvas(Modifier.size(SWATCH_SIZE)) {
             val width = (if (entry.symbol == LegendSymbol.LINE) 5.dp else 4.dp).toPx()
@@ -166,6 +174,33 @@ private fun LegendSwatch(entry: LegendEntry) {
                 }
             )
         }
+    }
+}
+
+/** A [shape] of [fill] ringed in [outline] with the bus glyph in [glyph], as on the map. */
+@Composable
+private fun GlyphBadge(
+    size: Dp,
+    ring: Dp,
+    shape: Shape,
+    fill: Color,
+    outline: Color,
+    glyph: String?
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .border(ring, outline, shape)
+            .background(fill, shape),
+        contentAlignment = Alignment.Center
+    ) {
+        // Decorative: the label next to it says what it is.
+        Icon(
+            painter = painterResource(R.drawable.ic_bus),
+            contentDescription = null,
+            tint = glyph?.toColor() ?: Color.White,
+            modifier = Modifier.size(size * 0.6f)
+        )
     }
 }
 
