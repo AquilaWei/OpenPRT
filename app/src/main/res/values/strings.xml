@@ -8,6 +8,7 @@
     <string name="location_error_failed">location service error</string>
     <string name="map_relocate">Re-center on my location</string>
     <string name="stops_loading">Loading nearby stops…</string>
+    <string name="timetable_expired">The bus timetable on this phone ended on %1$s, so scheduled times may be wrong. A newer one downloads automatically once you\'re online.</string>
     <string name="stops_failed">Couldn\'t load bus stops. Check your connection; the app retries when you move or re-center.</string>
     <string name="departures_title">Nearby departures</string>
     <string name="departures_loading">Loading departures…</string>
@@ -100,6 +101,7 @@
     <string name="trip_no_stop_near_destination">No bus stop within walking distance (800 m) of the destination.</string>
     <string name="trip_no_connection">No buses in the timetable connect these places at this time.</string>
     <string name="trip_no_timetable">The bus timetable hasn\'t finished downloading yet.</string>
+    <string name="trip_timetable_download_failed">Couldn\'t download the bus timetable. Check your connection; the app tries again when you move or re-center the map.</string>
     <string name="trip_retry">Try again</string>
     <string name="trip_time_leave_now">Leave now</string>
     <string name="trip_time_depart_at">Depart at</string>

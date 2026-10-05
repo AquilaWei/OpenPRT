@@ -35,6 +35,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.DeparturesPanel
 import org.openprt.app.departures.DeparturesUiState
@@ -242,7 +245,8 @@ fun HomeScreen(
                 StatusMessages(
                     messages = listOfNotNull(
                         locationStatusText(locationState),
-                        stopsStatusText(locationState, mapState.stopsStatus)
+                        stopsStatusText(locationState, mapState.stopsStatus),
+                        timetableEndedText(mapState.timetableEndedOn)
                     )
                 )
             }
@@ -364,6 +368,14 @@ private fun stopsStatusText(locationState: LocationUiState, status: StopsStatus)
     status == StopsStatus.Loading -> stringResource(R.string.stops_loading)
     status is StopsStatus.Failed -> stringResource(R.string.stops_failed)
     else -> null
+}
+
+@Composable
+private fun timetableEndedText(endedOn: LocalDate?): String? = endedOn?.let {
+    stringResource(
+        R.string.timetable_expired,
+        it.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+    )
 }
 
 @Preview

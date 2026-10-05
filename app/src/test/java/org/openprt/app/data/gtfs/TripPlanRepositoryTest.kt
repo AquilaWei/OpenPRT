@@ -311,7 +311,25 @@ class TripPlanRepositoryTest {
         )
 
         empty.close()
-        assertEquals(TripPlanResult.NoTimetable, result)
+        assertEquals(TripPlanResult.NoTimetable(importFailed = false), result)
+    }
+
+    @Test
+    fun plan_databaseWithoutGtfsDataAfterAFailedDownload_saysTheDownloadFailed() = runTest {
+        val empty = inMemoryDatabase()
+        val emptyRepository = TripPlanRepository(
+            RoomTransitNetworkSource(empty.gtfsDao()),
+            importFailed = { true }
+        )
+
+        val result = emptyRepository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
+
+        empty.close()
+        assertEquals(TripPlanResult.NoTimetable(importFailed = true), result)
     }
 
     private fun inMemoryDatabase(): GtfsDatabase = Room

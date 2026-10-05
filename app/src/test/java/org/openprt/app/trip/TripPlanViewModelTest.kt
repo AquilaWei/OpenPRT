@@ -9,6 +9,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -207,19 +208,32 @@ class TripPlanViewModelTest {
 
     @Test
     fun onDestinationChanged_noTimetable_isNoTimetable() = runTest(dispatcher) {
-        val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable))
+        val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable(false)))
         val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
 
         viewModel.onDestinationChanged(THERE)
         advanceUntilIdle()
 
-        assertEquals(TripPlanUiState.NoTimetable, viewModel.state.value)
+        assertEquals(TripPlanUiState.NoTimetable(importFailed = false), viewModel.state.value)
     }
 
     @Test
+    fun onDestinationChanged_noTimetableAfterAFailedDownload_saysTheDownloadFailed() =
+        runTest(dispatcher) {
+            val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable(true)))
+            val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
+            viewModel.onLocationChanged(HERE)
+
+            viewModel.onDestinationChanged(THERE)
+            advanceUntilIdle()
+
+            assertEquals(TripPlanUiState.NoTimetable(importFailed = true), viewModel.state.value)
+        }
+
+    @Test
     fun retry_withDestination_plansAgain() = runTest(dispatcher) {
-        val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable))
+        val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable(false)))
         val viewModel = TripPlanViewModel(source, NO_PREDICTIONS, STRAIGHT_RIDES, CLOCK)
         viewModel.onLocationChanged(HERE)
         viewModel.onDestinationChanged(THERE)
@@ -759,6 +773,78 @@ class TripPlanViewModelTest {
         advanceUntilIdle()
 
         assertEquals(dates, viewModel.time.value.dates)
+    }
+
+    @Test
+    fun timetableUpdated_whileDepartAtIsOpen_readsTheNewTimetableDates() = runTest(dispatcher) {
+        val newDates = LocalDate.of(2026, 10, 4)..LocalDate.of(2027, 1, 9)
+        var dates = LocalDate.of(2026, 9, 27)..LocalDate.of(2026, 11, 21)
+        val imports = MutableStateFlow(Instant.parse("2026-09-27T12:00:00Z"))
+        val viewModel = TripPlanViewModel(
+            FakePlanSource(),
+            NO_PREDICTIONS,
+            STRAIGHT_RIDES,
+            CLOCK,
+            TimetableDatesSource { dates },
+            timetableUpdates = imports
+        )
+        viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+        advanceUntilIdle()
+
+        dates = newDates
+        imports.value = Instant.parse("2026-10-04T12:00:00Z")
+        advanceUntilIdle()
+
+        assertEquals(newDates, viewModel.time.value.dates)
+    }
+
+    @Test
+    fun timetableUpdated_afterDatesWereReadInLeaveNow_readsTheNewDatesForDepartAt() =
+        runTest(dispatcher) {
+            val newDates = LocalDate.of(2026, 10, 4)..LocalDate.of(2027, 1, 9)
+            var dates = LocalDate.of(2026, 9, 27)..LocalDate.of(2026, 11, 21)
+            val imports = MutableStateFlow(Instant.parse("2026-09-27T12:00:00Z"))
+            val viewModel = TripPlanViewModel(
+                FakePlanSource(),
+                NO_PREDICTIONS,
+                STRAIGHT_RIDES,
+                CLOCK,
+                TimetableDatesSource { dates },
+                timetableUpdates = imports
+            )
+            viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+            advanceUntilIdle()
+            viewModel.setTimeMode(TripTimeMode.LEAVE_NOW)
+            advanceUntilIdle()
+
+            dates = newDates
+            imports.value = Instant.parse("2026-10-04T12:00:00Z")
+            advanceUntilIdle()
+            viewModel.setTimeMode(TripTimeMode.DEPART_AT)
+            advanceUntilIdle()
+
+            assertEquals(newDates, viewModel.time.value.dates)
+        }
+
+    @Test
+    fun timetableUpdated_whileShowingNoTimetable_plansAgain() = runTest(dispatcher) {
+        val source = FakePlanSource(CompletableDeferred(TripPlanResult.NoTimetable(false)))
+        val imports = MutableStateFlow<Instant?>(null)
+        val viewModel = TripPlanViewModel(
+            source,
+            NO_PREDICTIONS,
+            STRAIGHT_RIDES,
+            CLOCK,
+            timetableUpdates = imports
+        )
+        viewModel.onLocationChanged(HERE)
+        viewModel.onDestinationChanged(THERE)
+        advanceUntilIdle()
+
+        imports.value = Instant.parse("2026-10-01T10:55:00Z")
+        advanceUntilIdle()
+
+        assertEquals(2, source.calls.size)
     }
 
     @Test

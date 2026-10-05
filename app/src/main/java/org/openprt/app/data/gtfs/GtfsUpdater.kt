@@ -2,9 +2,13 @@ package org.openprt.app.data.gtfs
 
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import java.io.IOException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -46,9 +50,21 @@ class GtfsUpdater(
     private val clock: Clock = Clock.systemUTC()
 ) {
     private val lock = Mutex()
+    private val mutableLastImport = MutableStateFlow(log.lastImport)
 
-    /** When the data was last imported; changes after every successful import. */
-    val lastImport: Instant? get() = log.lastImport
+    /**
+     * When the data was last imported; changes after every successful import, so screens can
+     * read the new timetable while they stay open.
+     */
+    val lastImport: StateFlow<Instant?> = mutableLastImport.asStateFlow()
+
+    /**
+     * True when the most recent import, finished or not, failed; false while one is running and
+     * after one succeeds. With an empty database this tells "still downloading" from "failed".
+     */
+    @Volatile
+    var lastImportFailed: Boolean = false
+        private set
 
     /**
      * Imports the feed when the database has no stops (first launch, or after a schema change
@@ -77,8 +93,22 @@ class GtfsUpdater(
         }
     }
 
-    private suspend fun importAndRecord(): GtfsImportResult = importer.import().also {
-        if (it is GtfsImportResult.Success) log.record(clock.instant())
+    private suspend fun importAndRecord(): GtfsImportResult {
+        lastImportFailed = false
+        val result = try {
+            importer.import()
+        } catch (e: IOException) {
+            lastImportFailed = true
+            throw e
+        }
+        if (result is GtfsImportResult.Success) {
+            val now = clock.instant()
+            log.record(now)
+            mutableLastImport.value = now
+        } else {
+            lastImportFailed = true
+        }
+        return result
     }
 
     companion object {

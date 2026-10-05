@@ -2,15 +2,21 @@ package org.openprt.app.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import java.time.Clock
+import java.time.LocalDate
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import org.openprt.app.data.gtfs.GtfsImportError
 import org.openprt.app.data.gtfs.NearbyStopSource
 import org.openprt.app.data.gtfs.NearbyStopsResult
+import org.openprt.app.data.gtfs.PRT_TIME_ZONE
+import org.openprt.app.data.gtfs.TimetableDatesSource
 import org.openprt.app.data.gtfs.trueTimeStopId
 import org.openprt.app.departures.WalkableStop
 import org.openprt.app.geo.LatLng
@@ -37,18 +43,30 @@ data class MapUiState(
     val stopMarkers: List<StopMarker> = emptyList(),
     val stopsStatus: StopsStatus = StopsStatus.Loading,
     /** The same stops as [stopMarkers], keyed by TrueTime stop ID, for the departures list. */
-    val walkableStops: List<WalkableStop> = emptyList()
+    val walkableStops: List<WalkableStop> = emptyList(),
+    /**
+     * The last day of the imported timetable when that day is already past, so its times may no
+     * longer match the buses; null while the timetable is current or there is none.
+     */
+    val timetableEndedOn: LocalDate? = null
 )
 
 /**
  * Keeps the nearby-stop markers in step with the map's position. Small moves reuse the current
  * markers: stops are re-queried only once the position is at least [requeryDistanceMeters] away
  * from where they were last queried.
+ *
+ * Also tells whether the timetable has run out, from [timetableDates] and [clock], after every
+ * stop lookup (which may have downloaded the first timetable) and whenever [timetableUpdates]
+ * emits, i.e. a newer timetable was imported.
  */
 class MapViewModel(
     private val stopSource: NearbyStopSource,
     private val radiusMeters: Double = DEFAULT_RADIUS_METERS,
-    private val requeryDistanceMeters: Double = DEFAULT_REQUERY_DISTANCE_METERS
+    private val requeryDistanceMeters: Double = DEFAULT_REQUERY_DISTANCE_METERS,
+    private val timetableDates: TimetableDatesSource = TimetableDatesSource { null },
+    private val clock: Clock = Clock.systemUTC(),
+    timetableUpdates: Flow<Any?> = emptyFlow()
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(MapUiState())
     val state: StateFlow<MapUiState> = mutableState.asStateFlow()
@@ -63,6 +81,9 @@ class MapViewModel(
     init {
         viewModelScope.launch {
             queries.receiveAsFlow().collect { load(it) }
+        }
+        viewModelScope.launch {
+            timetableUpdates.collect { checkTimetableEnd() }
         }
     }
 
@@ -97,6 +118,14 @@ class MapViewModel(
                 mutableState.value.copy(stopsStatus = StopsStatus.Failed(result.error))
             }
         }
+        checkTimetableEnd()
+    }
+
+    private suspend fun checkTimetableEnd() {
+        val last = timetableDates.dates()?.endInclusive
+        val today = LocalDate.now(clock.withZone(PRT_TIME_ZONE))
+        val endedOn = last?.takeIf { it < today }
+        mutableState.value = mutableState.value.copy(timetableEndedOn = endedOn)
     }
 
     companion object {

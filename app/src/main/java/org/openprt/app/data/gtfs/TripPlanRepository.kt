@@ -46,10 +46,11 @@ sealed interface TripPlanResult {
     data class NoRoute(val reason: NoRouteReason) : TripPlanResult
 
     /**
-     * No GTFS timetable on the device yet: the first download has not finished or failed, or an
-     * app update dropped the old tables. Nearby stops trigger the download.
+     * No GTFS timetable on the device yet: the first download has not finished, or an app update
+     * dropped the old tables. [importFailed] when the latest download failed rather than is
+     * still running. Nearby stops trigger the download.
      */
-    data object NoTimetable : TripPlanResult
+    data class NoTimetable(val importFailed: Boolean) : TripPlanResult
 }
 
 /** Where trip plans come from; an interface so screens can be tested with a fake. */
@@ -72,12 +73,14 @@ fun interface TripPlanSource {
  * same planners, whose mirrored networks are built on first use and kept with them.
  *
  * [feedVersion] names the imported timetable, e.g. its import time; when it changes, every kept
- * planner is dropped so the next request reads the new timetable.
+ * planner is dropped so the next request reads the new timetable. [importFailed] tells whether
+ * the latest download failed, for [TripPlanResult.NoTimetable].
  */
 class TripPlanRepository(
     private val networks: TransitNetworkSource,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
-    private val feedVersion: () -> Any? = { null }
+    private val feedVersion: () -> Any? = { null },
+    private val importFailed: () -> Boolean = { false }
 ) : TripPlanSource {
     // Held while building, so overlapping requests for a new day build its network only once.
     private val lock = Mutex()
@@ -111,7 +114,8 @@ class TripPlanRepository(
         destination: LatLng,
         time: TripTime
     ): TripPlanResult {
-        val dayPlanners = plannersFor(days) ?: return TripPlanResult.NoTimetable
+        val dayPlanners =
+            plannersFor(days) ?: return TripPlanResult.NoTimetable(importFailed())
         val results = withContext(dispatcher) {
             dayPlanners.map { (day, planner) ->
                 val seconds = secondsInto(day, time.time)

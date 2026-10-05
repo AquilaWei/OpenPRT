@@ -71,7 +71,11 @@ class MainActivity : ComponentActivity() {
         val viewModelFactory = viewModelFactory {
             initializer { LocationViewModel(FusedLocationProvider(applicationContext)) }
             initializer {
-                MapViewModel(app.nearbyStopRepository)
+                MapViewModel(
+                    app.nearbyStopRepository,
+                    timetableDates = RoomTimetableDatesSource(app.gtfsDao),
+                    timetableUpdates = app.gtfsUpdater.lastImport
+                )
             }
             initializer { NearbyDeparturesViewModel(predictions, Clock.systemUTC()) }
             initializer {
@@ -97,7 +101,8 @@ class MainActivity : ComponentActivity() {
                     app.rideStops,
                     Clock.systemUTC(),
                     RoomTimetableDatesSource(app.gtfsDao),
-                    walkRouter = app.walkRouter
+                    walkRouter = app.walkRouter,
+                    timetableUpdates = app.gtfsUpdater.lastImport
                 )
             }
             initializer { ApiKeyViewModel(app.apiKeySettings, TrueTimeClient.keyChecker()) }

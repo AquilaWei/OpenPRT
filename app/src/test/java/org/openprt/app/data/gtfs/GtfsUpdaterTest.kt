@@ -14,7 +14,9 @@ import mockwebserver3.MockWebServer
 import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -122,6 +124,63 @@ class GtfsUpdaterTest {
         assertEquals(stopsBefore, dao.getAllStops())
         assertEquals(12, dao.countStopTimes())
         assertEquals(imported, log.lastImport)
+    }
+
+    @Test
+    fun updateIfOlderThan_newFeedHasOnlyHeaders_keepsTheDataAndItsImportTime() = runTest {
+        enqueueFeed()
+        updater.importIfEmpty()
+        val stopsBefore = dao.getAllStops()
+        val imported = NOW.minusSeconds(8 * DAY_SECONDS)
+        log.record(imported)
+        val headersOnly = fixtureFeedFiles.mapValues { (_, text) -> text.lines().first() + "\n" }
+        server.enqueue(MockResponse.Builder().body(Buffer().write(zipOf(headersOnly))).build())
+
+        val result = updater.updateIfOlderThan()
+
+        assertEquals(
+            GtfsImportError.MalformedFeed::class,
+            ((result as GtfsImportResult.Failure).error)::class
+        )
+        assertEquals(stopsBefore, dao.getAllStops())
+        assertEquals(12, dao.countStopTimes())
+        assertEquals(imported, log.lastImport)
+    }
+
+    @Test
+    fun importIfEmpty_downloadFails_reportsTheImportFailed() = runTest {
+        server.enqueue(MockResponse.Builder().code(503).build())
+
+        updater.importIfEmpty()
+
+        assertTrue(updater.lastImportFailed)
+    }
+
+    @Test
+    fun importIfEmpty_succeedsAfterAFailure_noLongerReportsAFailure() = runTest {
+        server.enqueue(MockResponse.Builder().code(503).build())
+        updater.importIfEmpty()
+        enqueueFeed()
+
+        updater.importIfEmpty()
+
+        assertFalse(updater.lastImportFailed)
+    }
+
+    @Test
+    fun updateIfOlderThan_succeeds_publishesTheNewImportTime() = runTest {
+        log.record(NOW.minusSeconds(7 * DAY_SECONDS))
+        val openUpdater = GtfsUpdater(
+            dao,
+            GtfsImporter(database, temporaryFolder.root, feedUrl = server.url("/GTFS.zip")),
+            log,
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        )
+        enqueueFeed()
+
+        openUpdater.updateIfOlderThan()
+
+        assertEquals(NOW, openUpdater.lastImport.value)
     }
 
     @Test

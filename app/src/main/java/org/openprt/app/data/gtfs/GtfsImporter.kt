@@ -45,7 +45,10 @@ sealed interface GtfsImportError {
      */
     data class Network(val cause: IOException) : GtfsImportError
 
-    /** The download was not a usable GTFS zip, e.g. a missing file or a duplicate stop ID. */
+    /**
+     * The download was not a usable GTFS zip, e.g. a missing or empty file or a duplicate stop
+     * ID.
+     */
     data class MalformedFeed(val cause: Exception) : GtfsImportError
 }
 
@@ -119,16 +122,23 @@ class GtfsImporter(
             zip.insertTable("calendar_dates.txt", GtfsRow::toCalendarDateEntity) {
                 dao.insertCalendarDates(it)
             }
-        return GtfsImportResult.Success(
-            stopCount = stopCount ?: throw GtfsFormatException("stops.txt missing"),
-            routeCount = routeCount ?: throw GtfsFormatException("routes.txt missing"),
-            tripCount = tripCount ?: throw GtfsFormatException("trips.txt missing"),
-            stopTimeCount = stopTimeCount ?: throw GtfsFormatException("stop_times.txt missing")
-        ).also {
-            if (calendarCount == null && calendarDateCount == null) {
-                throw GtfsFormatException("calendar.txt and calendar_dates.txt missing")
-            }
+        // A file with only its header row would replace a working timetable with nothing, so
+        // empty tables are as broken as missing ones; throwing rolls the transaction back.
+        if ((calendarCount ?: 0) + (calendarDateCount ?: 0) == 0) {
+            throw GtfsFormatException("calendar.txt and calendar_dates.txt missing or empty")
         }
+        return GtfsImportResult.Success(
+            stopCount = requireRows("stops.txt", stopCount),
+            routeCount = requireRows("routes.txt", routeCount),
+            tripCount = requireRows("trips.txt", tripCount),
+            stopTimeCount = requireRows("stop_times.txt", stopTimeCount)
+        )
+    }
+
+    private fun requireRows(name: String, count: Int?): Int = when (count) {
+        null -> throw GtfsFormatException("$name missing")
+        0 -> throw GtfsFormatException("$name has no rows")
+        else -> count
     }
 
     companion object {

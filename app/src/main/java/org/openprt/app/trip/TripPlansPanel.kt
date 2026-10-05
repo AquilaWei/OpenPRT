@@ -74,8 +74,16 @@ fun TripPlansPanel(
 
             is TripPlanUiState.NoRoute -> PanelText(stringResource(state.reason.textRes()))
 
-            TripPlanUiState.NoTimetable -> {
-                PanelText(stringResource(R.string.trip_no_timetable))
+            is TripPlanUiState.NoTimetable -> {
+                PanelText(
+                    stringResource(
+                        if (state.importFailed) {
+                            R.string.trip_timetable_download_failed
+                        } else {
+                            R.string.trip_no_timetable
+                        }
+                    )
+                )
                 TextButton(
                     onClick = actions::retry,
                     modifier = Modifier.padding(horizontal = 8.dp)

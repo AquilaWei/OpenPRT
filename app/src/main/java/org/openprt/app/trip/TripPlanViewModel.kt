@@ -9,9 +9,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import org.openprt.app.data.gtfs.RideStopsSource
 import org.openprt.app.data.gtfs.TimetableDatesSource
@@ -160,8 +162,11 @@ sealed interface TripPlanUiState {
 
     data class NoRoute(val reason: NoRouteReason) : TripPlanUiState
 
-    /** The timetable has not been downloaded yet; [TripPlanViewModel.retry] tries again. */
-    data object NoTimetable : TripPlanUiState
+    /**
+     * The timetable has not been downloaded yet, and [importFailed] when the latest download
+     * failed; [TripPlanViewModel.retry] searches again.
+     */
+    data class NoTimetable(val importFailed: Boolean) : TripPlanUiState
 }
 
 /** What the trip panels can ask for; [TripPlanViewModel] does them. */
@@ -229,7 +234,8 @@ class TripPlanViewModel(
     private val clock: Clock,
     private val timetableDates: TimetableDatesSource = TimetableDatesSource { null },
     private val zone: ZoneId = ZoneId.systemDefault(),
-    private val walkRouter: WalkRouter = WalkRouter { from, to -> WalkPath.Straight(from, to) }
+    private val walkRouter: WalkRouter = WalkRouter { from, to -> WalkPath.Straight(from, to) },
+    private val timetableUpdates: Flow<Any?> = emptyFlow()
 ) : ViewModel(),
     TripPlanActions {
     private val mutableState = MutableStateFlow<TripPlanUiState?>(null)
@@ -248,6 +254,21 @@ class TripPlanViewModel(
     // Loads for the chosen option; cancelled when the choice or the plans change.
     private var selection: Job? = null
     private var rideLookup: Job? = null
+
+    init {
+        viewModelScope.launch {
+            timetableUpdates.collect {
+                // Leave now with no dates read yet needs nothing: they are read fresh the first
+                // time a time is chosen.
+                if (datesLoad != null || mutableTime.value.mode != TripTimeMode.LEAVE_NOW) {
+                    datesLoad?.cancel()
+                    datesLoad = null
+                    loadTimetableDates()
+                }
+                if (mutableState.value is TripPlanUiState.NoTimetable) retry()
+            }
+        }
+    }
 
     /** Reports the user's location; null while it is being looked up again. */
     fun onLocationChanged(location: LatLng?) {
@@ -480,7 +501,7 @@ class TripPlanViewModel(
 
             is TripPlanResult.NoRoute -> TripPlanUiState.NoRoute(result.reason)
 
-            TripPlanResult.NoTimetable -> TripPlanUiState.NoTimetable
+            is TripPlanResult.NoTimetable -> TripPlanUiState.NoTimetable(result.importFailed)
         }
     }
 

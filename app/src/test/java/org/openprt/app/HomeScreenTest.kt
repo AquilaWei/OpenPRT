@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.IOException
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -238,6 +239,37 @@ class HomeScreenTest {
         }
 
         composeRule.onNodeWithText("Loading nearby stops…").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = PHONE_SCREEN)
+    fun homeScreen_timetableEnded_warnsThatScheduledTimesMayBeWrong() {
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(
+                    stopsStatus = StopsStatus.Ready,
+                    timetableEndedOn = LocalDate.of(2026, 9, 26)
+                ),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
+                mapContent = stubMap
+            )
+        }
+
+        composeRule
+            .onNodeWithText("The bus timetable on this phone ended on", substring = true)
+            .assertIsDisplayed()
     }
 
     @Test

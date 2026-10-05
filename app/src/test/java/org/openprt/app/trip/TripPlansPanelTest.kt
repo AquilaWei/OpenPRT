@@ -177,12 +177,34 @@ class TripPlansPanelTest {
     fun tripPlansPanel_noTimetableRetryClicked_reportsRetry() {
         val actions = RecordingActions()
         composeRule.setContent {
-            TripPlansPanel(TripPlanUiState.NoTimetable, actions)
+            TripPlansPanel(TripPlanUiState.NoTimetable(importFailed = false), actions)
         }
 
         composeRule.onNodeWithText("Try again").performClick()
 
         assertEquals(listOf("retry"), actions.calls)
+    }
+
+    @Test
+    fun tripPlansPanel_noTimetableWhileDownloading_saysItHasNotFinished() {
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.NoTimetable(importFailed = false), RecordingActions())
+        }
+
+        composeRule
+            .onNodeWithText("The bus timetable hasn't finished downloading yet.")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun tripPlansPanel_noTimetableAfterAFailedDownload_saysTheDownloadFailed() {
+        composeRule.setContent {
+            TripPlansPanel(TripPlanUiState.NoTimetable(importFailed = true), RecordingActions())
+        }
+
+        composeRule
+            .onNodeWithText("Couldn't download the bus timetable", substring = true)
+            .assertIsDisplayed()
     }
 
     @Test

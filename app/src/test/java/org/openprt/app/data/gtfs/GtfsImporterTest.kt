@@ -173,6 +173,62 @@ class GtfsImporterTest {
     }
 
     @Test
+    fun import_whenStopTimesHasOnlyItsHeader_returnsMalformedFeedAndKeepsExistingTimetable() =
+        runTest {
+            enqueueZip(fixtureFeedFiles)
+            importer.import()
+            enqueueZip(
+                fixtureFeedFiles + (
+                    "stop_times.txt" to
+                        "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                    )
+            )
+
+            val result = importer.import()
+
+            assertTrue(
+                result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+            )
+            assertEquals(12, dao.countStopTimes())
+            assertEquals(fixtureStops, dao.getAllStops())
+        }
+
+    @Test
+    fun import_whenEveryFileHasOnlyItsHeader_returnsMalformedFeedAndKeepsExistingTimetable() =
+        runTest {
+            enqueueZip(fixtureFeedFiles)
+            importer.import()
+            enqueueZip(fixtureFeedFiles.mapValues { (_, text) -> text.lines().first() + "\n" })
+
+            val result = importer.import()
+
+            assertTrue(
+                result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+            )
+            assertEquals(fixtureStops, dao.getAllStops())
+            assertEquals(fixtureRoutes, dao.getAllRoutes())
+            assertEquals(12, dao.countStopTimes())
+        }
+
+    @Test
+    fun import_whenBothCalendarFilesHaveOnlyTheirHeaders_returnsMalformedFeed() = runTest {
+        enqueueZip(
+            fixtureFeedFiles + mapOf(
+                "calendar.txt" to
+                    "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday," +
+                    "start_date,end_date\n",
+                "calendar_dates.txt" to "service_id,date,exception_type\n"
+            )
+        )
+
+        val result = importer.import()
+
+        assertTrue(
+            result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+        )
+    }
+
+    @Test
     fun import_withOnlyCalendarDates_succeeds() = runTest {
         enqueueZip(fixtureFeedFiles - "calendar.txt")
 
