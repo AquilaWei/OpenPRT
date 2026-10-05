@@ -72,20 +72,20 @@ fun interface TripPlanSource {
  * moves on to the next service day, keeping only its network. "Arrive by" plans use the
  * same planners, whose mirrored networks are built on first use and kept with them.
  *
- * [feedVersion] names the imported timetable, e.g. its import time; when it changes, every kept
- * planner is dropped so the next request reads the new timetable. [importFailed] tells whether
- * the latest download failed, for [TripPlanResult.NoTimetable].
+ * Kept planners remember the import they were built from; once the timetable is imported again,
+ * they are all dropped and every day of the next request is read from the new import, so one
+ * request never mixes two timetables. [importFailed] tells whether the latest download failed,
+ * for [TripPlanResult.NoTimetable].
  */
 class TripPlanRepository(
     private val networks: TransitNetworkSource,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
-    private val feedVersion: () -> Any? = { null },
     private val importFailed: () -> Boolean = { false }
 ) : TripPlanSource {
     // Held while building, so overlapping requests for a new day build its network only once.
     private val lock = Mutex()
     private val planners = mutableMapOf<LocalDate, RoutePlanner>()
-    private var plannersVersion: Any? = null
+    private var plannersImportId: Long? = null
 
     /**
      * Ways from [origin] to [destination] at [time]; see [TripPlanSource.plan]. Searching runs on
@@ -138,19 +138,16 @@ class TripPlanRepository(
     /** Planners for [days] in the same order, or null when there is no timetable. */
     private suspend fun plannersFor(days: List<LocalDate>): List<Pair<LocalDate, RoutePlanner>>? =
         lock.withLock {
-            val version = feedVersion()
-            if (version != plannersVersion) {
+            val read = networks.networks { importId ->
+                if (importId == plannersImportId) days.filter { it !in planners } else days
+            } ?: return null
+            if (read.importId != plannersImportId) {
                 planners.clear()
-                plannersVersion = version
+                plannersImportId = read.importId
             }
             planners.keys.retainAll(days.toSet())
-            days.map { day ->
-                val planner = planners[day]
-                    ?: RoutePlanner(networks.network(day) ?: return null).also {
-                        planners[day] = it
-                    }
-                day to planner
-            }
+            read.networks.forEach { (day, network) -> planners[day] = RoutePlanner(network) }
+            days.map { it to planners.getValue(it) }
         }
 
     private fun secondsInto(serviceDate: LocalDate, instant: Instant): Int =

@@ -127,6 +127,7 @@ class GtfsImporter(
         if ((calendarCount ?: 0) + (calendarDateCount ?: 0) == 0) {
             throw GtfsFormatException("calendar.txt and calendar_dates.txt missing or empty")
         }
+        dao.insertImport(GtfsImportEntity())
         return GtfsImportResult.Success(
             stopCount = requireRows("stops.txt", stopCount),
             routeCount = requireRows("routes.txt", routeCount),

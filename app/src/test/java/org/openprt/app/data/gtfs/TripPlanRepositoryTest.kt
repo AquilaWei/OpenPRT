@@ -5,7 +5,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
 import java.time.LocalDate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okio.Buffer
@@ -20,7 +26,6 @@ import org.openprt.app.geo.LatLng
 import org.openprt.app.planner.Itinerary
 import org.openprt.app.planner.NoRouteReason
 import org.openprt.app.planner.RideLeg
-import org.openprt.app.planner.TransitNetwork
 import org.openprt.app.planner.TransitStop
 import org.openprt.app.planner.WalkLeg
 
@@ -44,12 +49,8 @@ class TripPlanRepositoryTest {
         server.start()
         database = inMemoryDatabase()
         server.enqueue(MockResponse.Builder().body(Buffer().write(zipOf(fixtureFeedFiles))).build())
-        GtfsImporter(
-            database,
-            downloadDir = temporaryFolder.root,
-            feedUrl = server.url("/GTFS.zip")
-        ).import()
-        source = CountingNetworkSource(RoomTransitNetworkSource(database.gtfsDao()))
+        importer().import()
+        source = CountingNetworkSource(RoomTransitNetworkSource(database))
         repository = TripPlanRepository(source)
     }
 
@@ -119,14 +120,51 @@ class TripPlanRepositoryTest {
 
     @Test
     fun plan_afterTheTimetableIsImportedAgain_buildsTheNetworkAgain() = runTest {
-        var feedVersion = Instant.parse("2026-09-30T12:00:00Z")
-        val repository = TripPlanRepository(source, feedVersion = { feedVersion })
         repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        server.enqueue(MockResponse.Builder().body(Buffer().write(zipOf(fixtureFeedFiles))).build())
+        importer().import()
 
-        feedVersion = Instant.parse("2026-10-01T09:00:00Z")
         repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
 
         assertEquals(listOf(THURSDAY, THURSDAY), source.builtDays)
+    }
+
+    @Test
+    fun plan_whileAnImportCommitsBetweenReads_ridesTheTimetableItStartedReading() = runTest {
+        val dao = ImportingBetweenReadsDao(database.gtfsDao())
+        val repository = TripPlanRepository(RoomTransitNetworkSource(database, dao = dao))
+
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
+        dao.import!!.await()
+
+        assertEquals(
+            listOf(RideLeg("T1", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_afterAnImportCommittedDuringTheLastBuild_ridesTheNewTimetable() = runTest {
+        val dao = ImportingBetweenReadsDao(database.gtfsDao())
+        val repository = TripPlanRepository(RoomTransitNetworkSource(database, dao = dao))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        dao.import!!.await()
+
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
+
+        // The new feed moves T1 an hour earlier, so the next bus is T2.
+        assertEquals(
+            listOf(RideLeg("T2", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 28_800, 30_600)),
+            plans(result).single().itinerary.rides
+        )
     }
 
     @Test
@@ -302,7 +340,7 @@ class TripPlanRepositoryTest {
     @Test
     fun plan_databaseWithoutGtfsData_returnsNoTimetable() = runTest {
         val empty = inMemoryDatabase()
-        val emptyRepository = TripPlanRepository(RoomTransitNetworkSource(empty.gtfsDao()))
+        val emptyRepository = TripPlanRepository(RoomTransitNetworkSource(empty))
 
         val result = emptyRepository.plan(
             CMU.location,
@@ -318,7 +356,7 @@ class TripPlanRepositoryTest {
     fun plan_databaseWithoutGtfsDataAfterAFailedDownload_saysTheDownloadFailed() = runTest {
         val empty = inMemoryDatabase()
         val emptyRepository = TripPlanRepository(
-            RoomTransitNetworkSource(empty.gtfsDao()),
+            RoomTransitNetworkSource(empty),
             importFailed = { true }
         )
 
@@ -339,13 +377,40 @@ class TripPlanRepositoryTest {
         )
         .build()
 
+    private fun importer() = GtfsImporter(
+        database,
+        downloadDir = temporaryFolder.root,
+        feedUrl = server.url("/GTFS.zip")
+    )
+
     private class CountingNetworkSource(private val real: TransitNetworkSource) :
         TransitNetworkSource {
         val builtDays = mutableListOf<LocalDate>()
 
-        override suspend fun network(serviceDate: LocalDate): TransitNetwork? {
-            builtDays += serviceDate
-            return real.network(serviceDate)
+        override suspend fun networks(
+            daysToBuild: (importId: Long) -> List<LocalDate>
+        ): TimetableNetworks? = real.networks { importId ->
+            daysToBuild(importId).also { builtDays += it }
+        }
+    }
+
+    /**
+     * Starts importing a feed whose T1 runs an hour earlier on the first read of all stops, after
+     * the calendars of that day were read, and gives the import a second to commit before the
+     * remaining reads. Reads sharing a transaction hold the import back until they finish.
+     */
+    private inner class ImportingBetweenReadsDao(private val real: GtfsDao) : GtfsDao by real {
+        var import: Deferred<GtfsImportResult>? = null
+
+        override suspend fun getAllStops(): List<StopEntity> {
+            if (import == null) {
+                server.enqueue(
+                    MockResponse.Builder().body(Buffer().write(zipOf(earlierT1Feed))).build()
+                )
+                import = CoroutineScope(Dispatchers.IO).async { importer().import() }
+                withContext(Dispatchers.IO) { withTimeoutOrNull(1_000) { import!!.await() } }
+            }
+            return real.getAllStops()
         }
     }
 
@@ -374,6 +439,11 @@ class TripPlanRepositoryTest {
             LatLng(40.439562, -79.995332),
             "99994"
         )
+
+        val earlierT1Feed = fixtureFeedFiles + (
+            "stop_times.txt" to fixtureFeedFiles.getValue("stop_times.txt")
+                .replace(",07:", ",06:")
+            )
 
         fun plans(result: TripPlanResult): List<TripPlan> = (result as TripPlanResult.Found).plans
     }

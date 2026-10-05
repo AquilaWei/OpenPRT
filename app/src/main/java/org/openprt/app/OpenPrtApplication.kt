@@ -60,8 +60,7 @@ class OpenPrtApplication :
 
     val tripPlanRepository: TripPlanRepository by lazy {
         TripPlanRepository(
-            RoomTransitNetworkSource(gtfsDatabase.gtfsDao()),
-            feedVersion = { gtfsUpdater.lastImport.value },
+            RoomTransitNetworkSource(gtfsDatabase),
             importFailed = { gtfsUpdater.lastImportFailed.value }
         )
     }

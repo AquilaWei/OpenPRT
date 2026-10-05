@@ -98,6 +98,14 @@ data class ServiceCalendarEntity(
 @Entity(tableName = "calendar_dates", primaryKeys = ["serviceId", "date"])
 data class CalendarDateEntity(val serviceId: String, val date: LocalDate, val added: Boolean)
 
+/**
+ * The import that filled the other tables, written in the same transaction, so a reader inside
+ * one transaction sees the [id] of exactly the data it reads. [id] never repeats: Room declares
+ * it AUTOINCREMENT, so SQLite does not reuse ids after the importer empties the table.
+ */
+@Entity(tableName = "imports")
+data class GtfsImportEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0)
+
 /** One scheduled stop of a trip where riders can board, joined with its trip. */
 data class StopDepartureRow(
     val tripId: String,
@@ -237,6 +245,10 @@ interface GtfsDao {
     )
     suspend fun getStopTimesOfServices(serviceIds: Collection<String>): List<StopTimeEntity>
 
+    /** The id of the import the tables hold; null when nothing has been imported. */
+    @Query("SELECT MAX(id) FROM imports")
+    suspend fun getImportId(): Long?
+
     /** Empties every table; the importer calls it inside the transaction that refills them. */
     suspend fun deleteAll() {
         deleteAllStops()
@@ -245,6 +257,7 @@ interface GtfsDao {
         deleteAllStopTimes()
         deleteAllCalendars()
         deleteAllCalendarDates()
+        deleteAllImports()
     }
 
     @Query("DELETE FROM stops")
@@ -265,6 +278,9 @@ interface GtfsDao {
     @Query("DELETE FROM calendar_dates")
     suspend fun deleteAllCalendarDates()
 
+    @Query("DELETE FROM imports")
+    suspend fun deleteAllImports()
+
     @Insert
     suspend fun insertStops(stops: List<StopEntity>)
 
@@ -282,6 +298,9 @@ interface GtfsDao {
 
     @Insert
     suspend fun insertCalendarDates(calendarDates: List<CalendarDateEntity>)
+
+    @Insert
+    suspend fun insertImport(import: GtfsImportEntity)
 }
 
 /** Stores dates as epoch days, so SQL comparisons on them follow calendar order. */
@@ -301,9 +320,10 @@ class GtfsConverters {
         TripEntity::class,
         StopTimeEntity::class,
         ServiceCalendarEntity::class,
-        CalendarDateEntity::class
+        CalendarDateEntity::class,
+        GtfsImportEntity::class
     ],
-    version = 3
+    version = 4
 )
 @TypeConverters(GtfsConverters::class)
 abstract class GtfsDatabase : RoomDatabase() {
