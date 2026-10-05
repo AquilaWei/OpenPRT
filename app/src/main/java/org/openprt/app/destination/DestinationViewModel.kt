@@ -59,6 +59,11 @@ interface DestinationActions {
     /** Makes the long-pressed spot the end being searched for and closes the search. */
     fun onMapLongPress(location: LatLng)
 
+    /**
+     * Starts over: the destination goes and the start is the user's location again, so no trip
+     * is planned. Removing either end means the user is done with that trip (user feedback,
+     * 2026-10-05).
+     */
     fun clearDestination()
 
     /** Starts choosing the starting point: the search and a long-press now fill it in. */
@@ -67,7 +72,10 @@ interface DestinationActions {
     /** Stops choosing the starting point without changing it. */
     fun cancelOriginEdit()
 
-    /** Starts from the user's location again. */
+    /**
+     * Starts over like [clearDestination]: from the user's location, with no destination, rather
+     * than planning the same trip again from where the user is.
+     */
     fun clearOrigin()
 
     /**
@@ -157,9 +165,7 @@ class DestinationViewModel(
         setEnd(Destination(name = null, location))
     }
 
-    override fun clearDestination() {
-        mutableState.update { it.copy(destination = null) }
-    }
+    override fun clearDestination() = startOver()
 
     override fun editOrigin() {
         searches.trySend(null)
@@ -175,8 +181,11 @@ class DestinationViewModel(
         }
     }
 
-    override fun clearOrigin() {
-        mutableState.update { it.copy(origin = null) }
+    override fun clearOrigin() = startOver()
+
+    private fun startOver() {
+        searches.trySend(null)
+        mutableState.value = DestinationUiState()
     }
 
     override fun swapEndpoints() {

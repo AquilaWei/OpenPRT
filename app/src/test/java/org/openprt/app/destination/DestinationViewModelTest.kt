@@ -354,6 +354,30 @@ class DestinationViewModelTest {
     }
 
     @Test
+    fun clearOrigin_withDestination_alsoClearsDestinationSoNoTripIsPlanned() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.onMapLongPress(PINNED)
+        viewModel.editOrigin()
+        viewModel.selectPlace(CMU)
+
+        viewModel.clearOrigin()
+
+        assertEquals(DestinationUiState(), viewModel.state.value)
+    }
+
+    @Test
+    fun clearDestination_withChosenOrigin_alsoStartsFromUserLocationAgain() = runTest(dispatcher) {
+        val viewModel = DestinationViewModel(FakeGeocoder())
+        viewModel.onMapLongPress(PINNED)
+        viewModel.editOrigin()
+        viewModel.selectPlace(CMU)
+
+        viewModel.clearDestination()
+
+        assertEquals(DestinationUiState(), viewModel.state.value)
+    }
+
+    @Test
     fun swapEndpoints_fromUserLocation_destinationBecomesWhereUserIs() = runTest(dispatcher) {
         val viewModel = DestinationViewModel(FakeGeocoder())
         viewModel.onLocationChanged(USER)
