@@ -2,6 +2,13 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.32] - 2026-10-05
+
+### 新增
+
+- 可以從 GitHub 的 **Releases** 頁面下載安裝檔了：每個版本依手機架構分成幾個 APK（一般手機用 `arm64-v8a`，約 24 MB，比以前的 65 MB 小很多），
+  不確定時用 `universal`；每個 APK 都附 SHA256 校驗檔，README 有下載與安裝步驟
+
 ## [0.1.31] - 2026-10-04
 
 ### 新增
