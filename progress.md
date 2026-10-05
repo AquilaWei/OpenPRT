@@ -999,3 +999,13 @@
 - 2026-10-05：**F19 仍卡在 GitHub repo**，沒有改程式。開工前 verify 通過，`scripts/test-release-scripts.sh` 全部通過
   - 再問一次 GitHub repo 怎麼處理，仍沒有回答；沒建 repo、沒推送，F19 維持 `passes: false`，tag `v0.1.32` 仍在 `12d936a`
   - 剩下的步驟都要使用者回答或親自做，照上一條的指令即可；在那之前再開 session 也只會重複這一條
+- 2026-10-05：**GitHub repo 建好了**（使用者同意，公開）：https://github.com/AquilaWei/OpenPRT ，`hb/7-openprt` 推成 `master`，CI 綠燈。
+  公開前檢查過整段歷史：沒有 key、keystore、`local.properties`，也沒有實機測試地點。**tag 還沒推**，要等使用者設好四個簽章 secret
+- 2026-10-05：**0.1.33 修正時刻表下載失敗**（實機上看到「Couldn't load bus stops」）。PRT 改版網站，舊網址
+  `rideprt.org/developerresources/GTFS.zip` 回 404；新網址在 `/business-resources/web-developer-resources/` 頁上，是帶雜湊的
+  `/contentassets/<hash>/gtfs.zip`，每次換時刻表很可能會變
+  - 決定：`GtfsImporter` 新增 `feedPageUrl`，每次下載前先讀開發者資源頁找 `gtfs.zip` 連結，找不到或讀不到時用 `DEFAULT_FEED_URL`（目前的雜湊網址）。
+    參數預設 `null`（不查頁面），只有 App 會傳，測試不會連到真網站
+  - 4 個新測試，拿掉修正時 4 個都失敗；完整 verify 775 個測試通過。實機上裝 debug 版後站牌與附近即時班次都出來了
+  - 0.1.32 從沒發佈，本機 tag `v0.1.32` 不會再用；第一次發佈改用 `v0.1.33`
+  - 下一步：使用者設定簽章 secret → 推 `v0.1.33` → 確認 Release 有 4 個 APK 與 4 個 `.sha256` → 從 Release 安裝 `arm64-v8a` 並啟動，F19 才算完成
