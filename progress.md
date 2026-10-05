@@ -988,5 +988,5 @@
     從 Release 安裝 `arm64-v8a` 版並啟動，通過後 F19 才改 `passes: true`
 - 2026-10-04：**F19 仍卡在 GitHub repo**，沒有改程式。開工前 verify 通過，`scripts/test-release-scripts.sh` 全部通過
   - 用 AskUserQuestion 再問一次 GitHub repo 怎麼處理，沒有回答（非互動 session）；建外部 repo 要先確認，所以沒建、沒推送
-  - F19 維持 `passes: false`；剩下的都要使用者自己做：建 repo、設定 keystore 四個 secret 與 `PRT_API_KEY`、
-    推送 main 與 `v0.1.32`、確認 workflow 綠燈、從 Release 安裝 `arm64-v8a` 版並啟動
+  - F19 維持 `passes: false`；剩下的都要使用者自己做：建 repo、設定 keystore 四個簽章 secret
+    （公開發佈**不要設定** `PRT_API_KEY`，否則個人 key 會內建進 APK）、推送 main 與 `v0.1.32`、確認 workflow 綠燈、從 Release 安裝 `arm64-v8a` 版並啟動
