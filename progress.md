@@ -23,7 +23,7 @@
 | 4 | F23 | 步行段沿街道（FOSSGIS Valhalla） | 只改方案地圖的步行線與分鐘，獨立 |
 | 5 | F17 | 輕軌 T 線 | 待使用者確認是否保留；附近班次、站牌班次（F24）、詳情都要合併兩個 feed，所以排在 F24 之後 |
 | 6 | F18 | 離線 / key 失效 / 配額 / GTFS 過期 + 每週背景更新 | 要涵蓋前面所有畫面的錯誤狀態，所以放在功能都做完之後 |
-| 7 | F19 | tag 觸發的 release APK | 2026-10-05 完成（0.1.32）；GitHub repo 問題沒回答，照建議選項做、由使用者建 repo 與 secrets |
+| 7 | F19 | tag 觸發的 release APK | 2026-10-05 本機部分做完（0.1.32），`passes: false`：等使用者回答 GitHub repo 問題、第一次 release 在 GitHub 跑過、從 Release 安裝並啟動後才算完成 |
 
 - verify 指令不變，2026-10-03 規劃時在本 worktree 跑過（結果見「狀態」最後一筆）
 - F27 若一個 session 做不完：先做「RoutePlanner 反向搜尋 + Repository」（前兩條 steps），UI 留到下一個 session；
@@ -979,3 +979,10 @@
   - GitHub repo 問題仍沒回答：照建議選項做，沒有建 repo、沒有推送；release workflow 沒在 GitHub 上跑過
   - `feature_list.json` 的功能全部 `passes: true`；仍**不能升 0.2.0**，要等使用者照實機驗收清單（F18、F17、F23、F27、0.1.28、F22、F24、F19）驗收
   - 下一步：使用者建 GitHub repo、設定 secrets、推送 main 與 `v0.1.32`，再做實機驗收
+- 2026-10-05：**F19 改回 `passes: false`**（reviewer 要求）。沒有 GitHub remote、沒有 Release、workflow 沒在 GitHub 跑過，
+  F19 最後一條 step「從 GitHub Release 下載 APK 安裝後可正常啟動」也沒驗收，所以不能算完成
+  - README「下載安裝」與 CHANGELOG 0.1.32 改寫成「還不能下載、請自己建置」；第一次發佈並驗證後再把這兩段的提醒拿掉
+  - README 與 `release.yml` 註解裡的 tag 指令原本寫死 `v0.1.31`（照做會被版號檢查擋下），改成從 `gradle.properties` 的 `VERSION_NAME` 讀
+  - 沒升版號（0.1.32 沒推送過）；本機 tag `v0.1.32` 移到記錄這一行的 commit，release notes 才會是改過的 CHANGELOG
+  - 下一步：等使用者回答 GitHub repo 問題；建好 repo、設定 secrets、推送 main 與 `v0.1.32` 後確認 workflow 綠燈，
+    從 Release 安裝 `arm64-v8a` 版並啟動，通過後 F19 才改 `passes: true`
