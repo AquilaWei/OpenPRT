@@ -621,13 +621,21 @@
   - 約束只有「需要網路」，**沒有限 Wi-Fi**：22 MB 可能用到行動數據，但只限 Wi-Fi 的話沒 Wi-Fi 的人永遠不會更新。若使用者在意可改 `UNMETERED`
   - WorkManager 改成第一次用到時才初始化（manifest 移除 `WorkManagerInitializer`，`OpenPrtApplication` 實作 `Configuration.Provider` 並給 `GtfsUpdateWorkerFactory`），
     worker 才拿得到 App 的 `GtfsUpdater`（同一把鎖）。排程放在 `MainActivity.onCreate`，不放 `Application.onCreate`，Robolectric 測試才不會啟動 WorkManager
-- **規劃快取失效**：`TripPlanRepository` 多一個 `feedVersion: () -> Any?`（App 傳 `gtfsUpdater.lastImport`），值變了就丟掉所有已建的 planner
+- **規劃快取失效**：`TripPlanRepository` 多一個 `feedVersion: () -> Any?`（App 傳 `gtfsUpdater.lastImport.value`），值變了就丟掉所有已建的 planner
 - 新增依賴：WorkManager 2.12.0（`work-runtime-ktx`、測試用 `work-testing`）
 - 新增 24 個測試（全部 745 個）：`GtfsUpdaterTest`（7）、`GtfsUpdateWorkerTest`（7，排程週期、需要網路、重複排程只一個、過期下載、未過期不下載、HTTP 失敗、連不上 retry）、
   `ApiProblemTest`（3）、附近班次畫面（3）、詳情畫面（2）、詳情 ViewModel 離線（1）、規劃快取失效（1）。
   「同時觸發只下載一次」與「更新後重建 network」兩個測試在拿掉鎖 / 拿掉 `planners.clear()` 後確認會失敗
-- **沒做**：description 提到的「GTFS 資料過期」提示畫面（steps 沒要求）。現在資料過期時背景會更新，但如果一直更新失敗，畫面不會說時刻表過期；
-  `TripPlanViewModel` 讀過一次的時刻表日期範圍（Depart at / Arrive by 的可選日期）在 GTFS 更新後也不會重讀，要等 App 重開
+- **review 修正（2026-10-05）**：
+  - **空表擋下**：`GtfsImporter` 在 stops / routes / trips / stop_times 任一表 0 列，或 calendar + calendar_dates 合計 0 列時丟 `GtfsFormatException`，
+    transaction 回滾，原本的時刻表不動（只有標頭的 feed 原本會被當成功並清空資料）
+  - **過期提示**：`MapViewModel` 在每次查站牌後與每次匯入成功後讀時刻表最後一天，早於今天（PRT 時區）時 `MapUiState.timetableEndedOn` 設成那天，
+    首頁狀態訊息顯示「The bus timetable on this phone ended on …」
+  - **空資料庫 + 下載失敗**：`GtfsUpdater.lastImportFailed`（只放記憶體，匯入開始時清掉、失敗時設定）→ `TripPlanRepository(importFailed = …)` →
+    `TripPlanResult.NoTimetable(importFailed)`；方案面板改說「Couldn't download the bus timetable…」，還在下載時仍說「hasn't finished」
+  - **日期範圍重讀**：`GtfsUpdater.lastImport` 改成 `StateFlow<Instant?>`。`TripPlanViewModel(timetableUpdates = …)` 每次有新值時，
+    若已讀過日期或目前不是 Leave now 就重讀；畫面停在「沒有時刻表」時也自動重新規劃
+  - 新增 18 個測試（全部 763 個）；空表、日期重讀、過期警示消失、NoTimetable 重新規劃這幾個測試在拿掉修正後確認會失敗
 
 ## 給下一個 session 的注意事項
 
@@ -700,6 +708,8 @@
   開網路後自動恢復。在 App 內輸入亂打的 key 存檔（Save without checking），附近班次出現換 key 的說明。
   背景更新：`adb shell dumpsys jobscheduler | grep -A5 openprt` 看得到每天一次、需要網路的工作；
   想立刻測可用 `adb shell cmd jobscheduler run -f org.openprt.app <job id>`（0.1.30 以前裝的手機沒有匯入時間，第一次執行就會重新下載）
+  時刻表過期提示無法在手機上自然重現（PRT 的 feed 通常涵蓋到未來），可把手機日期調到時刻表最後一天之後再開 App，首頁應出現「The bus timetable on this phone ended on …」；
+  清除 App 資料後開飛航模式啟動，再設定目的地，方案面板應說「Couldn't download the bus timetable…」
 - [ ] （新 F19）從 Release 下載 APK 安裝並啟動
 
 ## 狀態
@@ -897,4 +907,8 @@
   開工前 verify 通過；完成後 verify 通過（745 個測試，lint 0 issue）
   - 沒有裝到手機；需要實機驗收（見清單 F18 以及 F17、F23、F27、0.1.28、F22、F24）
   - 「時刻表過期」的提示畫面沒做（見 F18 段落最後一項）
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 review 修正**：只有標頭的 feed 不再清空時刻表；時刻表過期時首頁提示；空資料庫且下載失敗時方案面板說下載失敗；
+  背景更新後 Depart at / Arrive by 的可選日期重讀。見 F18 段落「review 修正」。verify 通過（763 個測試，lint 0 issue）；沒有裝到手機
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
   - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
