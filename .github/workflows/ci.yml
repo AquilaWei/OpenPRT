@@ -17,6 +17,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      - name: Check the README badge matches the version
+        run: scripts/check-version.sh
+
+      - name: Test release scripts
+        run: scripts/test-release-scripts.sh
+
       - name: Verify
         run: ./gradlew --no-daemon ktlintCheck testDebugUnitTest lintDebug assembleDebug
 

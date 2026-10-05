@@ -20,6 +20,23 @@
 > 第一次開啟時 App 會下載 GTFS 站牌與時刻表資料（下載約 22 MB，存進手機後約佔 **75 MB**），之後才會在地圖上顯示附近站牌。
 > 資料超過 7 天時，App 會在**有網路時於背景重新下載**（每天檢查一次）；下載失敗時繼續用手機上原本的資料。
 
+## 下載安裝
+
+1. 到 GitHub 專案的 **Releases** 頁面，打開最新版本
+2. 下載符合手機的 APK：
+   - **`OpenPRT-vX.Y.Z-arm64-v8a.apk`**：近幾年的 Android 手機幾乎都是這個（最小）
+   - `OpenPRT-vX.Y.Z-armeabi-v7a.apk`：較舊的 32 位元手機
+   - `OpenPRT-vX.Y.Z-universal.apk`：不確定時用這個，所有手機都能裝，但檔案約 60 MB（arm64 版約 24 MB）
+3. （選用）確認檔案沒有損壞：與同名的 `.sha256` 比對
+
+   ```bash
+   sha256sum -c OpenPRT-vX.Y.Z-arm64-v8a.apk.sha256
+   ```
+
+4. 在手機上打開 APK，依提示允許「安裝不明來源的應用程式」後安裝
+
+> 手機上若已裝了自己建置的 debug 版，簽章不同無法直接覆蓋，要先解除安裝（會清掉 App 裡輸入的 key 與下載的時刻表）。
+
 ## 需求
 
 - **JDK 21 以上**（只裝了 JRE 或其他版本也可以，Gradle 會自動下載 JDK 21 toolchain）
@@ -61,6 +78,8 @@ sdk.dir=/path/to/Android/Sdk
 | `./gradlew lintDebug` | Android Lint，warning 一律視為錯誤 |
 | `./gradlew assembleDebug` | 產出 `app/build/outputs/apk/debug/app-debug.apk` |
 | `./gradlew installDebug` | 安裝到已連接的手機或模擬器 |
+| `./gradlew assembleRelease` | 依 ABI 分開的 release APK；沒有簽章設定時產出未簽章的 `*-release-unsigned.apk` |
+| `scripts/test-release-scripts.sh` | 發佈腳本（release notes 擷取、版號檢查）的測試 |
 
 ## 參與開發
 
@@ -68,3 +87,31 @@ sdk.dir=/path/to/Android/Sdk
 - 排版由 ktlint 決定、Lint warning 視為錯誤，送出前先跑上面的完整檢查
 - 每次 push / PR 都會由 GitHub Actions（`.github/workflows/ci.yml`）跑同一組檢查
 - 版本變更記錄在 [CHANGELOG.md](CHANGELOG.md)
+
+### 發佈新版本
+
+推送 `v*` tag 時，GitHub Actions（`.github/workflows/release.yml`）會跑同一組檢查、建置簽章 APK、
+附上 SHA256，並用 CHANGELOG 對應版本的段落當 release notes 建立 GitHub Release。
+
+1. 改 `gradle.properties` 的版號與 README 的版本 badge，CHANGELOG 加上該版段落（`scripts/check-version.sh` 會檢查 badge）
+2. 推送 tag（tag 必須等於 `v` + `VERSION_NAME`，否則 workflow 會失敗）：
+
+   ```bash
+   git tag v0.1.31 && git push origin v0.1.31
+   ```
+
+**第一次發佈前**，在 repo 的 *Settings → Secrets and variables → Actions* 設定以下 secrets（簽章金鑰**不要 commit**，`.gitignore` 已排除 `*.jks` / `*.keystore`）：
+
+| Secret | 內容 |
+|---|---|
+| `OPENPRT_KEYSTORE_BASE64` | 簽章金鑰檔的 base64，例如 `base64 -w0 release.jks` 的輸出 |
+| `OPENPRT_KEYSTORE_PASSWORD` | 金鑰庫密碼 |
+| `OPENPRT_KEY_ALIAS` | 金鑰別名 |
+| `OPENPRT_KEY_PASSWORD` | 金鑰密碼 |
+| `PRT_API_KEY`（選用） | 內建到 APK 的 TrueTime key。**公開發佈時不要設**：任何人都能從 APK 取出 key，App 會請使用者自己輸入 |
+
+產生簽章金鑰（自己執行，密碼不要貼到任何地方；**金鑰檔要另外備份**，弄丟後就無法發佈能覆蓋安裝的更新）：
+
+```bash
+keytool -genkeypair -keystore release.jks -alias openprt -keyalg RSA -keysize 4096 -validity 10000
+```
