@@ -1091,3 +1091,7 @@
   0.1.34–0.1.37 是只裝在手機上的測試版，本機 tag 沒推、不發佈
   - Release workflow 綠燈：https://github.com/AquilaWei/OpenPRT/releases/tag/v0.2.0 ，4 個 APK + 4 個 `.sha256`，下載回來 `sha256sum -c` 全部 OK，
     簽章憑證與 release 金鑰一致。手機當時 USB 斷線，**沒有從 Release 安裝到手機**；手機上是 0.1.37（程式與 0.2.0 相同，只差版號）
+- 2026-10-05：**沒有剩下的功能**。`feature_list.json` 全部 `passes: true`，這次 session 沒有改程式。
+  開工時用 `--rerun-tasks` 跑完整 verify（不吃快取）通過：788 個測試、0 失敗，lint 0 issue
+  - `questions` 裡 iOS 版與繁體中文介面兩題一直沒有回答；目前照建議選項（只做 Android、只要英文），沒有新增功能。
+    使用者若要做，再把它們加成新的 feature
