@@ -766,7 +766,7 @@
   左下角圖例的顏色、圖示與地圖上看到的一致（淺色與深色都看）
 - [x] 0.1.27 時刻表班次：站牌面板中標 Scheduled 的班次可以點，列出接下來的站與時間、和站牌上的時刻表一致；返回回到站牌列表，再返回關掉站牌
 - [x] F22 輸入兩個地址規劃出方案：選目的地後點「From: My location」，搜尋一個地址（例如 Cathedral of Learning）選起點，方案從那裡出發、走路時不會重新規劃；
-  選起點模式下長按地圖也能設起點；✕ 回到 My location 並重新規劃；⇅ 對調後方案反過來，起點是 My location 時目的地顯示「My location (pinned)」
+  選起點模式下長按地圖也能設起點；按起點 ✕ 起訖點都清空、回到一開始的畫面（0.1.36 起；原本是回到 My location 並重新規劃）；⇅ 對調後方案反過來，起點是 My location 時目的地顯示「My location (pinned)」
 - [x] 第二次 review 修正：剛開 App（沒選目的地）時搜尋框上方就有「From: My location」，可先選起點再選目的地；
   Arrive by 選幾分鐘後的期限時不會出現已經開走的方案；剛切到 Depart at 的一瞬間日期按鈕是灰的，讀完後才可按，日期選擇器只能選範圍內的日子
 - [x] 第三次 review 修正：Leave now 在末班車後的方案卡片顯示隔天日期（例如「Fri, Oct 2 6:56 AM」），今天的方案只有時間；
@@ -1095,3 +1095,14 @@
   開工時用 `--rerun-tasks` 跑完整 verify（不吃快取）通過：788 個測試、0 失敗，lint 0 issue
   - `questions` 裡 iOS 版與繁體中文介面兩題一直沒有回答；目前照建議選項（只做 Android、只要英文），沒有新增功能。
     使用者若要做，再把它們加成新的 feature
+- 2026-10-06：**review 修正（codex）**
+  - F22 第二個 step 改成 0.1.36 起使用者決定的行為：按起點（或目的地）✕ 起訖點都清空、回到一開始的畫面，不重新規劃
+    （`DestinationViewModelTest.clearOrigin_withDestination_alsoClearsDestinationSoNoTripIsPlanned` 等測試）；
+    累積驗收清單的 F22 項同步改寫。上面 0.1.36 那段「feature_list 的 step 沒改」是當時的紀錄，保留
+  - **v0.2.0 Release 安裝檔的實機啟動驗證還沒做**：這次 session 手機沒有接上（`adb devices` 是空的）。
+    重新下載 v0.2.0 的 4 個 APK，`sha256sum -c` 全部 OK；本機模擬器（`ge_test`，x86_64）headless 開機兩次都在開機途中閃退，沒有驗到。
+    使用者接上手機後執行：
+    `gh release download v0.2.0 -R AquilaWei/OpenPRT -p 'OpenPRT-v0.2.0-arm64-v8a.apk*' -D /tmp/openprt-v020 --clobber && (cd /tmp/openprt-v020 && sha256sum -c OpenPRT-v0.2.0-arm64-v8a.apk.sha256)`、
+    `~/Android/Sdk/platform-tools/adb install -r /tmp/openprt-v020/OpenPRT-v0.2.0-arm64-v8a.apk`。
+    手機上的 0.1.37 若是 debug 簽章會出現 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`，要先 `adb uninstall org.openprt.app`（會清掉 App 內的 key 與時刻表）。
+    `adb shell dumpsys package org.openprt.app | grep versionName` 是 0.2.0；啟動後確認歡迎畫面 / 地圖 / 附近站牌正常。做完把這段改成結果
