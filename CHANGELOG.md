@@ -2,6 +2,148 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.0] - 2026-10-05
+
+The first version checked end to end on a phone: nearby departures, live buses, tapping stops, trip planning
+with Leave now / Depart at / Arrive by, starting from an address, walking routes along streets, T light rail,
+offline mode and the light and dark themes.
+
+### Changed since 0.1.33
+
+- **A cleaner, Apple-style look**: gray backgrounds with white cards (black and dark gray in the dark theme), one
+  blue accent color, round map buttons and an iOS-style Leave now / Depart at / Arrive by switch
+- **Bus stops are stop-sign icons** instead of dots; the stop you tapped or will board at is a larger gold sign.
+  The icons shrink when you zoom out
+- **A starting point you chose is marked on the map** with a purple dot, the destination is a red pin, and the map
+  frames both
+- The status bar stays readable on the white top bar in the light theme
+- The README is in English
+
+### Fixed since 0.1.33
+
+- Tapping ✕ next to the start or the destination after planning a trip left the trip on screen (clearing the
+  start re-planned it from your location). Either ✕ now starts over: from your location, with no destination
+
+## [0.1.37] - 2026-10-05
+
+### Changed
+
+- A cleaner, Apple-style look: light gray backgrounds with white cards (black and dark gray in the dark theme),
+  no card outlines, one blue accent color, semibold titles, a plain top bar and round white map buttons
+- **Leave now / Depart at / Arrive by** is now an iOS-style segmented control
+- The status bar icons are dark in the light theme, so the time and battery stay readable on the white top bar
+- Bus stop icons shrink when the map is zoomed out, so they no longer pile up
+- The README is now in English
+
+## [0.1.36] - 2026-10-05
+
+### 修正
+
+- 規劃好路線後按起點或目的地旁的 ✕，方案還留在畫面上（按起點的 ✕ 會改從你目前的位置重新規劃）。現在按任一邊的 ✕ 都會回到一開始的畫面：
+  起點回到「My location」、目的地清空、方案收起
+
+## [0.1.35] - 2026-10-05
+
+### 變更
+
+- 起點改成別的地址（不是「My location」）時，地圖會用**紫色圓點**（白框、白色中心）標出起點，畫面也會同時框住起點與終點，不再只看到你自己的位置
+- 目的地從紅色圓點改成**紅色地圖圖釘**，針尖指著目的地。地圖圖例也跟著更新
+
+## [0.1.34] - 2026-10-05
+
+### 變更
+
+- 地圖上的公車站牌從小圓點改成**站牌圖示**（深藍圓角方形裡一台公車，深色主題是淺藍），一眼就看得出是站牌，也和圓形的公車圖示分得開；
+  要上車的站與你點的站是**較大的金色站牌**。公車路線上沿途的站維持小圓點，避免蓋住路線。地圖圖例也跟著更新
+
+## [0.1.33] - 2026-10-05
+
+### 修正
+
+- 站牌和時刻表下載不了，地圖上沒有站牌、也規劃不了路線（畫面寫「Couldn't load bus stops」「Couldn't download the bus timetable」）：
+  PRT 改了網站，舊的下載網址失效。App 現在每次下載前先到 PRT 的開發者資源頁找最新的時刻表連結，之後 PRT 換新時刻表時也不會再斷；
+  那一頁讀不到時改用目前已知的網址
+
+## [0.1.32] - 2026-10-05
+
+### 新增
+
+- 準備好從 GitHub 的 **Releases** 頁面發佈安裝檔：每個版本依手機架構分成幾個 APK（一般手機用 `arm64-v8a`，約 24 MB，比以前的 65 MB 小很多），
+  不確定時用 `universal`；每個 APK 都附 SHA256 校驗檔，README 有下載與安裝步驟。
+  **目前還不能下載**：專案還沒放上 GitHub、發佈流程還沒實際跑過，第一次發佈並確認能安裝、啟動之前請自己建置
+
+## [0.1.31] - 2026-10-04
+
+### 新增
+
+- 沒有網路時，附近班次寫「**You're offline.**」並繼續顯示上次的班次與更新時間；班次詳情也寫「You're offline. Showing data from …」並保留公車位置與到站分鐘
+- TrueTime 不接受 API key 時，附近班次說明要按上方鑰匙圖示換 key；key 當天的請求次數用完時，說明即時班次明天才會回來（詳情與站牌面板也用同樣的說明）
+- 站牌與時刻表資料超過 7 天時，App 會在有網路時於背景重新下載（每天檢查一次）；下載失敗或下載到的檔案是空的時繼續用原本的資料，
+  更新後的方案規劃與 Depart at / Arrive by 可選的日期改用新的時刻表；背景更新剛好在規劃、查站牌時刻表或讀可選日期時完成，也不會混用新舊時刻表
+- 從舊版升級後第一次開 App 會重新下載一次站牌與時刻表
+- 手機上的時刻表已經過了最後一天時，首頁提醒「The bus timetable on this phone ended on …」
+- 第一次下載時刻表失敗時，規劃方案的面板會說下載失敗並請你檢查網路，不再一直寫「還沒下載完」（面板開著時也會馬上換）
+
+## [0.1.30] - 2026-10-04
+
+### 新增
+
+- 附近班次、點站牌看到的班次與方案的「Live」首班車，現在也包含**輕軌 T 線**（Red / Blue / Silver Line）的即時時間，不再只有公車。
+  其中一邊（公車或輕軌）暫時查不到時，另一邊的班次照常顯示
+- 點一班輕軌會在地圖上畫出它的路線，並顯示列車的即時位置與到站分鐘
+
+## [0.1.29] - 2026-10-04
+
+### 新增
+
+- 點一個方案後，地圖上的步行虛線改成**沿著街道與人行道**走（用 OpenStreetMap 的 FOSSGIS Valhalla 步行路線服務），方案的步行分鐘、出發（Leave by）與抵達時間也改用實際路線的時間，回到方案清單時那張卡片也一樣。
+  實際步行太久、來不及出門趕上第一班車或趕不上轉乘時，卡片和詳情會用紅字提醒「may miss a bus」；Arrive by 因步行變久而可能晚到時也會提醒。
+  服務查不到或 5 秒內沒回應時仍畫直線、用原本的估算，方案照常顯示；同一段路只查一次
+
+## [0.1.28] - 2026-10-04
+
+### 新增
+
+- 方案可以指定時間了：「Ways to get there」上方多了 **Leave now / Depart at / Arrive by** 三個選項（預設 Leave now，跟以前一樣）。
+  選 Depart at 或 Arrive by 後，下面出現日期與時間兩個按鈕，可選時刻表涵蓋範圍內的任一天。
+  Arrive by 會找出**最晚出發、仍能在指定時間前抵達**的方案，卡片最上面寫「Leave by 7:12 AM」；第一班車即時誤點、可能趕不上時，卡片會用紅字提醒
+- 出發時間在一小時以後的方案不查即時資料，只用時刻表時間（TrueTime 不會預測那麼遠）
+
+### 修正
+
+- 站牌今天的末班車開走後，站牌面板改列明天的班次，不再一片空白
+- Leave now / Depart at 選的時間已經沒有車（末班車開走了，或當天沒有班次）時，改找隔天的第一班，不再說找不到方案
+- 找不到方案時的說明不再寫死「today」，改成「…at this time」，因為現在可以查別天
+- Arrive by 不再列出**已經錯過**的方案（出發時間早於現在的）；全部都趕不上時顯示找不到方案
+- 「From: My location」一打開 App 就在搜尋框上方，不必先選目的地，就能先搜尋或長按地圖設定起點
+- Depart at / Arrive by 的日期只能選時刻表涵蓋的日子：時刻表日期還沒讀好時日期按鈕先停用，目前日期超出範圍時不能直接按 OK 保留
+- 切到 Depart at / Arrive by 時，預設時間改成**下一個整分**（例如 10:50:30 變 10:51），不再往回截到 10:50 而列出幾十秒前已開走的車
+- 今天不在時刻表涵蓋範圍內（例如新時刻表明天才生效）時，Depart at / Arrive by 的預設日期改成**最近一個有時刻表的日子**；只改時間也不會再送出範圍外的日期
+- 方案詳情裡一小時以後才上車的公車，按「Live bus」直接顯示時刻表時間，不再去查即時資料
+- 方案卡片與方案詳情裡**不是今天**的時間會加上日期（例如「Fri, Oct 2 7:00 AM」），隔天首班車或跨日的 Arrive by 方案不會再被看成今天
+
+## [0.1.27] - 2026-10-04
+
+### 新增
+
+- 起點也可以換了：選好目的地後，上方多一列「From: My location」。點它可以搜尋地址，或長按地圖選一個點當起點，方案就改從那裡算，
+  不再跟著你走動而改變；按 ✕ 回到「My location」。旁邊的 ⇅ 按鈕會對調起點與目的地：起點是你的位置時，對調後目的地就是你按下當時所在的位置
+  （顯示「My location (pinned)」）
+- 站牌面板裡標「Scheduled」的班次也可以點了：會列出這班車從這一站起接下來停靠的站牌與預定時間；按返回回到站牌的班次列表
+
+### 變更
+
+- 找不到起點附近的站牌時，說明改成「…of the starting point」，因為起點不一定是你的位置
+
+## [0.1.26] - 2026-10-03
+
+### 新增
+
+- 地圖上的站牌可以點了：點附近的站牌（或班次路線上的站牌），下方面板會列出站名、站牌編號（站牌上印的號碼）與接下來的班次，每 30 秒更新。
+  有即時預測時顯示即時時間並標「Live」，點一班會打開它的即時位置，按返回回到這個站牌；沒有 TrueTime key、連不上或該站目前沒有預測時，
+  改列時刻表上的班次並標「Scheduled」，也會說明為什麼沒有即時時間
+- 地圖左下角新增「圖例」按鈕：說明你的位置、站牌、上車站、路線上的站牌、公車路線、步行虛線、公車圖示與目的地各是什麼，顏色跟著淺色 / 深色主題
+
 ## [0.1.25] - 2026-10-03
 
 ### 修正

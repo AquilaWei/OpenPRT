@@ -29,12 +29,11 @@ import okhttp3.coroutines.executeAsync
  * [TrueTimeError.MissingApiKey] without touching the network.
  *
  * PRT serves several data feeds from one site and most endpoints refuse requests that do not
- * name one, so every request carries [dataFeed]. Light rail is a separate feed ("Light Rail")
- * and would need its own client.
+ * name one, so every request carries [feed]; buses and light rail each need their own client.
  */
 class TrueTimeClient(
     private val apiKey: () -> String,
-    private val dataFeed: String = BUS_DATA_FEED,
+    val feed: DataFeed = DataFeed.BUS,
     private val httpClient: OkHttpClient = defaultHttpClient(),
     private val baseUrl: HttpUrl = DEFAULT_BASE_URL.toHttpUrl(),
     // Response bodies are read with blocking I/O.
@@ -81,7 +80,7 @@ class TrueTimeClient(
             "prd",
             PredictionDto.serializer()
         ) {
-            it.toModel()
+            it.toModel(feed)
         }
     }
 
@@ -132,7 +131,7 @@ class TrueTimeClient(
                 .addPathSegment(endpoint)
                 .addQueryParameter("key", key)
                 .addQueryParameter("format", "json")
-                .addQueryParameter("rtpidatafeed", dataFeed)
+                .addQueryParameter("rtpidatafeed", feed.apiName)
                 .apply { params.forEach { (name, value) -> addQueryParameter(name, value) } }
                 .build()
 
@@ -207,9 +206,6 @@ class TrueTimeClient(
 
         /** BusTime rejects more than this many stop or vehicle IDs in one request. */
         const val MAX_IDS_PER_CALL = 10
-
-        /** PRT's bus feed, as named by `getrtpidatafeeds`. */
-        const val BUS_DATA_FEED = "Port Authority Bus"
 
         fun defaultHttpClient(): OkHttpClient = OkHttpClient
             .Builder()

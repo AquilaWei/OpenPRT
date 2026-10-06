@@ -10,6 +10,28 @@
 
 ## 計畫概覽
 
+### 第三輪規劃（2026-10-03）：剩下的待辦
+
+目標「完成 OpenPRT 剩下的待辦事項」。第二輪的 F14、F15、F16、F20、F21、F25、F26 都已完成（0.1.13–0.1.25），
+`feature_list.json` 再改寫成**只列還沒做的 7 項**，順序如下（已完成的說明仍在下方各段落與 git 歷史）：
+
+| 順序 | 功能 | 內容 | 為什麼排這裡 |
+|---|---|---|---|
+| 1 | F24 | 地圖站牌可點擊 + 圖例 | 前幾個 session 一直寫「下一步 F24」；只動地圖與新面板，不碰規劃 |
+| 2 | F22 | 起點可輸入地址、對調起訖 | 使用者已同意；F27 也要改同一塊規劃輸入區，先把起點做好 |
+| 3 | F27 | Leave now / Depart at / Arrive by | 使用者 2026-10-03 新提出；需要反向 RAPTOR，是剩下最大的一項，可能要拆兩個 session（見下） |
+| 4 | F23 | 步行段沿街道（FOSSGIS Valhalla） | 只改方案地圖的步行線與分鐘，獨立 |
+| 5 | F17 | 輕軌 T 線 | 待使用者確認是否保留；附近班次、站牌班次（F24）、詳情都要合併兩個 feed，所以排在 F24 之後 |
+| 6 | F18 | 離線 / key 失效 / 配額 / GTFS 過期 + 每週背景更新 | 要涵蓋前面所有畫面的錯誤狀態，所以放在功能都做完之後 |
+| 7 | F19 | tag 觸發的 release APK | 2026-10-05 本機部分做完（0.1.32），`passes: false`：等使用者回答 GitHub repo 問題、第一次 release 在 GitHub 跑過、從 Release 安裝並啟動後才算完成 |
+
+- verify 指令不變，2026-10-03 規劃時在本 worktree 跑過（結果見「狀態」最後一筆）
+- F27 若一個 session 做不完：先做「RoutePlanner 反向搜尋 + Repository」（前兩條 steps），UI 留到下一個 session；
+  `passes` 只在全部 steps 完成才改 true
+- F17 / F19 被使用者刪掉時，直接從 `feature_list.json` 移除，不要留 `passes: false` 的空項目
+- 完成所有功能後**仍不能升 0.2.0**：依規範要使用者實機驗收（下方累積清單）通過才升 MINOR
+- iOS 預設不在這一輪（questions 第一題確認）
+
 ### 第二輪規劃（2026-10-02）：目前完成度
 
 **還沒完成**（F14、F15、F20、F21、F26、F25、F16 已於同日完成，接著是 F24）。目標 1（附近班次）、目標 2（班次詳情 + 即時公車）的程式已完成；目標 3（路線規劃）
@@ -421,6 +443,40 @@
 - `MapPalette.busGlyph`：淺色白（#188038 底）、深色深綠 `#0D3B1E`（#81C995 底，白色太淡）；測試要求圖形對比 ≥ 3:1（WCAG 非文字）
 - 新增 4 個測試（全部 407 個），verify 通過。手機當時斷線，之後和 F25 一起裝上（0.1.19），實機截圖確認公車徽章出現在路線上
 
+## 站牌圖示（0.1.34，使用者 2026-10-05 實機回饋）
+
+- 使用者裝了 v0.1.33 後回報「公車站牌只是一個點，應該改成簡單直覺的圖標」；不在 `feature_list.json`，照回饋直接做
+- 附近站牌改成圓角方形站牌（`map/StopSign.kt` 程式畫 bitmap，沿用 `ic_bus` 圖形，和其他地圖 App 的公車站圖示同一個樣子）；方形是為了和圓形的公車徽章分開。
+  上車站、點選的站、方案的上車站改成較大的金色站牌（30 dp，附近站牌 22 dp）。**路線沿途的站與方案下車站維持圓點**：每站都畫站牌會蓋住路線
+- 新增 `MapPalette.stopGlyph` / `boardingStopGlyph`：淺色白 / 深藍 `#17365F`（白色在金色上只有約 2:1），深色都是 `#111318`；
+  4 個對比 ≥ 3:1 的測試。圖例新增 `STOP_SIGN` / `LARGE_STOP_SIGN`，測試比對圖例與地圖同色
+- 站牌圖示全部畫出（`iconAllowOverlap` + `iconIgnorePlacement`），因為每個都能點；點擊判斷不變（48 dp 觸控範圍比圖示大）
+- 用本機 release 金鑰建置 0.1.34 的 arm64 APK，`adb install -r` 覆蓋手機上的 Release 版（簽章相同，資料保留），深色主題截圖確認站牌圖示與點選後的金色站牌正常
+
+## 起點與終點標記（0.1.35，使用者 2026-10-05 實機回饋）
+
+- 使用者回報：起點改成 Cathedral of Learning 後地圖只看到終點與自己的位置，看不到起點；要一個起點顏色圖示，終點紅色可以但圖示要換
+- 起點：`StopMap` 新參數 `origin`（`DestinationUiState.origin`，My location 時是 null），畫成紫色（淺色 `#8E24AA`、深色 `#CE93D8`，和其他標記都不同色）
+  圓點加白框、白色中心，用兩個 CircleLayer，不用 bitmap
+- 終點：紅色水滴形圖釘（`map/PlaceMarkers.kt` 的 `pinBitmap`），`iconAnchor` 在底部，針尖對準地點
+- 鏡頭：沒有方案時框住 `cameraPoints(center, origin, destination)`，有選起點時用起點取代使用者位置（5 個測試）
+- 圖例新增 `RINGED_CENTER_DOT`（起點）與 `PIN`（目的地）；共 786 個測試，verify 通過。
+  裝到手機，深色主題實際操作 Cathedral of Learning → CMU，截圖確認紫點、紅色圖釘與鏡頭範圍正確
+
+## Apple 簡約風（0.1.37，使用者 2026-10-05 要求）
+
+- 使用者要「參考蘋果簡約風重新設計」，並把 README 改成英文（面向匹茲堡使用者）。取代 F21 的 PRT 深藍 + 金黃：
+  只留**一個藍色重點色**（淺色 `#0066CC`、深色 `#4DA3FF`，是 iOS 系統藍調暗到 AA），金色只剩「上車站」（地圖上車站、時間軸、Board here）
+- 顏色在 `ui/theme/Color.kt`：iOS grouped 背景（淺色 `#F2F2F7` 底 + 白卡片、深色黑底 + `#1C1C1E` 卡片），次要文字 `#636366` / `#AEAEB2`，
+  `surfaceTint` 等於 surface，浮起來的元件靠陰影不靠染色；`ThemeContrastTest` 的 28 組對比都過
+- `ui/theme/Type.kt`：標題 SemiBold、字距略收；圓角 6 / 10 / 12 / 16 / 24 dp。字型仍用手機的（SF Pro 不能隨 Android App 散布）
+- 元件：卡片拿掉外框；上方列白底（深色黑底）黑字；地圖兩顆按鈕改成白色圓形、藍色圖示；搜尋框白卡片加陰影；
+  Leave now / Depart at / Arrive by 改成 iOS 分段控制（灰色軌道、選中的是白色、沒有勾勾）
+- 狀態列圖示改成跟主題（`SystemBarStyle.auto`）：原本上方列是深藍所以一律白色圖示，改白底後看不到
+- 卡片內距試過 16 dp，Robolectric 預設小螢幕上班次詳情的「Board here」被擠出畫面（2 個測試失敗），維持 12 dp
+- 站牌圖示在 zoom 12–15 之間從 0.5 倍放大到原尺寸，規劃方案縮小地圖時不再疊成一團
+- CHANGELOG 從 0.1.37 起用英文寫（release notes 給匹茲堡使用者看），舊段落維持中文
+
 ## 卡片化介面與方向切換（F25 決定）
 
 - 共用元件 `ui/Cards.kt`：`InfoCard`（surface 底 + outlineVariant 外框，兩種主題都分得開）、`MinutesPill`（primaryContainer）、
@@ -458,6 +514,206 @@
 - 實機（Galaxy S23）確認：搜尋 Carnegie Mellon University → 點方案 → 地圖畫出 64 路線與上車站；6:33 的班次按「Live bus」顯示僅時刻表
 - 新增 26 個測試（全部 476 個），verify 通過（lint 0 issue）
 
+## 站牌可點擊與地圖圖例（F24 決定）
+
+- **地圖上所有 `StopMarker.stopId` 現在都是 TrueTime ID**（`stop_code`，沒有時退回 `stop_id`）：附近站牌原本放 GTFS `stop_id`，
+  路線站牌（pattern）放 TrueTime `stpid`，兩邊不一致；改成一致後點哪一種站牌都能直接查 TrueTime。面板的「Stop #…」就是這個號碼（站牌上印的）
+- 點擊判斷 `map/StopHitTest.kt` 的 `stopAt`：螢幕像素距離，半徑 24 dp（48 dp 觸控目標的一半），取最近的；範圍外回傳 null 且 click listener
+  回傳 false（不吃掉事件）。長按是另一個 listener，不受影響。可點的站牌 = 目前畫出的附近站牌 + 班次詳情的路線站牌；方案（trip）的上下車站不能點
+- `stop/StopDeparturesViewModel`：和詳情相同的 `Selection` + `autoRefresh()` 模式（`MainActivity` 用 `repeatOnLifecycle(STARTED)`），每 30 秒一次 `getpredictions`（只在面板開著時，多一次呼叫）。
+  即時預測**有任何一班**就只顯示即時（最多 10 班）；TrueTime 失敗、沒有 key、或成功但沒有該站預測（含 No data found）時改查時刻表，
+  `StopTimesSource.Scheduled(liveError)` 記下原因，面板顯示「No live times (原因)」或「No live predictions…」。
+  時刻表班次沒有車輛可追，點了改開「班次時刻」：`ScheduledRun`（trip_id + 服務日 + stop_sequence）交給 `RoomScheduledTripSource`
+  （`GtfsDao.getTripStopTimesFrom`，走主鍵）列出這班車從該站起的後續站與預定時間（第一站用 departure、其餘用 arrival），標「Scheduled」；
+  返回（箭頭或系統返回，`StopDeparturesViewModel.back`）先回到站牌列表再關站牌。30 秒更新不會關掉開著的班次時刻（reviewer 2026-10-04 要求補上）
+- 時刻表：`data/gtfs/StopSchedule.kt` 的 `RoomStopScheduleSource`，用 `GtfsDao.getStopsByTrueTimeId`（掃 stops 表，幾千筆，一次點擊一次）找 GTFS 站牌，
+  查今天與**前一個服務日**（跨午夜的班次）再合併排序；路線名稱取 `routes.shortName`。`GtfsTimetable` 第一次在 App 內使用
+- 步行分鐘：選站牌時用使用者位置到站牌的直線距離（和附近班次一樣 1.2 m/s 無條件進位），沒有位置時是 0
+- 導覽順序（sheet 內容）：班次詳情 > 站牌 > 方案 > 附近班次。從站牌點進詳情，返回（箭頭或系統返回）回到站牌；站牌的返回回到方案或附近班次。
+  在詳情中點路線站牌會先關掉詳情再開站牌。詳情返回箭頭的說明文字仍是「Back to nearby departures」（從站牌進入時不精確，未改）
+- 選中的站牌在地圖上用金色大圓（和上車站同樣式，`selected-stop-layer`），詳情開著時不畫
+- 圖例：`map/MapLegend.kt` 的 `mapLegend(palette)` 從同一份 `MapPalette` 取色（`MapLegendTest` 逐項寫死兩種主題的預期色），
+  `MapLegendDialog` 用 Canvas 畫圓點 / 線 / 虛線、公車用 `ic_bus`。按鈕是地圖左下角的小 FAB（`ic_legend`，Material Icons info_outline）。
+  Robolectric 的小螢幕放不下八列，所以內容可捲動（大字型的手機也需要）
+- 手機這次顯示 `unauthorized`（USB 偵錯授權還沒按允許），**沒有裝到手機**，地圖點擊只能實機驗收
+- 新增 47 個測試（全部 559 個），verify 通過（lint 0 issue）
+
+## 起點地址與對調（F22 決定）
+
+- 兩端都由 `DestinationViewModel` 管：`DestinationUiState.origin`（null = My location）、`destination`、`editing`（`Endpoint.ORIGIN` / `DESTINATION`，
+  搜尋與長按填哪一端）。`editOrigin()` 進入「選起點模式」，直到選了地點、長按地圖或按 ✕（`cancelOriginEdit`）才結束；
+  失焦**不會**結束（長按地圖時搜尋框會失焦，不能因此把長按當成選目的地）
+- `TripPlanViewModel.onEndpointsChanged(origin, destination)`：`MainActivity` 用一個 `LaunchedEffect(origin, destination)` 一次送兩端，對調只規劃一次。
+  有選起點時用它的座標，定位更新完全不影響規劃；清除起點（null）時以目前位置重新規劃（沒有位置時等第一個定位）
+- 對調（`swapEndpoints`）：起點是 My location 時，新目的地是**按下當時**的位置（`Destination.wasUserLocation = true`，顯示「My location (pinned)」），
+  新起點是原目的地；再對調一次時這個「固定的位置」不會變成起點，而是回到 My location（跟著定位）。還不知道位置時對調不做事
+- From 列**一直都在**（review 後改）：F22 要求它在目的地搜尋框上方，所以還沒選目的地也能先選起點（搜尋或長按地圖），⇅ 等有目的地才出現。
+  搜尋區約 121dp（原本約 72dp，測試上限 130dp）；`HomeScreenTest` 中搜尋框下方狀態訊息的 4 個測試改用手機尺寸（`w360dp-h780dp`），
+  Robolectric 預設 470dp 高的螢幕放不下
+- 「離起點太遠」的 NoRoute 文字改成「of the starting point」
+- 尚未做：地圖上沒有起點標記；只有目的地時的相機縮放仍以你的位置與目的地為準（選了方案後會縮放到整個行程，包含起點）
+- 新增 26 個 F22 測試與 16 個時刻表班次測試（全部 601 個），verify 通過（lint 0 issue）
+
+## 指定出發 / 抵達時間（F27 決定）
+
+- 反向搜尋：`TransitNetwork.mirrored`（第一次用時才建、跟著網路一起快取）把每個 trip 倒過來、時間取負、上下車權限互換，
+  轉乘不變（步行雙向）。`RoutePlanner.planArrivingBy` 在鏡像網路上從目的地往回跑**同一個** RAPTOR，再把結果翻回正向（`Itinerary.mirrored`），
+  所以轉乘緩衝與 Pareto（少轉乘優先、多轉一次只有出發更晚才保留）規則和正向完全一樣；最後一班車下車後直接步行，不加緩衝
+- `TripPlanSource.plan(origin, destination, time: TripTime)`：`TripTime.DepartAt` / `ArriveBy`。Repository 跨服務日的合併也照 Arrive by 改成「出發越晚越好」。
+  凌晨的 Arrive by 會找前一服務日的深夜班次（例：週四 06:00 前抵達，會找到週三 24:40 那班）
+- `TripPlanViewModel.time`（`TripTimeUiState`：mode、at、dates）獨立於目的地；切換模式或時間都會重新規劃（清掉已選方案）。
+  Depart at / Arrive by 的預設時間是現在**往上取到下一個整分**（第三次 review 後；原本往下截，會列出幾十秒前開走的車）。日期範圍由 `RoomTimetableDatesSource` 從 calendar / calendar_dates 讀（第一次選非 Leave now 時才讀）
+- 出發時間在**一小時以後**（`LIVE_HORIZON`）的方案不查 TrueTime；Arrive by 方案的首班車即時誤點、推算抵達晚於期限時 `TripOption.late = true`，卡片顯示紅字提醒
+- 畫面：`trip/TripTimeControls.kt`（三段 SegmentedButton + 日期 / 時間按鈕，Material3 `DatePickerDialog` 只能選時刻表範圍內的日子，時間用 `TimePicker`）。
+  日期時間以手機時區顯示與解讀（和方案時間一致）。Arrive by 卡片最上面是「Leave by …」
+- NO_CONNECTION 文字改成「No buses in the timetable connect these places at this time.」
+- 跨到隔天（review 後補上）：Depart at / Leave now 在當天與前一服務日都是 NO_CONNECTION 時，改查**下一個服務日**（例：週日 10:00 出發 → 週一 07:00 的 T1，`TripPlan.serviceDate` 是週一）。只在找不到時才查，因為隔天的車不會比今天還在跑的車更早到；快取仍最多兩個網路（fallback 只留隔天那個）。Arrive by 不需要：隔天的班次都晚於期限
+- 0.1.28 的 `VERSION_CODE` 原本沿用 0.1.27 的 26，改成 27
+- 新增 41 個測試，review 後再加 2 個隔天回歸測試（全部 644 個），verify 通過（lint 0 issue）。上一個 session 未提交的 Repository 測試
+  `plan_arriveByBeforeTheFirstTrip_returnsNoConnection` 原本用週四 06:00，但週三深夜班次確實趕得上，改成週一 06:00（週日沒有班次）
+- 第二次 review 後的修正：
+  - Arrive by 的反向搜尋會找到**出發時間早於現在**的方案（例：現在 9:55、期限 10:00，9:40 出發那班）。`TripPlanViewModel` 只在 Arrive by 時把
+    `departureTime < now` 的方案拿掉（用含即時誤點的出發時間）；全部拿掉時顯示 NO_CONNECTION。過濾放在 ViewModel 而不是 Repository，因為只有它知道「現在」
+  - 日期按鈕在時刻表日期讀到之前停用；`DatePickerDialog` 的 OK 只有選到範圍內的日子才能按（目前日期超出範圍時預設不選）。
+    時間按鈕仍保留目前的日期，所以「今天」本身不在時刻表範圍內時，只改時間仍會送出今天（第三次 review 後已修正，見下）
+  - 新增 9 個測試（全部 653 個），verify 通過；其中 6 個回歸測試確認在修正前的程式下會失敗
+- 第三次 review 後的修正（三個 `fix:` commit，版號仍是未推送的 0.1.28）：
+  - **日期範圍改由 `TripPlanViewModel` 把關**：新增建構參數 `zone`（預設手機時區，和畫面一致），`setTime` 與預設時間都經過 `withinTimetable`，
+    超出時刻表範圍的日子換成最近的有效日、保留時刻。日期讀到之前選的時間在讀完後也會被拉回範圍內並重新規劃一次。
+    放在 ViewModel 而不是畫面，是因為時間按鈕、日期按鈕、預設值三個入口都要守，只有 ViewModel 全看得到
+  - **跨日時間顯示日期**：`TripClockFormat`（`TripPlansPanel.kt`）在時間不是「今天」時前面加 `EEE, MMM d`（`DateFormat.getBestDateTimePattern`，跟語系走），
+    方案卡片（出發、抵達、Leave by、首班車、遲到提醒）與方案詳情都用它。「今天」由 `TripPlansPanel` / `TripDetailsPanel` 的 `today` 參數決定，預設手機今天的日期
+  - 新增 5 個測試（全部 658 個），verify 通過（lint 0 issue）；其中 4 個在拿掉修正的程式下會失敗，另一個（今天的方案不加日期）是防止日期加過頭的守門測試
+- 第四次 review 後的修正：方案詳情中點「Live bus」時，**上車時間在一小時以後的乘車段**直接顯示「時間取自時刻表」（`RideLookup.ScheduledOnly`），
+  不再查 TrueTime。判斷用該乘車段的預定上車時間（不是整個方案的出發時間），所以一小時內出發、但轉乘段在一小時後的方案，後段也不查。
+  新增 2 個測試（全部 660 個），兩個都在修正前的程式下會失敗
+
+## 步行街道路線（F23 決定）
+
+- 服務：**FOSSGIS Valhalla** `https://valhalla1.openstreetmap.de/route`，`costing=pedestrian`、`directions_type=none`（只要折線與秒數），GET `?json=…`。
+  回應 `trip.legs[].shape` 是精度 **6 位**的 encoded polyline，`trip.summary.time` 是秒（小數，往上取整）
+- **使用政策**（2026-10-04 讀 https://routing.openstreetmap.de/about.html，完整版在 FOSSGIS 網站、德文）：要帶有效 User-Agent、**每秒最多 1 次**、
+  不可大量使用或爬取、要顯示 OSM 出處。做法：每個請求帶 `User-Agent: OpenPRT/<版號>`；`ValhallaWalkRouter` 用 Mutex 讓同一個實例的請求間隔至少 1 秒；
+  `CachingWalkRouter`（LRU 64 筆、只存成功的街道路線）讓同一段路（起訖座標相同）只查一次；只對**選定的方案**查，不對整份方案清單查。
+  OSM 出處已在 OpenFreeMap 地圖的 attribution 裡
+- 程式：`walk/WalkRouter.kt`（`WalkPath.Streets` / `Straight`、`WalkRouter`、`CachingWalkRouter`）、`walk/ValhallaWalkRouter.kt`。
+  失敗、HTTP 錯誤、格式錯誤、逾時（預設 **5 秒** call timeout）一律回 `Straight`，方案照常顯示。街道路線前後接上真正的起訖點（服務會把起訖點吸附到路上）
+- `TripPlanViewModel.select`：先讀乘車段站牌，再**逐段**查步行（一段查到就更新地圖），`SelectedTrip.walks` 依步行段順序存結果；
+  `toMapLayers` 多一個 `walkPaths` 參數，沒有路線的步行段畫直線。長度為 0 的步行段（起點就在站牌）不查
+- 步行分鐘：方案詳情（`TripDetailsPanel`）用 `SelectedTrip.minutesOf` 顯示街道路線的分鐘
+- **方案時間跟著街道路線走**（review 修正）：每查到一段，`TripOption.withWalks` 用街道秒數重算**選定方案**的步行分鐘、出發（Leave by）、抵達與總分鐘，
+  同時換掉清單裡同一個方案的卡片；其他沒點過的方案仍是規劃器的直線估算（只對選定方案查服務）。重算只看 plan、第一班車的 `boardingTime` 與步行秒數，重複套用結果相同
+  - 第一段步行：出發時間 = 上車時間 − 街道秒數。變長且出發時間已早於現在 → `missesBus`
+  - 轉乘步行：多出的秒數超過下一班車前的等待 → `missesBus`；抵達時間照第一班車誤點同樣的規則往後推（`delayAtEnd`）
+  - 最後一段步行：抵達時間加上多出（或減去省下）的秒數；超過 Arrive by 期限就是 `late`
+  - 卡片與詳情共用 `TripWarning`：`missesBus` 顯示「may miss a bus」；`late` 且有步行變長時怪步行，否則照舊怪第一班車誤點
+  - `updateSelected` 改用 `plan` 比對選定方案，因為重算會換掉 `TripOption` 本身
+- Fixture `valhalla/route_cmu_to_craig.json`：2026-10-04 真實錄製（Forbes Ave 近 CMU → Craig St，38 點、446.797 秒）
+- 新增 24 個測試（全部 684 個），verify 通過（lint 0 issue）
+
+## 輕軌 T 線（F17 決定）
+
+- 使用者沒回答 questions 的輕軌題（非互動 session），照建議選項「要，照順序做 F17」實作；若使用者之後決定不要，revert `44a6ef4` 即可
+- GTFS 本來就有輕軌：`routes.txt` 的 `RED` / `BLUE` / `SLVR`（route_type 2），車站是一般站牌、stop_code 是 999xx（例：Steel Plaza stop_id `10`、code `99994`），
+  所以附近站牌與站牌面板**已經包含輕軌站**，不用改 GTFS 匯入。缺的只是 TrueTime 那邊沒問 `Light Rail` feed
+- `TrueTimeModels.kt` 新增 `enum DataFeed(apiName)`：`BUS`（"Port Authority Bus"）、`LIGHT_RAIL`（"Light Rail"）。`TrueTimeClient` 的 `dataFeed: String` 換成 `feed: DataFeed`，
+  `BUS_DATA_FEED` 常數拿掉。`Prediction.feed` 由 client 填入（預設 BUS），`DepartureItem.feed` 從 prediction 帶過來（附近班次、站牌面板、方案的「Live bus」三處）
+- `departures/MergedPredictionSource.kt`：同時（`async`）問每個 feed、合併結果。規則：
+  - 各 feed 的 `No data found` 當空列表
+  - 至少一個 feed 有預測 → 成功，失敗的 feed 被忽略（公車或輕軌暫時壞掉，另一邊照常顯示）
+  - 沒有任何預測且有 feed 失敗 → 回第一個失敗（順序是 `DataFeed.entries`，所以公車的錯誤優先）。這樣沒有 key、沒有網路仍顯示錯誤，而不是「附近沒有班次」
+  - 已知取捨：公車 feed 暫時失敗但輕軌有預測時，那 30 秒內列表只剩輕軌，且不顯示錯誤
+- `MainActivity`：每個 `DataFeed` 一個 `TrueTimeClient`（共用 App 內的 key）。附近班次、站牌面板、方案首班車即時時間都用合併後的 source；
+  班次詳情用 `tripSourceOf(clients)`：`TripSource` 的三個方法多了 `feed` 參數，`DepartureDetailsViewModel` 用 `departure.feed` 問對的 feed
+- **API 呼叫次數**（每個 predictions 呼叫變兩個請求）：
+  - 附近班次：每 30 秒 1 → **2** 個請求；App 整天開著 2880 → **5760** 次 / 天
+  - 站牌面板（開著時）：同樣每 30 秒 2 個；方案首班車：每次規劃 2 個（原 1 個）
+  - 班次詳情：不變（每 15 秒 getvehicles + getpredictions，只問該班車的 feed）
+  - BusTime 預設每日額度是 **10,000 次 / key**（未向 PRT 確認是否不同），一般使用（一天開幾十分鐘）遠低於額度；
+    附近班次整天開著是 5760 次；若同時一直開著站牌面板會再加 5760 次而超過額度（沒查證兩者是否同時更新）。若實機發現配額不夠，
+    可改成只在附近有輕軌站時才問輕軌 feed（需要從 GTFS 判斷哪些站是輕軌站）
+- **未確認（沒有 key）**：輕軌的 TrueTime `stpid` 是否也等於 GTFS stop_code、輕軌 `rt` 是否是 `RED` / `BLUE` / `SLVR`（方案首班車用 `rt == route_id` 配對）。列入實機驗收
+- 新增 16 個測試（全部 721 個）：`MergedPredictionSourceTest`（9）、附近班次合併兩個 feed（1）、詳情問對的 feed（2）、client 送 / 標記 Light Rail（2）、
+  站牌面板與方案 Live bus 帶著 feed（2）。新測試用到新的 `feed` API，舊程式下無法編譯（等同失敗）
+
+## 可靠性與離線狀態（F18 決定）
+
+- **錯誤訊息**：`TrueTimeResult.kt` 新增 `ApiProblem` 與 `TrueTimeError.Api.problem`，從 TrueTime 的 `msg` 文字判斷：
+  含「key」→ `INVALID_KEY`（與 `ApiKeyChecker` 原本的規則相同，改成共用）；含「transaction」→ `QUOTA_EXCEEDED`（BusTime 文件的訊息是
+  「Transaction limit for current day has been exceeded.」，**未用真實 key 實測**）；其他 → `OTHER`，照舊引用 TrueTime 原文
+  - 附近班次（`DeparturesPanel.FailureText`）：Network → 「You're offline.」、key 無效 → 換 key 的說明、配額 → 明天恢復；後面照舊接「Showing departures from …」
+  - 班次詳情：Network 且有舊資料 → 「You're offline. Showing data from …」；`trueTimeErrorReason` 加 key 無效與配額兩種原因（詳情路線、站牌面板共用）
+  - 保留上次資料本來就有（`NearbyDeparturesViewModel`、`DepartureDetailsViewModel` 失敗時只改 status / error），這次補上離線的 ViewModel 與畫面測試
+- **GTFS 更新**：`data/gtfs/GtfsUpdater.kt`
+  - `GtfsImportLog`：最後一次成功匯入的時間存在 SharedPreferences（`gtfs` 檔），**不放 Room**，避免改 schema 讓所有人重新下載。
+    0.1.31 以前的安裝沒有紀錄 → 視為過期，第一次背景檢查就會重新下載一次
+  - `GtfsUpdater`：唯一的匯入入口，`importIfEmpty()`（附近站牌，原本 `NearbyStopRepository` 的鎖搬過來）與 `updateIfOlderThan(7 天)`（背景）共用一個 `Mutex`。
+    兩者同時觸發時，後拿到鎖的那個看到資料已在 / 剛記錄過時間，就不下載。只有成功才記錄時間
+  - `GtfsUpdateWorker`：**每天**一次的 `PeriodicWorkRequest`（unique、`KEEP`、`NetworkType.CONNECTED`），資料滿 7 天才真的下載，
+    所以資料最多比 7 天再舊約一天。選每天檢查而不是每 7 天排一次：週期 7 天時，剛匯入完的那次檢查會略過，最舊會到 14 天。
+    結果：成功 / 不需要 → success；Network / Timeout → retry（WorkManager 退避）；HTTP 錯誤 / 壞掉的 feed → failure（隔天再試，不重複下載 22 MB）
+  - 約束只有「需要網路」，**沒有限 Wi-Fi**：22 MB 可能用到行動數據，但只限 Wi-Fi 的話沒 Wi-Fi 的人永遠不會更新。若使用者在意可改 `UNMETERED`
+  - WorkManager 改成第一次用到時才初始化（manifest 移除 `WorkManagerInitializer`，`OpenPrtApplication` 實作 `Configuration.Provider` 並給 `GtfsUpdateWorkerFactory`），
+    worker 才拿得到 App 的 `GtfsUpdater`（同一把鎖）。排程放在 `MainActivity.onCreate`，不放 `Application.onCreate`，Robolectric 測試才不會啟動 WorkManager
+- **規劃快取失效**：`TripPlanRepository` 多一個 `feedVersion: () -> Any?`（App 傳 `gtfsUpdater.lastImport.value`），值變了就丟掉所有已建的 planner
+- 新增依賴：WorkManager 2.12.0（`work-runtime-ktx`、測試用 `work-testing`）
+- 新增 24 個測試（全部 745 個）：`GtfsUpdaterTest`（7）、`GtfsUpdateWorkerTest`（7，排程週期、需要網路、重複排程只一個、過期下載、未過期不下載、HTTP 失敗、連不上 retry）、
+  `ApiProblemTest`（3）、附近班次畫面（3）、詳情畫面（2）、詳情 ViewModel 離線（1）、規劃快取失效（1）。
+  「同時觸發只下載一次」與「更新後重建 network」兩個測試在拿掉鎖 / 拿掉 `planners.clear()` 後確認會失敗
+- **review 修正（2026-10-05）**：
+  - **空表擋下**：`GtfsImporter` 在 stops / routes / trips / stop_times 任一表 0 列，或 calendar + calendar_dates 合計 0 列時丟 `GtfsFormatException`，
+    transaction 回滾，原本的時刻表不動（只有標頭的 feed 原本會被當成功並清空資料）
+  - **過期提示**：`MapViewModel` 在每次查站牌後與每次匯入成功後讀時刻表最後一天，早於今天（PRT 時區）時 `MapUiState.timetableEndedOn` 設成那天，
+    首頁狀態訊息顯示「The bus timetable on this phone ended on …」
+  - **空資料庫 + 下載失敗**：`GtfsUpdater.lastImportFailed`（只放記憶體，匯入開始時清掉、失敗時設定）→ `TripPlanRepository(importFailed = …)` →
+    `TripPlanResult.NoTimetable(importFailed)`；方案面板改說「Couldn't download the bus timetable…」，還在下載時仍說「hasn't finished」
+  - **日期範圍重讀**：`GtfsUpdater.lastImport` 改成 `StateFlow<Instant?>`。`TripPlanViewModel(timetableUpdates = …)` 每次有新值時，
+    若已讀過日期或目前不是 Leave now 就重讀；畫面停在「沒有時刻表」時也自動重新規劃
+  - 新增 18 個測試（全部 763 個）；空表、日期重讀、過期警示消失、NoTimetable 重新規劃這幾個測試在拿掉修正後確認會失敗
+- **第二次 review 修正（2026-10-05）**：面板開著時第一次下載失敗，原本會一直停在「hasn't finished」（失敗只改了一個變數，ViewModel 只聽成功）。
+  `GtfsUpdater.lastImportFailed` 改成 `StateFlow<Boolean>`，`TripPlanViewModel(importFailures = …)` 收到新值時，畫面若是 `NoTimetable` 就只換
+  `importFailed`（失敗 → 下載失敗；重新開始下載 → 還在下載），不重新規劃。新增 3 個測試（全部 766 個），兩個切換測試在拿掉修正後確認會失敗
+- **第三次 review 修正（2026-10-05）**：規劃器建網路時連續讀日曆、站牌、班次、停靠時間，背景更新可能在中間提交，組出新舊混合的方案；
+  快取版本又是另外讀的 SharedPreferences 匯入時間。改成：
+  - 資料庫新增 `imports` 表（`GtfsImportEntity`，AUTOINCREMENT id），匯入在同一個 transaction 寫一列；schema 3 → 4，
+    已裝的手機升級後資料表被清掉，**會重新下載一次時刻表**（`importIfEmpty`）
+  - `TransitNetworkSource.networks(daysToBuild)`：`RoomTransitNetworkSource(database)` 在一個 `withTransaction` 裡先讀 import id，
+    再讀 `daysToBuild(importId)` 挑出的所有日子，回傳 `TimetableNetworks(importId, networks)`；匯入與這些讀取互相等待，不會交錯
+  - `TripPlanRepository` 拿掉 `feedVersion`，改用讀到的 import id 標記快取：id 變了就清掉所有 planner，這次要的每一天都從新資料讀，
+    一次規劃不會混用兩份時刻表
+  - 新增 2 個測試（全部 768 個）：讀到一半時另一條執行緒匯入新 feed，方案仍是開始讀的那份（拿掉 transaction 後確認會失敗）；
+    那次匯入完成後下一次規劃改用新 feed。原本用假 `feedVersion` 的測試改成真的重新匯入
+- **第四次 review 修正（2026-10-05）**：站牌時刻表與可選日期也是連續好幾個查詢，背景更新在中間提交會混用新舊資料
+  （班次暫時消失、路線名稱或日期範圍錯）。改成：
+  - `RoomStopScheduleSource(database)` 一次查詢（站牌、三個服務日的日曆與班次、路線名稱）放在同一個 `withTransaction`
+  - `GtfsTimetable(database).departuresAfter` 的日曆與班次查詢也包在 transaction 裡（單獨呼叫時同樣一致；巢狀時沿用外層的）
+  - `RoomTimetableDatesSource(database)` 起日、迄日同一個 transaction 讀；`OpenPrtApplication.gtfsDatabase` 改成公開給 `MainActivity` 用
+  - 新增 3 個測試（全部 771 個）：讀到一半時另一條執行緒匯入新 feed（日期往後一週／T1 提早一小時／路線改名），結果仍是開始讀的那份；
+    三個都在拿掉 transaction 後確認會失敗
+
+## 發佈流程（F19 決定）
+
+- GitHub repo 的問題（questions 第三題）一直沒有回答；照建議選項「使用者自己建 repo 並設定 secrets」做，**不建 repo、不推送**。
+  repo 端的檔案都能在本機驗證，只有實際在 GitHub 上跑一次 release 要等使用者建好 repo
+- `.github/workflows/release.yml`：只在推送 `v*` tag 時觸發。順序：`scripts/check-version.sh "$GITHUB_REF_NAME"`（tag 與 README badge 都要等於
+  `VERSION_NAME`）→ `scripts/test-release-scripts.sh` → 與 CI 相同的 verify → 擷取 release notes → 還原金鑰 → `assembleRelease` →
+  改名 `OpenPRT-vX.Y.Z-<abi>.apk`、`apksigner verify`、每個 APK 一個 `.sha256` → `gh release create --notes-file`
+- 簽章：`app/build.gradle.kts` 只從環境變數讀（`OPENPRT_KEYSTORE_FILE`、`OPENPRT_KEYSTORE_PASSWORD`、`OPENPRT_KEY_ALIAS`、`OPENPRT_KEY_PASSWORD`）；
+  沒設 `OPENPRT_KEYSTORE_FILE` 就不建 signing config，`assembleRelease` 產出未簽章 APK、照樣成功。workflow 從 secret
+  `OPENPRT_KEYSTORE_BASE64` 解碼到 `$RUNNER_TEMP`，secret 沒設時直接失敗，不會發佈未簽章 APK
+- `PRT_API_KEY`：`local.properties` 優先，再讀環境變數（workflow 從同名 secret 傳入）。**公開發佈不要設這個 secret**：APK 裡的 key 任何人都取得到，
+  還會讓所有人共用使用者的每日配額；沒設時 App 照 F20 請使用者自己輸入。README 有寫
+- 大小：依 ABI 分割（arm64-v8a 約 24 MB、armeabi-v7a 約 20 MB、x86_64 約 24 MB）加 universal（約 60 MB）；debug APK 是 65 MB，主要是四份 MapLibre 原生庫。
+  分割只在任務名稱含 `Release` 時開啟（`gradle.startParameter.taskNames`），`assembleDebug` / `installDebug` 仍是單一 `app-debug.apk`。
+  **沒開 R8 minify**：沒實機測過 Room / kotlinx.serialization / MapLibre 的 keep 規則，怕發佈版閃退；之後要再壓大小可以評估
+- `scripts/changelog-section.sh VERSION [CHANGELOG]`：印出 `## [VERSION]` 到下一個 `## ` 之間的內容（去掉前後空行）；找不到或是空段落時失敗。
+  `## [0.1.3]` 不會被 `0.1.31` 誤配（比對含 `]`）
+- `scripts/test-release-scripts.sh`：9 個測試（擷取中間 / 最後一段、空段落、不存在的版本、badge 與 tag 一致 / 不一致），CI 與 release workflow 都會跑。
+  把比對改成不含 `]` 時確認「空段落」測試會失敗
+- 本機驗證過：沒有 secret 的 `assembleRelease` 成功（未簽章）；用 /tmp 裡臨時產生的金鑰設好環境變數後產出 4 個簽章 APK，
+  照 workflow 的改名、`apksigner verify`、`sha256sum` 步驟跑過，`sha256sum -c` 全部 OK。**release workflow 本身沒有在 GitHub 上跑過**
+- 簽章後的 release 版與 debug 版簽章不同，手機上已有 debug 版時要先解除安裝（會清掉 App 內 key 與時刻表），README 有寫
+
 ## 給下一個 session 的注意事項
 
 - 先載入 `coding-standards` skill：commit 訊息英文一行 `<type>: <description>`、功能與測試同一個 commit、版號只寫在 `gradle.properties`
@@ -475,37 +731,75 @@
 自動化測不到，完成對應功能後由使用者在手機上確認：
 
 - [x] F2 填入 `PRT_API_KEY` 後實際呼叫各端點成功（2026-10-01 用 curl 實測，發現並修正 rtpidatafeed 問題；fixture 只錄了 predictions）
-- [ ] F3 在手機上執行一次 GTFS 匯入（目前還沒有接到畫面或背景工作，F4/F16 接上後再驗）
-- [ ] F5 首次啟動跳出定位權限對話框，允許後主畫面顯示真實座標；拒絕時顯示 Downtown 提示；關閉手機定位時顯示「location is turned off」
-- [ ] F6 首次啟動後自動下載站牌資料，地圖顯示匹茲堡與你的位置（藍點），附近站牌（深藍圓點）位置與實際站牌吻合；
+- [x] F3 在手機上執行一次 GTFS 匯入（目前還沒有接到畫面或背景工作，F4/F16 接上後再驗）
+- [x] F5 首次啟動跳出定位權限對話框，允許後主畫面顯示真實座標；拒絕時顯示 Downtown 提示；關閉手機定位時顯示「location is turned off」
+- [x] F6 首次啟動後自動下載站牌資料，地圖顯示匹茲堡與你的位置（藍點），附近站牌（深藍圓點）位置與實際站牌吻合；
   走動時地圖跟著移動；按「重新定位」回到目前位置；圖磚右下角有 OSM 標示
-- [ ] F8 填入 `PRT_API_KEY` 後下方面板出現附近班次，路線 / 分鐘數與站牌電子看板一致（同時驗證 stop_code 是否就是 TrueTime 的 stpid）；
+- [x] F8 填入 `PRT_API_KEY` 後下方面板出現附近班次，路線 / 分鐘數與站牌電子看板一致（同時驗證 stop_code 是否就是 TrueTime 的 stpid）；
   面板可往上拉開並捲動；收合時地圖中心（你的位置）沒有被面板遮住；切到背景再回來會立刻更新
-- [ ] F9 點一班車：地圖縮放到整條路線，折線沿實際道路，上車站是橘色大圓點；面板列出沿線站牌並捲到「Board here」；
+- [x] F9 點一班車：地圖縮放到整條路線，折線沿實際道路，上車站是橘色大圓點；面板列出沿線站牌並捲到「Board here」；
   按返回箭頭或手機返回鍵回到列表，地圖回到你的位置
-- [ ] F10 詳情中的綠色公車圓點與實際車輛位置一致、每 15 秒移動；「Arrives at your stop in x min」與站牌看板一致；
+- [x] F10 詳情中的綠色公車圓點與實際車輛位置一致、每 15 秒移動；「Arrives at your stop in x min」與站牌看板一致；
   公車開過上車站後顯示「This bus has left your stop.」；切到背景再回來立刻更新
-- [ ] F11 在搜尋框輸入「carnegie mellon」等地點，停止打字後出現匹茲堡的結果；點一筆後地圖出現紅點並縮放到你和目的地；
+- [x] F11 在搜尋框輸入「carnegie mellon」等地點，停止打字後出現匹茲堡的結果；點一筆後地圖出現紅點並縮放到你和目的地；
   長按地圖任一處也會設成目的地（「To: Pinned spot …」）；按 ✕ 清除；關掉網路搜尋時出現錯誤與 Retry，開網路後按 Retry 有結果
-- [ ] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
+- [x] F12 完整 PRT GTFS 匯入耗時與資料庫大小：JVM 上匯入 3.9 秒、資料庫 74.7 MB（見 F12 段落）；
   手機上要量第一次啟動到附近站牌出現的時間（含下載），以及「設定 → 應用程式 → OpenPRT → 儲存空間」的資料大小。
   已裝過舊版的手機更新後會自動重新下載一次
-- [ ] F21 系統切深色時 App 與地圖一起變深色；右上角半圓圖示選 Light / Dark 立即生效且重開後保留；
+- [x] F21 系統切深色時 App 與地圖一起變深色；右上角半圓圖示選 Light / Dark 立即生效且重開後保留；
   桌面上新圖示（金黃圖釘 + 公車）清楚，開「主題圖示」時顯示單色版本；深色下各畫面文字看得清楚
-- [ ] F20 首次啟動出現「Welcome to OpenPRT」（2026-10-02 已在 Galaxy S23 上看到）；「Open PRT TrueTime」打開申請網頁；
+- [x] F20 首次啟動出現「Welcome to OpenPRT」（2026-10-02 已在 Galaxy S23 上看到）；「Open PRT TrueTime」打開申請網頁；
   貼上真實 key 按 Save key 後回到地圖，30 秒內附近班次出現；輸入亂打的 key 顯示「TrueTime didn't accept this key: …」；
   右上角鑰匙圖示可重新打開、Cancel 不影響已存的 key；重開 App 不再出現歡迎畫面
-- [ ] F15 選目的地後數秒內出現方案、時間合理（和 Google Maps / Transit App 比對一兩個行程）；量手機上第一次規劃的時間（JVM 約 1.4 秒，見 F14 段落）；
+- [x] F15 選目的地後數秒內出現方案、時間合理（和 Google Maps / Transit App 比對一兩個行程）；量手機上第一次規劃的時間（JVM 約 1.4 秒，見 F14 段落）；
   有即時預測的首班車顯示「· Live」且時間與站牌看板一致；按 ✕ 清除目的地回到附近班次
-- [ ] F25 附近班次卡片清楚好讀、同一路線兩個方向在同一張卡片；班次詳情的 Inbound / Outbound 切換直覺、切換後上車站與時間正確；
+- [x] F25 附近班次卡片清楚好讀、同一路線兩個方向在同一張卡片；班次詳情的 Inbound / Outbound 切換直覺、切換後上車站與時間正確；
   「N stops away」與時間軸上的公車位置合理；淺色主題下卡片也分得清楚
-- [ ] F26 點一班車後，地圖上的公車是圓形公車圖示（不是綠點），旁邊小箭頭指向行進方向，淺色與深色主題都看得清楚
-- [ ] F16 完整流程：定位 → 選目的地 → 規劃 → 點方案看地圖（步行虛線、公車線、上下車站） → 按「Live bus」看即時公車 → 返回回到方案；
+- [x] F26 點一班車後，地圖上的公車是圓形公車圖示（不是綠點），旁邊小箭頭指向行進方向，淺色與深色主題都看得清楚
+- [x] F16 完整流程：定位 → 選目的地 → 規劃 → 點方案看地圖（步行虛線、公車線、上下車站） → 按「Live bus」看即時公車 → 返回回到方案；
   快要開的班次（15 分鐘內）應該能打開即時詳情，較晚的班次顯示「時間取自時刻表」
-- [ ] 0.1.24 設計改進：站名與方向文字是一般大小寫（沒有「INBOUND-」）；方案卡片的「›」看得出可以點；
+- [x] 0.1.24 設計改進：站名與方向文字是一般大小寫（沒有「INBOUND-」）；方案卡片的「›」看得出可以點；
   方案詳情不用拉面板就看得到「Live bus」；選好目的地後上方只剩一列「To: …」，點它可重新搜尋、✕ 清除
-- [ ] 0.1.25：方案卡片顯示「N min trip」；班次詳情中公車開到身邊時公車圖示在藍點上方、藍點光暈仍看得到
-- [ ] （新 F19）從 Release 下載 APK 安裝並啟動
+- [x] 0.1.25：方案卡片顯示「N min trip」；班次詳情中公車開到身邊時公車圖示在藍點上方、藍點光暈仍看得到
+- [x] F24 點附近站牌（和班次詳情路線上的站牌）出現該站班次：站名、「Stop #」與站牌上的號碼一致；有 key 時標 Live 且和站牌看板一致，
+  點一班打開即時詳情、返回回到站牌；移除 key 或關網路時改成 Scheduled 並說明原因；點站牌以外的地方不會誤觸，長按仍可選目的地；
+  左下角圖例的顏色、圖示與地圖上看到的一致（淺色與深色都看）
+- [x] 0.1.27 時刻表班次：站牌面板中標 Scheduled 的班次可以點，列出接下來的站與時間、和站牌上的時刻表一致；返回回到站牌列表，再返回關掉站牌
+- [x] F22 輸入兩個地址規劃出方案：選目的地後點「From: My location」，搜尋一個地址（例如 Cathedral of Learning）選起點，方案從那裡出發、走路時不會重新規劃；
+  選起點模式下長按地圖也能設起點；按起點 ✕ 起訖點都清空、回到一開始的畫面（0.1.36 起；原本是回到 My location 並重新規劃）；⇅ 對調後方案反過來，起點是 My location 時目的地顯示「My location (pinned)」
+- [x] 第二次 review 修正：剛開 App（沒選目的地）時搜尋框上方就有「From: My location」，可先選起點再選目的地；
+  Arrive by 選幾分鐘後的期限時不會出現已經開走的方案；剛切到 Depart at 的一瞬間日期按鈕是灰的，讀完後才可按，日期選擇器只能選範圍內的日子
+- [x] 第三次 review 修正：Leave now 在末班車後的方案卡片顯示隔天日期（例如「Fri, Oct 2 6:56 AM」），今天的方案只有時間；
+  在 10:50:30 左右切到 Depart at，時間按鈕顯示 10:51；時刻表更新、今天不在新範圍時（不易遇到，可略過）預設日期是範圍第一天
+- [x] F27 Arrive by：選目的地（例如 CMU），切到 Arrive by、選明天上午的日期時間，卡片顯示「Leave by …」，
+  和 Google Maps 的「抵達時間」結果比對（同一班車或相近的出發時間）；Depart at 選一小時後的時間，方案只標 Scheduled；
+  點開該方案按「Live bus」立刻顯示時刻表時間、不轉圈；日期選擇器只能選時刻表範圍內的日子；切回 Leave now 回到現在的方案
+- [x] 0.1.28 站牌今天末班車開走後（深夜），站牌面板列出明天的班次並標出星期
+- [x] F23 點一個要走一段路的方案（例如從 Cathedral of Learning 到 CMU）：步行虛線沿著人行道 / 街道，而不是穿過建築物；
+  詳情的步行分鐘和 Google Maps 步行時間相近；關掉網路後點另一個方案，步行段改畫直線、方案照常顯示；
+  步行比原估算長時，詳情上方與返回清單後那張卡片的出發 / 抵達時間（Arrive by 的「Leave by」）一起變；剛好要出門的方案步行變長時出現「may miss a bus」紅字
+- [x] F17 站在輕軌站附近（例如 Steel Plaza、Station Square）：附近班次出現 RED / BLUE / SLVR，分鐘數與月台看板一致；
+  點一班輕軌，地圖畫出輕軌路線、列車位置每 15 秒移動、到站分鐘合理；點輕軌站站牌，面板標 Live 且列出輕軌班次；
+  規劃一個第一段坐輕軌的方案（例如 Downtown → South Hills Village），卡片的首班車標「Live」（若一直是 scheduled，代表輕軌 rt 和 GTFS route_id 不同）
+- [x] F18 關掉網路（飛航模式）30 秒內，附近班次上方出現「You're offline. Showing departures from …」且列表還在；打開一班車的詳情時關網路，出現「You're offline. Showing data from …」；
+  開網路後自動恢復。在 App 內輸入亂打的 key 存檔（Save without checking），附近班次出現換 key 的說明。
+  背景更新：`adb shell dumpsys jobscheduler | grep -A5 openprt` 看得到每天一次、需要網路的工作；
+  想立刻測可用 `adb shell cmd jobscheduler run -f org.openprt.app <job id>`（0.1.30 以前裝的手機沒有匯入時間，第一次執行就會重新下載）
+  時刻表過期提示無法在手機上自然重現（PRT 的 feed 通常涵蓋到未來），可把手機日期調到時刻表最後一天之後再開 App，首頁應出現「The bus timetable on this phone ended on …」；
+  清除 App 資料後開飛航模式啟動，再設定目的地，方案面板應說「Couldn't download the bus timetable…」；
+  從 0.1.31 以前的版本升級安裝後第一次開 App 會重新下載時刻表（schema 4），下載完附近班次與規劃正常；
+  用上面的 `jobscheduler run -f` 觸發背景更新後立刻規劃幾次，方案正常、不會閃退
+- [x] （新 F19，2026-10-05 使用者在手機上裝 Release 的 arm64-v8a 版並測試正常）從 Release 下載 APK 安裝並啟動。先照 README「發佈新版本」建 GitHub repo、設定四個簽章 secrets（`PRT_API_KEY` 不要設），
+  推送 main 與 tag 後確認 Release workflow 綠燈、Release 頁面有 4 個 APK 與 4 個 `.sha256`、notes 是 CHANGELOG 該版段落；
+  手機先解除安裝 debug 版，下載 `arm64-v8a` 版安裝，啟動後出現輸入 key 的歡迎畫面、地圖與附近站牌正常
+
+- [x] 0.1.34 站牌圖示：附近站牌是深藍（深色主題淺藍）方形站牌、點了變大的金色站牌，淺色主題也看得清楚；圖例與地圖一致；
+  市中心站牌密集時仍點得到想點的那一個
+- [x] 0.1.35 起點與終點標記：From 選了地址（例如 Cathedral of Learning）後地圖出現紫色圓點、選了目的地後是紅色圖釘，畫面同時框住兩者；
+  淺色主題也看得清楚；圖例有「Starting point you chose」與圖釘
+- [x] 0.1.36 清除起點或目的地：規劃好方案後按任一邊的 ✕，回到一開始的畫面（From: My location、Where to?、附近班次）
+- [x] 0.1.37 Apple 簡約風：淺色 / 深色主題的主畫面、附近班次、站牌面板、班次詳情、方案列表與方案詳情、API key 畫面看起來一致清爽，
+  文字都讀得清楚；淺色主題頂部的時間與電量看得到；縮小地圖時站牌不會疊成一團
 
 ## 狀態
 
@@ -651,3 +945,164 @@
   - 使用者提出「指定出發 / 抵達時間規劃」，記成 **F27**（feature_list.json 最後一項，反向 RAPTOR 的設計見 plan）
   - verify 通過，已裝到 S23 截圖確認
   - 下一步：F24 站牌可點擊 + 地圖圖例
+- 2026-10-03：**第三輪規劃**。`feature_list.json` 只留剩下的 F24 → F22 → F27 → F23 → F17 → F18 → F19，
+  questions 列出仍未回答的五題（iOS 範圍、輕軌、GitHub repo / 發佈、介面語言、實機驗收時程），已回答的四題保留 `answer`。
+  在本 worktree（0.1.25）跑 verify：通過，512 個測試，lint 0 issue
+  - 下一步：F24 站牌可點擊 + 地圖圖例（顏色用 `mapPalette`，圖示用 `ic_bus`）
+- 2026-10-03：**F24 完成**（版號 0.1.26，tag `v0.1.26` 只在本機）。地圖站牌可點擊（即時 / 時刻表班次、點班次進詳情、返回回到站牌）+ 地圖圖例，見 F24 段落。
+  開工前在本 worktree 跑 verify 通過（512 個測試）；完成後 verify 通過（559 個測試，lint 0 issue）
+  - 手機 adb 顯示 unauthorized，沒有安裝；需要實機驗收（見清單 F24）
+  - 下一步：F22 起點可輸入地址、對調起訖
+- 2026-10-04：reviewer 要求修正後：
+  - **F24 補上時刻表班次的詳情**（`fix:`）：站牌面板中 Scheduled 的班次點了會列出這班車從該站起的後續站與預定時間（GTFS），返回回到站牌列表，見 F24 段落。
+    reviewer 說的沒錯：F24 的 steps 寫「點班次可進入詳情」，原本時刻表班次不能點
+  - **F22 完成**：起點可以搜尋地址或長按地圖、清除回到 My location、⇅ 對調，見 F22 段落
+  - 版號 0.1.27（tag `v0.1.27` 只在本機）。開工前 verify 通過（559 個測試），完成後 verify 通過（601 個測試，lint 0 issue）
+  - README（功能描述、版本 badge）與 CHANGELOG 已更新
+  - 沒有裝到手機（上次 adb unauthorized，本次未再試）；需要實機驗收（見清單 0.1.27、F22、F24）
+  - F17、F19 是否保留仍等使用者回答 questions（不能由 session 自己決定刪掉）
+  - 下一步：F27 Leave now / Depart at / Arrive by（會改到 F22 剛改過的規劃輸入區：`TripPlanViewModel.onEndpointsChanged` 與 From/To 搜尋區）
+- 2026-10-04：**F27 完成**（版號 0.1.28，tag `v0.1.28` 只在本機）。Leave now / Depart at / Arrive by、反向 RAPTOR、Leave by 與遲到提醒，見 F27 段落。
+  - reviewer 第三點（站牌末班車後空白）已在 `08bf2af` 修正：時刻表也查下一服務日，並有跨日測試 `departures_afterTodaysLastTrip_listsNextServiceDaysFirstTrip`；CHANGELOG 補記在 0.1.28
+  - reviewer 第一點要求一次做完 F27、F23、F18：本 session 規則是一次一項，只做 F27；F23、F18 照順序留給之後的 session
+  - reviewer 第二點：F17 / F19 的取捨用 AskUserQuestion 問了使用者，**沒有回答**（非互動 session），所以兩項都保留、不刪
+  - 開工時工作樹有上一個 session 未提交的 F27 資料層與 ViewModel，檢查後沿用並補上畫面、測試與一個錯誤的測試
+  - 開工前 verify 失敗只因上述未提交程式的 ktlint 排序；完成後 verify 通過（642 個測試，lint 0 issue）
+  - adb 沒有裝置，沒有安裝；需要實機驗收（見清單 F27、0.1.28、F22、F24）
+  - 下一步：F23 步行段沿街道（FOSSGIS Valhalla）
+- 2026-10-04：**第三次 review 修正**（F27 的指定時間邊界）：日期限定在時刻表範圍內（預設值與只改時間都是）、跨日的方案時間顯示日期、
+  Depart at 預設往上取整分。見 F27 段落最後一項。verify 通過（658 個測試，lint 0 issue）；沒有裝到手機
+  - 下一步不變：實機驗收清單，然後 F23
+- 2026-10-04：**第四次 review 修正**：方案詳情裡一小時以後才上車的乘車段按「Live bus」不再查 TrueTime，直接顯示時刻表時間。verify 通過（660 個測試，lint 0 issue）；沒有裝到手機
+  - 下一步不變：實機驗收清單，然後 F23
+- 2026-10-04：本機 tag `v0.1.28` 原本停在 `4b8e0d2`（少了之後的修正），移到記錄這一行的 commit，也就是 0.1.28 最後通過 verify 的狀態。0.1.28 沒推送過，所以不升版號
+- 2026-10-04：**F23 完成**（版號 0.1.29，tag `v0.1.29` 只在本機）。選定方案的步行段改向 FOSSGIS Valhalla 查街道路線，地圖虛線沿街道、詳情顯示實際步行分鐘，
+  失敗或 5 秒逾時退回直線，見 F23 段落。開工前 verify 通過（660 個測試）；完成後 verify 通過（684 個測試，lint 0 issue）
+  - adb 沒有裝置，沒有安裝；需要實機驗收（見清單 F23 以及 F27、0.1.28、F22、F24）
+  - F17、F19 仍等使用者回答 questions
+  - 下一步：F17 輕軌 T 線（若使用者決定刪掉就從 `feature_list.json` 移除），否則 F18
+- 2026-10-04：**F23 review 修正**：街道路線查到後，選定方案的步行分鐘、Leave by、出發 / 抵達與總分鐘都改用街道時間（詳情與清單卡片），
+  來不及趕上第一班車或轉乘時提醒「may miss a bus」，Arrive by 因步行晚到時提醒，見 F23 段落。verify 通過（705 個測試，lint 0 issue）；沒有裝到手機
+  - 0.1.29 沒推送過，所以不升版號；本機 tag `v0.1.29` 移到記錄這一行的 commit
+  - 下一步不變：實機驗收清單，然後 F17（等使用者回答）或 F18
+- 2026-10-04：**F17 完成**（版號 0.1.30，tag `v0.1.30` 只在本機）。附近班次、站牌面板、方案首班車同時問公車與輕軌兩個 TrueTime feed 並合併，
+  一個 feed 失敗或沒資料時另一個照常顯示；輕軌班次的詳情改問 Light Rail feed，見 F17 段落（含 API 呼叫次數）。
+  使用者沒回答輕軌題，照建議選項做。開工前 verify 通過（705 個測試）；完成後 verify 通過（721 個測試，lint 0 issue）
+  - adb 沒有試，沒有裝到手機；需要實機驗收（見清單 F17 以及 F23、F27、0.1.28、F22、F24）
+  - F19 仍等使用者回答 questions
+  - 下一步：F18 可靠性與離線狀態
+- 2026-10-04：**F18 完成**（版號 0.1.31，tag `v0.1.31` 只在本機）。離線、key 無效、每日配額用完各有說明並保留上次資料；GTFS 匯入時間記錄、
+  每天檢查、滿 7 天在有網路時背景重新下載（WorkManager），與首次匯入共用 `GtfsUpdater` 的鎖；更新後規劃快取失效，見 F18 段落。
+  開工前 verify 通過；完成後 verify 通過（745 個測試，lint 0 issue）
+  - 沒有裝到手機；需要實機驗收（見清單 F18 以及 F17、F23、F27、0.1.28、F22、F24）
+  - 「時刻表過期」的提示畫面沒做（見 F18 段落最後一項）
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 review 修正**：只有標頭的 feed 不再清空時刻表；時刻表過期時首頁提示；空資料庫且下載失敗時方案面板說下載失敗；
+  背景更新後 Depart at / Arrive by 的可選日期重讀。見 F18 段落「review 修正」。verify 通過（763 個測試，lint 0 issue）；沒有裝到手機
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 第二次 review 修正**：方案面板開著時第一次下載失敗，訊息會從「還沒下載完」換成「下載失敗」，重新下載時換回來。
+  見 F18 段落「第二次 review 修正」。verify 通過（766 個測試，lint 0 issue）；沒有裝到手機
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 第三次 review 修正**：規劃器一次建網路的所有查詢與 import id 放在同一個資料庫 transaction，背景更新不會讓方案混用新舊時刻表；
+  快取改用資料庫裡的 import id 判斷版本。見 F18 段落「第三次 review 修正」。verify 通過（768 個測試，lint 0 issue）；沒有裝到手機
+  - schema 升到 4，已裝的手機升級後會重新下載一次時刻表
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F18 第四次 review 修正**：站牌時刻表（`RoomStopScheduleSource`、`GtfsTimetable`）與可選日期（`RoomTimetableDatesSource`）
+  的多次查詢放進同一個資料庫 transaction，背景更新不會讓它們混用新舊時刻表。見 F18 段落「第四次 review 修正」。
+  verify 通過（771 個測試，lint 0 issue）；沒有裝到手機
+  - 0.1.31 沒推送過，所以不升版號；本機 tag `v0.1.31` 移到記錄這一行的 commit
+  - 下一步：F19 發佈流程，仍等使用者回答 GitHub repo 的問題
+- 2026-10-05：**F19 完成**（版號 0.1.32，tag `v0.1.32` 只在本機）。推送 `v*` tag 時的 release workflow、依 ABI 分割的簽章 APK、SHA256、
+  CHANGELOG 擷取的 release notes、README 下載方式與 badge 檢查，見「發佈流程（F19 決定）」。開工前 verify 通過；完成後 verify 通過
+  （771 個測試，lint 0 issue），`scripts/test-release-scripts.sh` 9 個測試通過
+  - GitHub repo 問題仍沒回答：照建議選項做，沒有建 repo、沒有推送；release workflow 沒在 GitHub 上跑過
+  - `feature_list.json` 的功能全部 `passes: true`；仍**不能升 0.2.0**，要等使用者照實機驗收清單（F18、F17、F23、F27、0.1.28、F22、F24、F19）驗收
+  - 下一步：使用者建 GitHub repo、設定 secrets、推送 main 與 `v0.1.32`，再做實機驗收
+- 2026-10-05：**F19 改回 `passes: false`**（reviewer 要求）。沒有 GitHub remote、沒有 Release、workflow 沒在 GitHub 跑過，
+  F19 最後一條 step「從 GitHub Release 下載 APK 安裝後可正常啟動」也沒驗收，所以不能算完成
+  - README「下載安裝」與 CHANGELOG 0.1.32 改寫成「還不能下載、請自己建置」；第一次發佈並驗證後再把這兩段的提醒拿掉
+  - README 與 `release.yml` 註解裡的 tag 指令原本寫死 `v0.1.31`（照做會被版號檢查擋下），改成從 `gradle.properties` 的 `VERSION_NAME` 讀
+  - 沒升版號（0.1.32 沒推送過）；本機 tag `v0.1.32` 移到記錄這一行的 commit，release notes 才會是改過的 CHANGELOG
+  - 下一步：等使用者回答 GitHub repo 問題；建好 repo、設定 secrets、推送 main 與 `v0.1.32` 後確認 workflow 綠燈，
+    從 Release 安裝 `arm64-v8a` 版並啟動，通過後 F19 才改 `passes: true`
+- 2026-10-04：**F19 仍卡在 GitHub repo**，沒有改程式。開工前 verify 通過，`scripts/test-release-scripts.sh` 全部通過
+  - 用 AskUserQuestion 再問一次 GitHub repo 怎麼處理，沒有回答（非互動 session）；建外部 repo 要先確認，所以沒建、沒推送
+  - F19 維持 `passes: false`；剩下的都要使用者自己做：建 repo、設定 keystore 四個簽章 secret
+    （公開發佈**不要設定** `PRT_API_KEY`，否則個人 key 會內建進 APK）、推送 main 與 `v0.1.32`、確認 workflow 綠燈、從 Release 安裝 `arm64-v8a` 版並啟動
+- 2026-10-04：**F19 仍卡在 GitHub repo**，沒有改程式。開工前 verify 通過
+  - 用 `gh` 確認 `AquilaWei/OpenPRT` 還不存在（`gh` 已登入 AquilaWei），本機仍沒有 remote
+  - 再問一次 GitHub repo 怎麼處理，仍沒有回答；沒建 repo、沒推送，F19 維持 `passes: false`
+  - 本機預設分支是 `master`，這一輪的工作只在 `hb/7-openprt`，`master` 還沒有；要先把它併回 `master` 再推
+  - 使用者建好 repo 後的指令：`git remote add origin https://github.com/AquilaWei/OpenPRT.git`、
+    `git push -u origin master`、`git push origin v0.1.32`（tag 在 `12d936a`）
+- 2026-10-05：**F19 仍卡在 GitHub repo**，沒有改程式。開工前 verify 通過，`scripts/test-release-scripts.sh` 全部通過
+  - 再問一次 GitHub repo 怎麼處理，仍沒有回答；沒建 repo、沒推送，F19 維持 `passes: false`，tag `v0.1.32` 仍在 `12d936a`
+  - 剩下的步驟都要使用者回答或親自做，照上一條的指令即可；在那之前再開 session 也只會重複這一條
+- 2026-10-05：**GitHub repo 建好了**（使用者同意，公開）：https://github.com/AquilaWei/OpenPRT ，`hb/7-openprt` 推成 `master`，CI 綠燈。
+  公開前檢查過整段歷史：沒有 key、keystore、`local.properties`，也沒有實機測試地點。**tag 還沒推**，要等使用者設好四個簽章 secret
+- 2026-10-05：**0.1.33 修正時刻表下載失敗**（實機上看到「Couldn't load bus stops」）。PRT 改版網站，舊網址
+  `rideprt.org/developerresources/GTFS.zip` 回 404；新網址在 `/business-resources/web-developer-resources/` 頁上，是帶雜湊的
+  `/contentassets/<hash>/gtfs.zip`，每次換時刻表很可能會變
+  - 決定：`GtfsImporter` 新增 `feedPageUrl`，每次下載前先讀開發者資源頁找 `gtfs.zip` 連結，找不到或讀不到時用 `DEFAULT_FEED_URL`（目前的雜湊網址）。
+    參數預設 `null`（不查頁面），只有 App 會傳，測試不會連到真網站
+  - 4 個新測試，拿掉修正時 4 個都失敗；完整 verify 775 個測試通過。實機上裝 debug 版後站牌與附近即時班次都出來了
+  - 0.1.32 從沒發佈，本機 tag `v0.1.32` 不會再用；第一次發佈改用 `v0.1.33`
+  - 下一步：使用者設定簽章 secret → 推 `v0.1.33` → 確認 Release 有 4 個 APK 與 4 個 `.sha256` → 從 Release 安裝 `arm64-v8a` 並啟動，F19 才算完成
+- 2026-10-05：**F19 仍等簽章 secret**，沒有改程式。開工前 verify 通過；repo 的 CI 綠燈，`gh secret list` 是空的，還沒有任何 Release
+  - 問使用者要自己設 secret 還是讓 session 產生金鑰並設定，沒有回答（非互動 session）；簽章金鑰要使用者自己保管備份，所以沒有代為產生、沒推 tag
+  - 本機 tag `v0.1.33` 在 `24813c8`（0.1.33 的 CHANGELOG 已在），推送時用它即可，不用移動
+  - 使用者自己執行（密碼由 `gh` 互動輸入，不會出現在指令或 log）：
+    `keytool -genkeypair -keystore ~/openprt-release.jks -alias openprt -keyalg RSA -keysize 4096 -validity 10000`、
+    `base64 -w0 ~/openprt-release.jks | gh secret set OPENPRT_KEYSTORE_BASE64 -R AquilaWei/OpenPRT`、
+    `gh secret set OPENPRT_KEYSTORE_PASSWORD -R AquilaWei/OpenPRT`、`gh secret set OPENPRT_KEY_ALIAS -R AquilaWei/OpenPRT`（輸入 `openprt`）、
+    `gh secret set OPENPRT_KEY_PASSWORD -R AquilaWei/OpenPRT`；金鑰檔另外備份
+  - 設好後：`git push origin v0.1.33` → 確認 release workflow 綠燈、Release 有 4 個 APK 與 4 個 `.sha256` → 從 Release 安裝 `arm64-v8a` 並啟動，
+    F19 才改 `passes: true`，並拿掉 README「下載安裝」與 CHANGELOG 的「還不能下載」提醒
+- 2026-10-05：**第一次發佈 v0.1.33 成功**（使用者要求 session 直接執行）：https://github.com/AquilaWei/OpenPRT/releases/tag/v0.1.33
+  - session 用 `keytool` 產生 PKCS12 金鑰（RSA 4096，alias `openprt`，密碼是 `openssl rand` 產生的亂數），金鑰與密碼存在本機 `~/.openprt-release/`（權限 700 / 600，不在 repo 裡）；
+    用 `gh secret set` 從檔案寫入四個簽章 secret，密碼沒有出現在指令、log 或對話。**使用者要自己把這個資料夾備份到別處**，弄丟就不能發佈能覆蓋安裝的更新
+  - 憑證 SHA-256：`96:74:7A:54:49:30:3A:3F:4E:45:63:82:B1:11:7E:28:C0:3C:E8:53:72:11:97:B2:62:5E:4A:FE:E8:A1:2D:A7`
+  - release workflow 第一次在 GitHub 上跑就綠燈（`apksigner` 路徑、`gh release create --verify-tag` 的假設都成立）；Release 有 4 個 APK 與 4 個 `.sha256`，
+    下載回本機 `sha256sum -c` 全部 OK，`apksigner verify` 的簽章憑證與上面一致
+  - README 拿掉「還沒有可下載的版本」，Releases 連到 repo；順便把 README 的 GTFS 連結換成 PRT 開發者資源頁（舊網址 0.1.33 起就是 404）、開頭版號改 0.1.33
+  - **還沒裝到手機**：手機上是 debug 版，簽章不同要先解除安裝，會清掉 App 內的 key 與時刻表；問使用者要不要這樣做，沒有回答，所以沒動手機。
+    F19 維持 `passes: false`，等從 Release 安裝 `arm64-v8a` 並啟動成功才改
+- 2026-10-05：**F19 完成**。使用者把 v0.1.33 Release 的 `arm64-v8a` 版裝到手機並回報「測試都正確」；用 adb 拉回手機上的 APK 確認簽章憑證就是 release 金鑰、版本 0.1.33。
+  `feature_list.json` 全部 `passes: true`；仍要等使用者確認累積清單的其他實機項目才升 0.2.0
+- 2026-10-05：**0.1.34 站牌圖示**（使用者實機回饋），見「站牌圖示」。verify 通過（779 個測試，lint 0 issue）；已覆蓋安裝到手機並截圖確認深色主題。
+  本機 tag `v0.1.34` 還沒推（推了就會發佈 Release），淺色主題與市中心密集站牌待使用者確認
+- 2026-10-05：使用者實機驗收大部分項目通過（F3、F5、F6、F8–F12、F15、F17、F18、F20、F21、F24–F27、0.1.24、0.1.25、0.1.27、0.1.28、0.1.34），已勾選。
+  還沒驗：F16 完整流程、F22（起點標記剛改）、F23 步行街道路線、第二 / 三次 review 修正、0.1.35
+- 2026-10-05：**0.1.35 起點與終點標記**（使用者實機回饋），見「起點與終點標記」。本機 tag `v0.1.34`、`v0.1.35` 都還沒推（推了就發佈）
+- 2026-10-05：使用者驗收剩下六項全部通過（F16、F22、F23、第二 / 三次 review 修正、0.1.35），累積清單除了 0.1.36 都已勾選
+- 2026-10-05：**0.1.36 修正清除起點 / 目的地後方案還在**（使用者實機回報）。原本按起點 ✕ 只把起點改回 My location、保留目的地，於是馬上從目前位置重新規劃；
+  按目的地 ✕ 會收起方案但保留選的起點。使用者要求「刪除任何一個位置就退回原本的狀態」，兩個 ✕ 都改成 `DestinationViewModel.startOver()`：起訖點都清空
+  - 2 個回歸測試，修正前確認失敗；788 個測試、verify 通過。裝到手機重現：Cathedral of Learning → CMU 規劃後按起點 ✕，回到初始畫面
+  - 和 F22 step「清除起點回到 My location 並以目前位置重新規劃」的關係：`TripPlanViewModel.onEndpointsChanged(null, 目的地)` 仍會以目前位置規劃
+    （對調回 My location 時用到，測試還在），只是畫面上的 ✕ 不再走這條路；這是使用者的新決定，feature_list 的 step 沒改
+  - 本機 tag `v0.1.34`、`v0.1.35`、`v0.1.36` 都沒推；全部驗收通過後可以升 0.2.0
+- 2026-10-05：**0.1.37 Apple 簡約風 + 英文 README**（使用者要求），見「Apple 簡約風」。verify 通過（788 個測試，lint 0 issue）；
+  裝到手機，淺色與深色主題截圖確認主畫面、方案列表、分段控制與狀態列。**等使用者看過 0.1.37 再升 0.2.0**；本機 tag `v0.1.34`–`v0.1.37` 都沒推
+- 2026-10-05：**0.2.0**。使用者看過 0.1.37 後回覆「進版」：累積的實機驗收清單全部勾選，`feature_list.json` 全部 `passes: true`。
+  CHANGELOG 0.2.0 段落（英文）整理 0.1.33 之後的變更；完整 verify 與 `scripts/test-release-scripts.sh` 通過後推 `v0.2.0`。
+  0.1.34–0.1.37 是只裝在手機上的測試版，本機 tag 沒推、不發佈
+  - Release workflow 綠燈：https://github.com/AquilaWei/OpenPRT/releases/tag/v0.2.0 ，4 個 APK + 4 個 `.sha256`，下載回來 `sha256sum -c` 全部 OK，
+    簽章憑證與 release 金鑰一致。手機當時 USB 斷線，**沒有從 Release 安裝到手機**；手機上是 0.1.37（程式與 0.2.0 相同，只差版號）
+- 2026-10-05：**沒有剩下的功能**。`feature_list.json` 全部 `passes: true`，這次 session 沒有改程式。
+  開工時用 `--rerun-tasks` 跑完整 verify（不吃快取）通過：788 個測試、0 失敗，lint 0 issue
+  - `questions` 裡 iOS 版與繁體中文介面兩題一直沒有回答；目前照建議選項（只做 Android、只要英文），沒有新增功能。
+    使用者若要做，再把它們加成新的 feature
+- 2026-10-06：**review 修正（codex）**
+  - F22 第二個 step 改成 0.1.36 起使用者決定的行為：按起點（或目的地）✕ 起訖點都清空、回到一開始的畫面，不重新規劃
+    （`DestinationViewModelTest.clearOrigin_withDestination_alsoClearsDestinationSoNoTripIsPlanned` 等測試）；
+    累積驗收清單的 F22 項同步改寫。上面 0.1.36 那段「feature_list 的 step 沒改」是當時的紀錄，保留
+  - **v0.2.0 Release 安裝檔的實機啟動驗證還沒做**：這次 session 手機沒有接上（`adb devices` 是空的）。
+    重新下載 v0.2.0 的 4 個 APK，`sha256sum -c` 全部 OK；本機模擬器（`ge_test`，x86_64）headless 開機兩次都在開機途中閃退，沒有驗到。
+    使用者接上手機後執行：
+    `gh release download v0.2.0 -R AquilaWei/OpenPRT -p 'OpenPRT-v0.2.0-arm64-v8a.apk*' -D /tmp/openprt-v020 --clobber && (cd /tmp/openprt-v020 && sha256sum -c OpenPRT-v0.2.0-arm64-v8a.apk.sha256)`、
+    `~/Android/Sdk/platform-tools/adb install -r /tmp/openprt-v020/OpenPRT-v0.2.0-arm64-v8a.apk`。
+    手機上的 0.1.37 若是 debug 簽章會出現 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`，要先 `adb uninstall org.openprt.app`（會清掉 App 內的 key 與時刻表）。
+    `adb shell dumpsys package org.openprt.app | grep versionName` 是 0.2.0；啟動後確認歡迎畫面 / 地圖 / 附近站牌正常。做完把這段改成結果

@@ -11,7 +11,7 @@ import org.openprt.app.planner.WalkLeg
 class TripMapLayersTest {
     @Test
     fun toMapLayers_walks_runFromOriginToStopsToDestination() {
-        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList())
+        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList(), emptyList())
 
         assertEquals(
             listOf(
@@ -24,20 +24,68 @@ class TripMapLayersTest {
     }
 
     @Test
+    fun toMapLayers_walksWithPaths_followThem() {
+        val paths = listOf(
+            listOf(ORIGIN, CORNER, CMU.location),
+            listOf(CRAIG.location, FIFTH.location),
+            listOf(STEEL_PLAZA.location, CORNER, DESTINATION)
+        )
+
+        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList(), paths)
+
+        assertEquals(paths, layers.walks)
+    }
+
+    @Test
+    fun toMapLayers_walkWithoutPath_isStraight() {
+        val paths = listOf(listOf(ORIGIN, CORNER, CMU.location))
+
+        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList(), paths)
+
+        assertEquals(
+            listOf(
+                listOf(ORIGIN, CORNER, CMU.location),
+                listOf(CRAIG.location, FIFTH.location),
+                listOf(STEEL_PLAZA.location, DESTINATION)
+            ),
+            layers.walks
+        )
+    }
+
+    @Test
+    fun toMapLayers_walkOfNoLengthFirst_laterPathsStayWithTheirWalks() {
+        val trip = Itinerary(
+            listOf(
+                WalkLeg(null, CMU, 0.0, 25_200, 25_200),
+                RideLeg("T1", "61C", null, CMU, CRAIG, 25_200, 25_800),
+                WalkLeg(CRAIG, null, 100.0, 25_800, 25_900)
+            )
+        )
+        val paths = listOf(
+            listOf(CMU.location, CMU.location),
+            listOf(CRAIG.location, CORNER, DESTINATION)
+        )
+
+        val layers = trip.toMapLayers(CMU.location, DESTINATION, emptyList(), paths)
+
+        assertEquals(listOf(listOf(CRAIG.location, CORNER, DESTINATION)), layers.walks)
+    }
+
+    @Test
     fun toMapLayers_ridesWithStops_runThroughThem() {
         val stops = listOf(
             listOf(CMU.location, MIDDLE, CRAIG.location),
             listOf(FIFTH.location, STEEL_PLAZA.location)
         )
 
-        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, stops)
+        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, stops, emptyList())
 
         assertEquals(stops, layers.rides)
     }
 
     @Test
     fun toMapLayers_rideWithoutStops_isStraightFromBoardingToAlighting() {
-        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList())
+        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList(), emptyList())
 
         assertEquals(
             listOf(
@@ -50,14 +98,14 @@ class TripMapLayersTest {
 
     @Test
     fun toMapLayers_marksBoardingStopsOfEveryRide() {
-        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList())
+        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList(), emptyList())
 
         assertEquals(listOf(CMU.location, FIFTH.location), layers.boardingStops)
     }
 
     @Test
     fun toMapLayers_marksAlightingStopsOfEveryRide() {
-        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList())
+        val layers = TRANSFER_TRIP.toMapLayers(ORIGIN, DESTINATION, emptyList(), emptyList())
 
         assertEquals(listOf(CRAIG.location, STEEL_PLAZA.location), layers.alightingStops)
     }
@@ -71,7 +119,7 @@ class TripMapLayersTest {
             )
         )
 
-        val layers = trip.toMapLayers(CMU.location, CRAIG.location, emptyList())
+        val layers = trip.toMapLayers(CMU.location, CRAIG.location, emptyList(), emptyList())
 
         assertEquals(emptyList<List<LatLng>>(), layers.walks)
     }
@@ -80,6 +128,7 @@ class TripMapLayersTest {
         val ORIGIN = LatLng(40.4450, -79.9500)
         val DESTINATION = LatLng(40.4400, -80.0000)
         val MIDDLE = LatLng(40.4440, -79.9500)
+        val CORNER = LatLng(40.4445, -79.9520)
         val CMU = TransitStop("s1", "Forbes Ave at Morewood", LatLng(40.4443, -79.9532))
         val CRAIG = TransitStop("s2", "Fifth Ave at Craig", LatLng(40.4447, -79.9483))
         val FIFTH = TransitStop("s3", "Fifth Ave at Bellefield", LatLng(40.4450, -79.9510))

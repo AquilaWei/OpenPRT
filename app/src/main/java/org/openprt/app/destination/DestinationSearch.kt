@@ -46,7 +46,11 @@ private val RESULTS_MAX_HEIGHT = 280.dp
 /**
  * Search field for the trip's destination, floating over the map, with the matching places
  * below it. Once a destination is chosen the field itself shows it, with a button to clear it,
- * so the overlay stays one line tall and leaves the map visible; tapping it searches again.
+ * so the overlay stays short and leaves the map visible; tapping it searches again.
+ *
+ * A "From" line always sits above it, so the start can be chosen before the destination: "My
+ * location" until the user taps it ([onEditOrigin]) and picks a place or long-presses the map,
+ * with buttons to go back to their location ([onClearOrigin]) and to swap the ends ([onSwap]).
  */
 @Composable
 fun DestinationSearch(
@@ -55,7 +59,11 @@ fun DestinationSearch(
     onPlaceSelected: (Place) -> Unit,
     onRetry: () -> Unit,
     onClearDestination: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onEditOrigin: () -> Unit = {},
+    onCancelOriginEdit: () -> Unit = {},
+    onClearOrigin: () -> Unit = {},
+    onSwap: () -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     // Reset for each new destination, so picking one always ends the search.
@@ -63,20 +71,36 @@ fun DestinationSearch(
     Surface(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         shape = MaterialTheme.shapes.large,
-        tonalElevation = 3.dp,
-        shadowElevation = 3.dp
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 6.dp
     ) {
         Column {
             val destination = state.destination
-            if (destination != null && !editing && state.query.isEmpty()) {
-                DestinationBar(destination, onEdit = { editing = true }, onClearDestination)
+            if (state.editing == Endpoint.ORIGIN) {
+                OriginSearchField(state.query, onQueryChanged, onCancelOriginEdit)
+                if (destination != null) {
+                    HorizontalDivider()
+                    DestinationBar(destination, onEdit = {}, onClearDestination)
+                }
             } else {
-                SearchField(
-                    query = state.query,
-                    onQueryChanged = onQueryChanged,
-                    focusOnStart = editing,
-                    onLeft = { editing = false }
+                OriginBar(
+                    origin = state.origin,
+                    canSwap = destination != null,
+                    onEdit = onEditOrigin,
+                    onClear = onClearOrigin,
+                    onSwap = onSwap
                 )
+                HorizontalDivider()
+                if (destination != null && !editing && state.query.isEmpty()) {
+                    DestinationBar(destination, onEdit = { editing = true }, onClearDestination)
+                } else {
+                    SearchField(
+                        query = state.query,
+                        onQueryChanged = onQueryChanged,
+                        focusOnStart = editing,
+                        onLeft = { editing = false }
+                    )
+                }
             }
             SearchStatusContent(
                 status = state.search,
@@ -183,6 +207,111 @@ private fun SearchStatusContent(
     }
 }
 
+/**
+ * The search field while choosing the starting point. It stays in that mode until a place is
+ * picked or [onCancel] is pressed, so tapping the map to long-press it does not end it.
+ */
+@Composable
+private fun OriginSearchField(
+    query: String,
+    onQueryChanged: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+    val transparent = Color.Transparent
+    TextField(
+        value = query,
+        onValueChange = onQueryChanged,
+        placeholder = { Text(stringResource(R.string.origin_hint)) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        leadingIcon = {
+            Icon(painterResource(R.drawable.ic_my_location), contentDescription = null)
+        },
+        trailingIcon = {
+            IconButton(onClick = onCancel) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = stringResource(R.string.origin_cancel)
+                )
+            }
+        },
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = transparent,
+            unfocusedContainerColor = transparent,
+            focusedIndicatorColor = transparent,
+            unfocusedIndicatorColor = transparent
+        ),
+        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
+    )
+    if (query.isEmpty()) SearchText(stringResource(R.string.origin_long_press_hint))
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+}
+
+/**
+ * Where the trip starts: the chosen [origin], or the user's location while it is null. Tapping
+ * the text chooses another start; the swap button shows once there is a destination to swap.
+ */
+@Composable
+private fun OriginBar(
+    origin: Destination?,
+    canSwap: Boolean,
+    onEdit: () -> Unit,
+    onClear: () -> Unit,
+    onSwap: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.heightIn(min = 48.dp).padding(start = 12.dp, end = 4.dp)
+    ) {
+        Icon(painterResource(R.drawable.ic_my_location), contentDescription = null)
+        Text(
+            text = stringResource(
+                R.string.origin_from,
+                origin?.let { endLabel(it) } ?: stringResource(R.string.origin_my_location)
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClickLabel = stringResource(R.string.origin_change), onClick = onEdit)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        )
+        if (origin != null) {
+            IconButton(onClick = onClear) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = stringResource(R.string.origin_clear)
+                )
+            }
+        }
+        if (canSwap) {
+            IconButton(onClick = onSwap) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_swap_vert),
+                    contentDescription = stringResource(R.string.trip_swap)
+                )
+            }
+        }
+    }
+}
+
+/** How an end of the trip is named: its place name, or where it was pinned. */
+@Composable
+private fun endLabel(end: Destination): String = when {
+    end.name != null -> end.name
+
+    end.wasUserLocation -> stringResource(R.string.destination_my_location_pinned)
+
+    else -> stringResource(
+        R.string.destination_pinned,
+        // Five decimals is about a meter, plenty to recognize the spot.
+        String.format(Locale.US, "%.5f", end.location.latitude),
+        String.format(Locale.US, "%.5f", end.location.longitude)
+    )
+}
+
 /** The chosen destination in place of the search field; tapping its text searches again. */
 @Composable
 private fun DestinationBar(destination: Destination, onEdit: () -> Unit, onClear: () -> Unit) {
@@ -192,15 +321,7 @@ private fun DestinationBar(destination: Destination, onEdit: () -> Unit, onClear
     ) {
         Icon(painterResource(R.drawable.ic_place), contentDescription = null)
         Text(
-            text = stringResource(
-                R.string.destination_to,
-                destination.name ?: stringResource(
-                    R.string.destination_pinned,
-                    // Five decimals is about a meter, plenty to recognize the spot.
-                    String.format(Locale.US, "%.5f", destination.location.latitude),
-                    String.format(Locale.US, "%.5f", destination.location.longitude)
-                )
-            ),
+            text = stringResource(R.string.destination_to, endLabel(destination)),
             style = MaterialTheme.typography.titleSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

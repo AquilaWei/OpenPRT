@@ -253,6 +253,185 @@ class RoutePlannerTest {
         assertEquals(PlanResult.NoRoute(NoRouteReason.NO_CONNECTION), result)
     }
 
+    @Test
+    fun planArrivingBy_severalTripsInTime_ridesTheLatestOneThatArrivesByTheDeadline() {
+        val planner = plannerFor(
+            trip("T1", "R1", "A" to "08:00", "C" to "08:20"),
+            trip("T2", "R1", "A" to "08:30", "C" to "08:50"),
+            trip("T3", "R1", "A" to "09:00", "C" to "09:20")
+        )
+
+        val result = planner.planArrivingBy(A.location, C.location, at("09:00"))
+
+        assertEquals(
+            listOf(ride("T2", "R1", A, C, "08:30", "08:50")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun planArrivingBy_tripArrivesExactlyAtTheDeadline_ridesIt() {
+        val planner = plannerFor(
+            trip("T1", "R1", "A" to "08:00", "C" to "08:20"),
+            trip("T2", "R1", "A" to "08:30", "C" to "08:50")
+        )
+
+        val result = planner.planArrivingBy(A.location, C.location, at("08:50"))
+
+        assertEquals(
+            listOf(ride("T2", "R1", A, C, "08:30", "08:50")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun planArrivingBy_noTripArrivesBeforeTheDeadline_returnsNoConnection() {
+        val planner = plannerFor(trip("T1", "R1", "A" to "08:00", "C" to "08:20"))
+
+        val result = planner.planArrivingBy(A.location, C.location, at("08:10"))
+
+        assertEquals(PlanResult.NoRoute(NoRouteReason.NO_CONNECTION), result)
+    }
+
+    @Test
+    fun planArrivingBy_laterFeederArrivesUnderTheTransferBuffer_ridesAnEarlierOne() {
+        val planner = plannerFor(
+            trip("T0", "R1", "A" to "07:50", "C" to "08:10"),
+            trip("T1", "R1", "A" to "08:00", "C" to "08:20"),
+            trip("T2", "R2", "C" to "08:20:30", "D" to "08:30")
+        )
+
+        val result = planner.planArrivingBy(A.location, D.location, at("08:30"))
+
+        assertEquals(
+            listOf(
+                ride("T0", "R1", A, C, "07:50", "08:10"),
+                ride("T2", "R2", C, D, "08:20:30", "08:30")
+            ),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun planArrivingBy_walkFromTheLastStopWouldEndLate_ridesAnEarlierTrip() {
+        val planner = plannerFor(
+            trip("T0", "R1", "A" to "07:50", "C" to "08:10"),
+            trip("T1", "R1", "A" to "08:00", "C" to "08:20")
+        )
+        // 111.195 m north of C, a 93 s walk: T1 would arrive at 08:21:33.
+        val destination = LatLng(40.441, -80.0)
+
+        val result = planner.planArrivingBy(A.location, destination, at("08:21"))
+
+        assertEquals(
+            listOf(ride("T0", "R1", A, C, "07:50", "08:10")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun planArrivingBy_walkFromTheLastStop_startsAsTheBusArrives() {
+        val planner = plannerFor(trip("T1", "R1", "A" to "08:00", "C" to "08:20"))
+        val destination = LatLng(40.441, -80.0)
+
+        val result = planner.planArrivingBy(A.location, destination, at("08:30"))
+
+        assertEquals(at("08:21:33"), itineraries(result).single().arrivalSeconds)
+    }
+
+    @Test
+    fun planArrivingBy_walkToTheFirstStop_endsAsTheBusLeaves() {
+        val planner = plannerFor(trip("T1", "R1", "A" to "08:00", "C" to "08:20"))
+        // 111.195 m north of A, a 93 s walk.
+        val origin = LatLng(40.401, -80.0)
+
+        val result = planner.planArrivingBy(origin, C.location, at("08:30"))
+
+        assertEquals(at("07:58:27"), itineraries(result).single().departureSeconds)
+    }
+
+    @Test
+    fun planArrivingBy_transferLeavesLater_keepsBothDirectAndTransferTrips() {
+        val planner = plannerFor(
+            trip("T3", "R3", "A" to "08:00", "D" to "08:40"),
+            trip("T1", "R1", "A" to "08:10", "C" to "08:20"),
+            trip("T2", "R2", "C" to "08:30", "D" to "08:40")
+        )
+
+        val result = planner.planArrivingBy(A.location, D.location, at("08:45"))
+
+        assertEquals(
+            listOf(
+                listOf(ride("T3", "R3", A, D, "08:00", "08:40")),
+                listOf(
+                    ride("T1", "R1", A, C, "08:10", "08:20"),
+                    ride("T2", "R2", C, D, "08:30", "08:40")
+                )
+            ),
+            itineraries(result).map { it.rides }
+        )
+    }
+
+    @Test
+    fun planArrivingBy_transferLeavesNoLater_returnsOnlyTheDirectTrip() {
+        val planner = plannerFor(
+            trip("T3", "R3", "A" to "08:10", "D" to "08:40"),
+            trip("T1", "R1", "A" to "08:10", "C" to "08:20"),
+            trip("T2", "R2", "C" to "08:30", "D" to "08:40")
+        )
+
+        val result = planner.planArrivingBy(A.location, D.location, at("08:45"))
+
+        assertEquals(
+            listOf(listOf(ride("T3", "R3", A, D, "08:10", "08:40"))),
+            itineraries(result).map { it.rides }
+        )
+    }
+
+    @Test
+    fun planArrivingBy_transferBetweenNearbyStops_walksBetweenThemAfterTheFirstRide() {
+        val planner = plannerFor(
+            trip("T1", "R1", "A" to "08:00", "C" to "08:20"),
+            trip("T2", "R2", "C2" to "08:30", "D" to "08:40")
+        )
+
+        val result = planner.planArrivingBy(A.location, D.location, at("08:45"))
+
+        // C to C2 is 222.390 m, a 186 s walk, timed to reach C2 as T2 leaves.
+        assertEquals(
+            WalkLeg(C, C2, 222.39016, at("08:26:54"), at("08:30")),
+            itineraries(result).single().legs[2].roundedDistance()
+        )
+    }
+
+    @Test
+    fun planArrivingBy_cannotGetOffWhereDropOffIsNotAllowed_findsNoConnection() {
+        val planner = plannerFor(
+            ScheduledTrip(
+                "T1",
+                "R1",
+                null,
+                listOf(
+                    TripStop("A", at("08:00"), at("08:00")),
+                    TripStop("C", at("08:20"), at("08:20"), dropOffAllowed = false)
+                )
+            )
+        )
+
+        val result = planner.planArrivingBy(A.location, C.location, at("08:30"))
+
+        assertEquals(PlanResult.NoRoute(NoRouteReason.NO_CONNECTION), result)
+    }
+
+    @Test
+    fun planArrivingBy_noStopWithinWalkOfDestination_returnsNoRoute() {
+        val planner = plannerFor(trip("T1", "R1", "A" to "08:00", "C" to "08:20"))
+
+        val result = planner.planArrivingBy(A.location, LatLng(40.47, -80.0), at("08:30"))
+
+        assertEquals(PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION), result)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun network_tripVisitsUnknownStop_throws() {
         network(trip("T1", "R1", "A" to "08:00", "Z" to "08:20"))

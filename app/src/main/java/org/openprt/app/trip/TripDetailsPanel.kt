@@ -21,9 +21,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import org.openprt.app.R
 import org.openprt.app.planner.RideLeg
 import org.openprt.app.planner.WalkLeg
@@ -34,19 +33,23 @@ import org.openprt.app.ui.displayHeadsign
 import org.openprt.app.ui.displayName
 
 /**
- * One chosen way to go, leg by leg: walks with their minutes and where they lead, and rides with
- * where to board and get off. Tapping a ride's live-bus button looks its bus up through
- * [actions]; when TrueTime has no data for it, the ride says its times are from the timetable.
- * The back button returns to the list of options. Times are shown in [zone].
+ * One chosen way to go, leg by leg: walks with their minutes (along the streets once routed) and
+ * where they lead, and rides with where to board and get off. Tapping a ride's live-bus button
+ * looks its bus up through [actions]; when TrueTime has no data for it, the ride says its times
+ * are from the timetable. The summary on top warns, like the list, when the walks along the
+ * streets may miss a bus or the deadline.
+ * The back button returns to the list of options. Times are shown in [zone], with their date
+ * when it is not [today].
  */
 @Composable
 fun TripDetailsPanel(
     selected: SelectedTrip,
     actions: TripPlanActions,
     modifier: Modifier = Modifier,
-    zone: ZoneId = ZoneId.systemDefault()
+    zone: ZoneId = ZoneId.systemDefault(),
+    today: LocalDate = LocalDate.now(zone)
 ) {
-    val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+    val time = TripClockFormat(zone, today)
     val option = selected.option
     Column(
         modifier = modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -60,7 +63,10 @@ fun TripDetailsPanel(
                         contentDescription = stringResource(R.string.trip_back)
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) { TripSummary(option, time) }
+                Column(modifier = Modifier.weight(1f)) {
+                    TripSummary(option, time)
+                    TripWarning(option, time)
+                }
             }
         }
         InfoCard {
@@ -72,7 +78,7 @@ fun TripDetailsPanel(
                 legs.forEachIndexed { index, leg ->
                     if (index > 0) HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     when (leg) {
-                        is WalkLeg -> WalkRow(leg)
+                        is WalkLeg -> WalkRow(leg, selected.minutesOf(leg))
 
                         is RideLeg -> RideRow(
                             ride = leg,
@@ -89,14 +95,14 @@ fun TripDetailsPanel(
 }
 
 @Composable
-private fun WalkRow(walk: WalkLeg) {
+private fun WalkRow(walk: WalkLeg, minutes: Long) {
     val to = walk.to
     IconText(
         icon = R.drawable.ic_walk,
         text = if (to == null) {
-            stringResource(R.string.trip_walk_to_destination, walk.minutes())
+            stringResource(R.string.trip_walk_to_destination, minutes)
         } else {
-            stringResource(R.string.trip_walk_to_stop, walk.minutes(), displayName(to.name))
+            stringResource(R.string.trip_walk_to_stop, minutes, displayName(to.name))
         },
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.padding(vertical = 8.dp)
@@ -108,7 +114,7 @@ private fun RideRow(
     ride: RideLeg,
     option: TripOption,
     lookup: RideLookup,
-    time: DateTimeFormatter,
+    time: TripClockFormat,
     onLiveBus: () -> Unit
 ) {
     val plan = option.plan

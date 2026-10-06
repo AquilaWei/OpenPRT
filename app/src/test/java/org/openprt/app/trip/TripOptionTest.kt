@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.openprt.app.data.gtfs.TripPlan
 import org.openprt.app.data.truetime.Prediction
@@ -13,6 +14,7 @@ import org.openprt.app.planner.Itinerary
 import org.openprt.app.planner.RideLeg
 import org.openprt.app.planner.TransitStop
 import org.openprt.app.planner.WalkLeg
+import org.openprt.app.walk.WalkPath
 
 /**
  * The plan is on Thursday 2026-10-01 (EDT, UTC-4): walk 200 s, 61C CMU 07:00 (11:00Z) → Fifth
@@ -194,6 +196,121 @@ class TripOptionTest {
         assertEquals(Instant.parse("2026-10-01T11:02:00Z"), option.boardingTime)
     }
 
+    @Test
+    fun withWalks_firstWalkLongerAlongStreets_setsOffEarlier() {
+        // 300 s instead of 200 s before the 11:00Z bus.
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(streets(300), straight(), straight()), NOW)
+
+        assertEquals(Instant.parse("2026-10-01T10:55:00Z"), option.departureTime)
+    }
+
+    @Test
+    fun withWalks_firstWalkLongerAlongStreets_countsItInTheTotal() {
+        // 10:55:00 → 11:28:20 is 33 min 20 s.
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(streets(300), straight(), straight()), NOW)
+
+        assertEquals(34, option.totalMinutes)
+    }
+
+    @Test
+    fun withWalks_firstWalkLongerAlongStreets_showsItsMinutesInTheLegs() {
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(streets(300), straight(), straight()), NOW)
+
+        assertEquals(LegSummary.Walk(5), option.legs.first())
+    }
+
+    @Test
+    fun withWalks_firstWalkTooLongToSetOffInTime_missesTheBus() {
+        // 700 s before 11:00Z means setting off at 10:48:20Z, before NOW.
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(streets(700), straight(), straight()), NOW)
+
+        assertTrue(option.missesBus)
+    }
+
+    @Test
+    fun withWalks_firstWalkLongerButStillInTime_doesNotMissTheBus() {
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(streets(300), straight(), straight()), NOW)
+
+        assertFalse(option.missesBus)
+    }
+
+    @Test
+    fun withWalks_transferWalkLongerThanTheWait_missesTheBus() {
+        // 500 s instead of 120 s; the wait for 71B is 280 s.
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(straight(), streets(500), straight()), NOW)
+
+        assertTrue(option.missesBus)
+    }
+
+    @Test
+    fun withWalks_transferWalkLongerThanTheWait_pushesArrivalBackByTheRest() {
+        // 380 s longer, 280 s of it absorbed by the wait: arrival moves 100 s.
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(straight(), streets(500), straight()), NOW)
+
+        assertEquals(Instant.parse("2026-10-01T11:30:00Z"), option.arrivalTime)
+    }
+
+    @Test
+    fun withWalks_transferWalkLongerWithinTheWait_keepsArrivalAndCatchesTheBus() {
+        // 300 s instead of 120 s fits in the 280 s wait.
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(straight(), streets(300), straight()), NOW)
+
+        assertEquals(Instant.parse("2026-10-01T11:28:20Z"), option.arrivalTime)
+        assertFalse(option.missesBus)
+    }
+
+    @Test
+    fun withWalks_lastWalkLongerAlongStreets_arrivesThatMuchLater() {
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(straight(), straight(), streets(400)), NOW)
+
+        assertEquals(Instant.parse("2026-10-01T11:33:20Z"), option.arrivalTime)
+    }
+
+    @Test
+    fun withWalks_lastWalkLongerPastTheDeadline_isLateBecauseOfWalking() {
+        val deadline = Instant.parse("2026-10-01T11:30:00Z")
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW, deadline)
+            .withWalks(listOf(straight(), straight(), streets(400)), NOW)
+
+        assertTrue(option.late)
+        assertTrue(option.walksLonger)
+    }
+
+    @Test
+    fun withWalks_shorterAlongStreets_isNotWalksLonger() {
+        val option = TRANSFER_PLAN.toOption(emptyList(), NOW)
+            .withWalks(listOf(streets(100), straight(), straight()), NOW)
+
+        assertFalse(option.walksLonger)
+    }
+
+    @Test
+    fun withWalks_appliedTwice_givesTheSameOption() {
+        val walks = listOf(streets(300), streets(500), streets(400))
+        val once = TRANSFER_PLAN.toOption(emptyList(), NOW).withWalks(walks, NOW)
+
+        assertEquals(once, once.withWalks(walks, NOW))
+    }
+
+    @Test
+    fun withWalks_liveFirstBus_keepsItsPredictedBoarding() {
+        val option = TRANSFER_PLAN.toOption(
+            listOf(prediction("61C", "8312", "2026-10-01T11:03:00Z")),
+            NOW
+        ).withWalks(listOf(streets(300), straight(), straight()), NOW)
+
+        assertEquals(Instant.parse("2026-10-01T10:58:00Z"), option.departureTime)
+    }
+
     private companion object {
         val NOW: Instant = Instant.parse("2026-10-01T10:50:00Z")
         val DATE: LocalDate = LocalDate.of(2026, 10, 1)
@@ -228,6 +345,11 @@ class TripOptionTest {
                 )
             )
         )
+
+        /** A walk routed along the streets; its line plays no part in the times. */
+        fun streets(seconds: Long) = WalkPath.Streets(emptyList(), seconds)
+
+        fun straight() = WalkPath.Straight(CMU.location, CMU.location)
 
         fun prediction(route: String, stopId: String, time: String) = Prediction(
             generatedAt = NOW,

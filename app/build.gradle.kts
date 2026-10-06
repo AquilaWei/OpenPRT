@@ -9,15 +9,24 @@ plugins {
     alias(libs.plugins.room)
 }
 
-// The TrueTime key lives in the untracked local.properties; a missing key still builds,
-// and the API client reports MissingApiKey at call time instead.
+// The TrueTime key lives in the untracked local.properties, or in the PRT_API_KEY environment
+// variable that the release workflow fills from a GitHub secret. A missing key still builds,
+// and the app asks for one on first launch instead.
 val prtApiKey: String =
     rootProject
         .file("local.properties")
         .takeIf { it.exists() }
         ?.let { file -> Properties().apply { file.inputStream().use(::load) } }
         ?.getProperty("PRT_API_KEY")
-        .orEmpty()
+        ?: providers.environmentVariable("PRT_API_KEY").orNull.orEmpty()
+
+// Release signing comes only from environment variables (set by the release workflow from
+// GitHub secrets). Without them assembleRelease still builds, but the APK is unsigned.
+val releaseKeystore: String? = providers.environmentVariable("OPENPRT_KEYSTORE_FILE").orNull
+
+// Splitting by ABI keeps each release APK to one copy of MapLibre's native library. Only
+// release builds split, so assembleDebug and installDebug keep producing a single APK.
+val isReleaseBuild: Boolean = gradle.startParameter.taskNames.any { it.contains("Release") }
 
 android {
     namespace = "org.openprt.app"
@@ -30,6 +39,32 @@ android {
         versionName = providers.gradleProperty("VERSION_NAME").get()
         versionCode = providers.gradleProperty("VERSION_CODE").get().toInt()
         buildConfigField("String", "PRT_API_KEY", "\"$prtApiKey\"")
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = providers.environmentVariable("OPENPRT_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("OPENPRT_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("OPENPRT_KEY_PASSWORD").get()
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.findByName("release")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = isReleaseBuild
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
+        }
     }
 
     buildFeatures {
@@ -82,6 +117,7 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.maplibre.android)
+    implementation(libs.work.runtime.ktx)
     ksp(libs.room.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
@@ -90,6 +126,7 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.work.testing)
     testImplementation(libs.androidx.lifecycle.runtime.testing)
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.androidx.test.espresso.core)

@@ -3,7 +3,9 @@ package org.openprt.app.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import org.openprt.app.R
+import org.openprt.app.data.truetime.ApiProblem
 import org.openprt.app.data.truetime.TrueTimeError
+import org.openprt.app.data.truetime.problem
 
 /**
  * Why a TrueTime request failed, in a few words for the end of an error message, so the user
@@ -13,11 +15,17 @@ import org.openprt.app.data.truetime.TrueTimeError
 fun trueTimeErrorReason(error: TrueTimeError): String = when (error) {
     TrueTimeError.MissingApiKey -> stringResource(R.string.error_reason_missing_key)
 
-    // TrueTime's own text, e.g. "Invalid API access key supplied".
-    is TrueTimeError.Api -> stringResource(
-        R.string.error_reason_api,
-        error.messages.joinToString("; ")
-    )
+    is TrueTimeError.Api -> when (error.problem) {
+        ApiProblem.INVALID_KEY -> stringResource(R.string.error_reason_invalid_key)
+
+        ApiProblem.QUOTA_EXCEEDED -> stringResource(R.string.error_reason_quota_exceeded)
+
+        // TrueTime's own text, e.g. "No service scheduled".
+        ApiProblem.OTHER -> stringResource(
+            R.string.error_reason_api,
+            error.messages.joinToString("; ")
+        )
+    }
 
     is TrueTimeError.Http -> stringResource(R.string.error_reason_http, error.code)
 

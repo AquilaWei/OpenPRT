@@ -1,5 +1,6 @@
 package org.openprt.app.data.gtfs
 
+import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -39,12 +40,19 @@ class NearbyStopRepositoryTest {
             )
             .build()
         dao = database.gtfsDao()
+        val context = ApplicationProvider.getApplicationContext<Context>()
         repository = NearbyStopRepository(
             dao,
-            GtfsImporter(
-                database,
-                downloadDir = temporaryFolder.root,
-                feedUrl = server.url("/GTFS.zip")
+            GtfsUpdater(
+                dao,
+                GtfsImporter(
+                    database,
+                    downloadDir = temporaryFolder.root,
+                    feedUrl = server.url("/GTFS.zip")
+                ),
+                GtfsImportLog(
+                    context.getSharedPreferences(GtfsImportLog.PREFS_NAME, Context.MODE_PRIVATE)
+                )
             )
         )
     }

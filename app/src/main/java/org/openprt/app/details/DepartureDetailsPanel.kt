@@ -45,6 +45,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import org.openprt.app.R
+import org.openprt.app.data.truetime.TrueTimeError
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.directionLabel
 import org.openprt.app.departures.oppositeDirectionName
@@ -248,6 +249,9 @@ private fun UpdateText(bus: LiveBus, zone: ZoneId) {
     val time = bus.lastUpdated?.let { formatTime(it, zone) }
     val error = bus.error
     val (text, failed) = when {
+        error is TrueTimeError.Network && time != null ->
+            stringResource(R.string.details_bus_offline_since, time) to true
+
         error != null && time != null -> stringResource(
             R.string.details_bus_failed_since,
             trueTimeErrorReason(error),

@@ -46,3 +46,26 @@ sealed interface TrueTimeError {
     /** The response body was not the JSON shape BusTime v3 documents. */
     data class MalformedResponse(val cause: Exception) : TrueTimeError
 }
+
+/** What a [TrueTimeError.Api] is about, as far as the app needs to tell the user. */
+enum class ApiProblem {
+    /** TrueTime refused the key, e.g. "Invalid API access key supplied". */
+    INVALID_KEY,
+
+    /** The key used up its daily requests, e.g. "Transaction limit for current day has been exceeded." */
+    QUOTA_EXCEEDED,
+
+    OTHER
+}
+
+/**
+ * Reads [TrueTimeError.Api.messages], which are free text. Any message naming the key counts as a
+ * refused key; one naming transactions counts as the daily limit, which BusTime counts in
+ * transactions (one per request).
+ */
+val TrueTimeError.Api.problem: ApiProblem
+    get() = when {
+        messages.any { it.contains("key", ignoreCase = true) } -> ApiProblem.INVALID_KEY
+        messages.any { it.contains("transaction", ignoreCase = true) } -> ApiProblem.QUOTA_EXCEEDED
+        else -> ApiProblem.OTHER
+    }

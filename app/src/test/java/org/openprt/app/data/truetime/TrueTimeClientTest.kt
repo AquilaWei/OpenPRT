@@ -76,6 +76,37 @@ class TrueTimeClientTest {
     }
 
     @Test
+    fun request_lightRailClient_sendsLightRailDataFeed() = runTest {
+        val lightRail = TrueTimeClient(
+            apiKey = { "test-key" },
+            feed = DataFeed.LIGHT_RAIL,
+            baseUrl = server.url("/bustime/api/v3/")
+        )
+        enqueueFixture("getdirections.json")
+
+        lightRail.getDirections("RED")
+
+        assertEquals("Light Rail", server.takeRequest().url.queryParameter("rtpidatafeed"))
+    }
+
+    @Test
+    fun getPredictions_lightRailClient_marksPredictionsAsLightRail() = runTest {
+        val lightRail = TrueTimeClient(
+            apiKey = { "test-key" },
+            feed = DataFeed.LIGHT_RAIL,
+            baseUrl = server.url("/bustime/api/v3/")
+        )
+        enqueueFixture("getpredictions.json")
+
+        val predictions = lightRail.getPredictions(listOf("7117")).valueOrFail()
+
+        assertEquals(
+            listOf(DataFeed.LIGHT_RAIL, DataFeed.LIGHT_RAIL),
+            predictions.map { it.feed }
+        )
+    }
+
+    @Test
     fun getPredictions_withRecordedPrtResponse_parsesPredictions() = runTest {
         // Recorded from the real API on 2026-10-01; it has more fields than BusTime documents.
         enqueueFixture("getpredictions_recorded.json")

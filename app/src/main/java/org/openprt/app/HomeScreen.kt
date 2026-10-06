@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
@@ -16,6 +17,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -33,6 +35,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import org.openprt.app.departures.DepartureItem
 import org.openprt.app.departures.DeparturesPanel
 import org.openprt.app.departures.DeparturesUiState
@@ -47,15 +53,22 @@ import org.openprt.app.details.RouteStatus
 import org.openprt.app.geo.LatLng
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
+import org.openprt.app.map.MapLegendDialog
 import org.openprt.app.map.MapUiState
 import org.openprt.app.map.StopMap
+import org.openprt.app.map.StopMarker
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.map.mapPalette
 import org.openprt.app.planner.RideLeg
+import org.openprt.app.stop.StopDeparture
+import org.openprt.app.stop.StopDeparturesPanel
+import org.openprt.app.stop.StopDeparturesUiState
 import org.openprt.app.trip.TripOption
 import org.openprt.app.trip.TripPlanActions
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.trip.TripPlansPanel
+import org.openprt.app.trip.TripTimeMode
+import org.openprt.app.trip.TripTimeUiState
 import org.openprt.app.ui.theme.LocalOpenPrtColors
 import org.openprt.app.ui.theme.OpenPrtTheme
 import org.openprt.app.ui.theme.ThemeMode
@@ -84,7 +97,13 @@ private val DETAILS_SHEET_PEEK_HEIGHT = 300.dp
  * destination. Both go to [destinationActions]. While [tripPlanState] is set (a destination is
  * chosen), the sheet lists the ways there instead of the nearby departures. Tapping one shows it
  * leg by leg and on the map; those requests go to [tripPlanActions], and system back returns to
- * the list.
+ * the list. Above the ways, [tripTimeState] shows the Leave now / Depart at / Arrive by choice.
+ *
+ * Tapping a stop on the map calls [onStopClick]; while [stopState] is set, the sheet lists that
+ * stop's buses (over the ways there, under a departure's details, so backing out of a departure
+ * opened from the stop returns to it). A timetabled bus in that list calls [onScheduledClick];
+ * back calls [onStopBack], which closes an open timetabled run before the stop. The legend button explains
+ * the map's markers in the current theme's colors.
  *
  * The key button in the top bar calls [onOpenApiKey] to change the TrueTime key; the theme
  * button offers System / Light / Dark, marks [themeMode] and reports a pick to [onThemeModeChange].
@@ -110,6 +129,11 @@ fun HomeScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
+    tripTimeState: TripTimeUiState = TripTimeUiState(),
+    stopState: StopDeparturesUiState? = null,
+    onStopClick: (StopMarker) -> Unit = {},
+    onScheduledClick: (StopDeparture) -> Unit = {},
+    onStopBack: () -> Unit = {},
     mapContent: @Composable (Modifier, PaddingValues) -> Unit = { mapModifier, overlayPadding ->
         val trip = (tripPlanState as? TripPlanUiState.Results)?.selected?.map
         StopMap(
@@ -124,23 +148,28 @@ fun HomeScreen(
             palette = mapPalette(dark = LocalOpenPrtColors.current.isDark),
             modifier = mapModifier,
             trip = trip,
-            overlayPadding = overlayPadding
+            overlayPadding = overlayPadding,
+            selectedStop = stopState?.stop?.position.takeIf { detailsState == null },
+            onStopClick = onStopClick,
+            origin = destinationState.origin?.location
         )
     }
 ) {
     val tripSelected = (tripPlanState as? TripPlanUiState.Results)?.selected != null
     BackHandler(enabled = detailsState != null, onBack = onCloseDetails)
+    BackHandler(enabled = detailsState == null && stopState != null, onBack = onStopBack)
     BackHandler(
-        enabled = detailsState == null && tripSelected,
+        enabled = detailsState == null && stopState == null && tripSelected,
         onBack = tripPlanActions::closeSelection
     )
-    val peekHeight = if (detailsState != null || tripSelected) {
+    val peekHeight = if (detailsState != null || stopState != null || tripSelected) {
         DETAILS_SHEET_PEEK_HEIGHT
     } else {
         SHEET_PEEK_HEIGHT
     }
     // The search box floats over the top of the map; camera fits keep clear of it.
     var searchHeight by remember { mutableStateOf(0.dp) }
+    var legendOpen by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     BottomSheetScaffold(
         modifier = modifier,
@@ -148,7 +177,13 @@ fun HomeScreen(
         topBar = {
             val brand = LocalOpenPrtColors.current
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
+                // A plain bar with a semibold title, like an iOS navigation bar.
+                title = {
+                    Text(
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = brand.appBar,
                     titleContentColor = brand.onAppBar,
@@ -177,7 +212,15 @@ fun HomeScreen(
                     onSwitchDirection = onDepartureClick
                 )
 
-                tripPlanState != null -> TripPlansPanel(tripPlanState, tripPlanActions)
+                stopState != null -> StopDeparturesPanel(
+                    stopState,
+                    onBack = onStopBack,
+                    onDepartureClick = onDepartureClick,
+                    onScheduledClick = onScheduledClick
+                )
+
+                tripPlanState != null ->
+                    TripPlansPanel(tripPlanState, tripPlanActions, time = tripTimeState)
 
                 else -> DeparturesPanel(departuresState, onDepartureClick)
             }
@@ -201,19 +244,38 @@ fun HomeScreen(
                     onQueryChanged = destinationActions::onQueryChanged,
                     onPlaceSelected = destinationActions::selectPlace,
                     onRetry = destinationActions::retry,
-                    onClearDestination = destinationActions::clearDestination
+                    onClearDestination = destinationActions::clearDestination,
+                    onEditOrigin = destinationActions::editOrigin,
+                    onCancelOriginEdit = destinationActions::cancelOriginEdit,
+                    onClearOrigin = destinationActions::clearOrigin,
+                    onSwap = destinationActions::swapEndpoints
                 )
                 StatusMessages(
                     messages = listOfNotNull(
                         locationStatusText(locationState),
-                        stopsStatusText(locationState, mapState.stopsStatus)
+                        stopsStatusText(locationState, mapState.stopsStatus),
+                        timetableEndedText(mapState.timetableEndedOn)
                     )
+                )
+            }
+            // Round map buttons in the card color with a soft shadow, like Apple Maps'.
+            SmallFloatingActionButton(
+                onClick = { legendOpen = true },
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_legend),
+                    contentDescription = stringResource(R.string.legend_open)
                 )
             }
             FloatingActionButton(
                 onClick = onRelocate,
-                containerColor = LocalOpenPrtColors.current.accent,
-                contentColor = LocalOpenPrtColors.current.onAccent,
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
             ) {
                 Icon(
@@ -222,6 +284,12 @@ fun HomeScreen(
                 )
             }
         }
+    }
+    if (legendOpen) {
+        MapLegendDialog(
+            palette = mapPalette(dark = LocalOpenPrtColors.current.isDark),
+            onDismiss = { legendOpen = false }
+        )
     }
 }
 
@@ -313,6 +381,14 @@ private fun stopsStatusText(locationState: LocationUiState, status: StopsStatus)
     else -> null
 }
 
+@Composable
+private fun timetableEndedText(endedOn: LocalDate?): String? = endedOn?.let {
+    stringResource(
+        R.string.timetable_expired,
+        it.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+    )
+}
+
 @Preview
 @Composable
 private fun HomeScreenPreview() {
@@ -362,6 +438,14 @@ private object PreviewDestinationActions : DestinationActions {
     override fun onMapLongPress(location: LatLng) = Unit
 
     override fun clearDestination() = Unit
+
+    override fun editOrigin() = Unit
+
+    override fun cancelOriginEdit() = Unit
+
+    override fun clearOrigin() = Unit
+
+    override fun swapEndpoints() = Unit
 }
 
 /** Trip actions that do nothing, for previews and screens without a trip. */
@@ -375,4 +459,8 @@ internal object NoTripPlanActions : TripPlanActions {
     override fun openRide(ride: RideLeg) = Unit
 
     override fun onRideOpened() = Unit
+
+    override fun setTimeMode(mode: TripTimeMode) = Unit
+
+    override fun setTime(at: Instant) = Unit
 }

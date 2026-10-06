@@ -173,6 +173,62 @@ class GtfsImporterTest {
     }
 
     @Test
+    fun import_whenStopTimesHasOnlyItsHeader_returnsMalformedFeedAndKeepsExistingTimetable() =
+        runTest {
+            enqueueZip(fixtureFeedFiles)
+            importer.import()
+            enqueueZip(
+                fixtureFeedFiles + (
+                    "stop_times.txt" to
+                        "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+                    )
+            )
+
+            val result = importer.import()
+
+            assertTrue(
+                result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+            )
+            assertEquals(12, dao.countStopTimes())
+            assertEquals(fixtureStops, dao.getAllStops())
+        }
+
+    @Test
+    fun import_whenEveryFileHasOnlyItsHeader_returnsMalformedFeedAndKeepsExistingTimetable() =
+        runTest {
+            enqueueZip(fixtureFeedFiles)
+            importer.import()
+            enqueueZip(fixtureFeedFiles.mapValues { (_, text) -> text.lines().first() + "\n" })
+
+            val result = importer.import()
+
+            assertTrue(
+                result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+            )
+            assertEquals(fixtureStops, dao.getAllStops())
+            assertEquals(fixtureRoutes, dao.getAllRoutes())
+            assertEquals(12, dao.countStopTimes())
+        }
+
+    @Test
+    fun import_whenBothCalendarFilesHaveOnlyTheirHeaders_returnsMalformedFeed() = runTest {
+        enqueueZip(
+            fixtureFeedFiles + mapOf(
+                "calendar.txt" to
+                    "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday," +
+                    "start_date,end_date\n",
+                "calendar_dates.txt" to "service_id,date,exception_type\n"
+            )
+        )
+
+        val result = importer.import()
+
+        assertTrue(
+            result is GtfsImportResult.Failure && result.error is GtfsImportError.MalformedFeed
+        )
+    }
+
+    @Test
     fun import_withOnlyCalendarDates_succeeds() = runTest {
         enqueueZip(fixtureFeedFiles - "calendar.txt")
 
@@ -272,5 +328,71 @@ class GtfsImporterTest {
         )
         assertEquals(fixtureStops, dao.getAllStops())
         assertEquals(fixtureRoutes, dao.getAllRoutes())
+    }
+
+    private fun importerWithFeedPage() = GtfsImporter(
+        database,
+        downloadDir = temporaryFolder.root,
+        feedUrl = server.url("/fallback/GTFS.zip"),
+        feedPageUrl = server.url("/developer-resources/")
+    )
+
+    private fun enqueuePage(html: String) {
+        server.enqueue(MockResponse.Builder().body(html).build())
+    }
+
+    @Test
+    fun import_whenFeedPageLinksAZip_downloadsTheLinkedZip() = runTest {
+        enqueuePage("""<a href="/contentassets/abc123/gtfs.zip">GTFS</a>""")
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        // Timeouts so a missing request fails the test instead of hanging it.
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertEquals(
+            "/contentassets/abc123/gtfs.zip",
+            server.takeRequest(1, TimeUnit.SECONDS)?.url?.encodedPath
+        )
+    }
+
+    @Test
+    fun import_whenFeedPageLinksAZip_storesItsStops() = runTest {
+        enqueuePage("""<a href="/contentassets/abc123/gtfs.zip">GTFS</a>""")
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        assertEquals(fixtureStops, dao.getAllStops())
+    }
+
+    @Test
+    fun import_whenFeedPageHasNoZipLink_downloadsTheFallbackUrl() = runTest {
+        enqueuePage("""<a href="/about-us/">About</a>""")
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        // Timeouts so a missing request fails the test instead of hanging it.
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertEquals(
+            "/fallback/GTFS.zip",
+            server.takeRequest(1, TimeUnit.SECONDS)?.url?.encodedPath
+        )
+    }
+
+    @Test
+    fun import_whenFeedPageIsMissing_downloadsTheFallbackUrl() = runTest {
+        server.enqueue(MockResponse.Builder().code(404).build())
+        enqueueZip(fixtureFeedFiles)
+
+        importerWithFeedPage().import()
+
+        // Timeouts so a missing request fails the test instead of hanging it.
+        server.takeRequest(1, TimeUnit.SECONDS)
+        assertEquals(
+            "/fallback/GTFS.zip",
+            server.takeRequest(1, TimeUnit.SECONDS)?.url?.encodedPath
+        )
     }
 }

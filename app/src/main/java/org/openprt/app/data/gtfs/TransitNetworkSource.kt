@@ -1,5 +1,6 @@
 package org.openprt.app.data.gtfs
 
+import androidx.room.withTransaction
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -10,37 +11,64 @@ import org.openprt.app.planner.TransitNetwork
 import org.openprt.app.planner.TransitStop
 import org.openprt.app.planner.TripStop
 
+/** Networks of some service days, all read from the import with id [importId]. */
+class TimetableNetworks(val importId: Long, val networks: Map<LocalDate, TransitNetwork>)
+
 /** Where the planner gets its timetable; an interface so tests can count network builds. */
 fun interface TransitNetworkSource {
     /**
-     * The network of everything scheduled on [serviceDate], or null when no GTFS data has been
-     * imported yet. A day with no service gives a network without trips, not null.
+     * Reads one version of the imported timetable: its import id, then the networks of the days
+     * [daysToBuild] picks for that id, so a caller already holding networks of that import builds
+     * only the days it lacks. Null when no GTFS data has been imported yet. A day with no service
+     * gives a network without trips, not null.
      */
-    suspend fun network(serviceDate: LocalDate): TransitNetwork?
+    suspend fun networks(daysToBuild: (importId: Long) -> List<LocalDate>): TimetableNetworks?
 }
 
 /**
- * [TransitNetworkSource] over the imported GTFS timetable. Each call reads a whole service day
- * from Room and builds the network on [dispatcher], which takes a noticeable fraction of a second
- * for PRT's feed, so callers should cache the result per day.
+ * [TransitNetworkSource] over the imported GTFS timetable in [database]. The reads of one call
+ * share a transaction, so a background import committing meanwhile cannot mix old and new rows;
+ * that import waits for them, and they wait for an import already running. Each day's network
+ * is then built on [dispatcher], which takes a noticeable fraction of a second for PRT's feed, so
+ * callers should keep the result per day and import id.
  */
 class RoomTransitNetworkSource(
-    private val dao: GtfsDao,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val database: GtfsDatabase,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    // Tests wrap the DAO to act between its reads.
+    private val dao: GtfsDao = database.gtfsDao()
 ) : TransitNetworkSource {
-    override suspend fun network(serviceDate: LocalDate): TransitNetwork? {
-        // The importer fills every table in one transaction, so no stops means no timetable.
-        if (dao.countStops() == 0) return null
+    override suspend fun networks(
+        daysToBuild: (importId: Long) -> List<LocalDate>
+    ): TimetableNetworks? {
+        val (importId, rows) = database.withTransaction {
+            val importId = dao.getImportId() ?: return@withTransaction null
+            importId to daysToBuild(importId).associateWith { readServiceDay(it) }
+        } ?: return null
+        val networks = withContext(dispatcher) {
+            rows.mapValues { (_, day) -> buildNetwork(day.stops, day.trips, day.stopTimes) }
+        }
+        return TimetableNetworks(importId, networks)
+    }
+
+    private suspend fun readServiceDay(serviceDate: LocalDate): ServiceDayRows {
         val serviceIds = activeServiceIds(
             serviceDate,
             dao.getCalendarsCovering(serviceDate),
             dao.getCalendarDatesOn(serviceDate)
         )
-        val stops = dao.getAllStops()
-        val trips = dao.getTripsOfServices(serviceIds)
-        val stopTimes = dao.getStopTimesOfServices(serviceIds)
-        return withContext(dispatcher) { buildNetwork(stops, trips, stopTimes) }
+        return ServiceDayRows(
+            dao.getAllStops(),
+            dao.getTripsOfServices(serviceIds),
+            dao.getStopTimesOfServices(serviceIds)
+        )
     }
+
+    private class ServiceDayRows(
+        val stops: List<StopEntity>,
+        val trips: List<TripEntity>,
+        val stopTimes: List<StopTimeEntity>
+    )
 }
 
 /**

@@ -9,10 +9,16 @@ data class MapPalette(
     val routeLine: String,
     val stop: String,
     val stopOutline: String,
+    /** The bus glyph drawn on a [stop] sign. */
+    val stopGlyph: String,
     val routeStop: String,
     val routeStopOutline: String,
     val boardingStop: String,
+    /** The bus glyph drawn on a [boardingStop] sign. */
+    val boardingStopGlyph: String,
     val destination: String,
+    /** A starting point the user chose instead of their location; unlike every other marker. */
+    val origin: String,
     val bus: String,
     /** The bus glyph drawn on the [bus] disc. */
     val busGlyph: String,
@@ -39,10 +45,14 @@ fun mapPalette(dark: Boolean): MapPalette = if (dark) {
         routeLine = "#D5E3FF",
         stop = "#D5E3FF",
         stopOutline = "#111318",
+        // White would be too faint on the pale blue sign.
+        stopGlyph = "#111318",
         routeStop = "#111318",
         routeStopOutline = "#D5E3FF",
         boardingStop = "#FFC72C",
+        boardingStopGlyph = "#111318",
         destination = "#F28B82",
+        origin = "#CE93D8",
         bus = "#81C995",
         // White would be too faint on the pale green disc.
         busGlyph = "#0D3B1E",
@@ -55,10 +65,14 @@ fun mapPalette(dark: Boolean): MapPalette = if (dark) {
         routeLine = "#17365F",
         stop = "#17365F",
         stopOutline = "#FFFFFF",
+        stopGlyph = "#FFFFFF",
         routeStop = "#FFFFFF",
         routeStopOutline = "#17365F",
         boardingStop = "#F2A900",
+        // Navy rather than white: white on gold is below 3:1.
+        boardingStopGlyph = "#17365F",
         destination = "#D93025",
+        origin = "#8E24AA",
         bus = "#188038",
         busGlyph = "#FFFFFF",
         user = "#1A73E8",

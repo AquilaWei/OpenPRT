@@ -34,10 +34,12 @@ import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconAnchor
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.PropertyFactory.iconSize
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineDasharray
@@ -61,12 +63,17 @@ private const val ROUTE_STOPS_SOURCE = "route-stops"
 private const val BOARDING_STOP_SOURCE = "boarding-stop"
 private const val BUS_SOURCE = "bus"
 private const val DESTINATION_SOURCE = "destination"
+private const val ORIGIN_SOURCE = "origin"
+private const val SELECTED_STOP_SOURCE = "selected-stop"
 private const val TRIP_WALK_SOURCE = "trip-walks"
 private const val TRIP_RIDE_SOURCE = "trip-rides"
 private const val TRIP_BOARDING_SOURCE = "trip-boarding"
 private const val TRIP_ALIGHTING_SOURCE = "trip-alighting"
 private const val BUS_BADGE_IMAGE = "bus-badge"
 private const val BUS_HEADING_IMAGE = "bus-heading"
+private const val STOP_SIGN_IMAGE = "stop-sign"
+private const val BOARDING_STOP_SIGN_IMAGE = "boarding-stop-sign"
+private const val DESTINATION_PIN_IMAGE = "destination-pin"
 
 // Wider than the bus badge (18 dp with its ring), so a bus on top of the rider leaves a rim.
 private const val USER_HALO_RADIUS = 26f
@@ -74,6 +81,16 @@ private const val USER_HALO_OPACITY = 0.25f
 
 // Street level: a 400 m stop radius fills most of a phone screen.
 private const val FOLLOW_ZOOM = 16.0
+
+private const val ORIGIN_CENTER_RADIUS = 4f
+
+// Stop signs are full size from street level (FOLLOW_ZOOM is 16) and half size at city level.
+private const val SMALL_SIGN_ZOOM = 12f
+private const val SMALL_SIGN_SCALE = 0.5f
+private const val FULL_SIGN_ZOOM = 15f
+
+// Half a 48 dp touch target, so a stop dot is as easy to hit as a button.
+private val STOP_TOUCH_RADIUS = 24.dp
 
 /** Margin kept between a fitted route (or user and destination) and the map edges. */
 private val ROUTE_FIT_PADDING = 48.dp
@@ -87,9 +104,13 @@ private val ROUTE_FIT_PADDING = 48.dp
  * The selected [bus], when reported, is drawn on top of everything, the user dot included, as a
  * bus badge with an arrow pointing where it is heading; the camera does not follow it.
  *
- * A [destination], when set, is drawn as a red dot and, while no route is shown, the camera fits
- * both [center] and the destination instead of zooming in on [center]. Long-pressing the map
- * reports the pressed spot through [onLongPress].
+ * A [destination], when set, is drawn as a red pin, and a chosen [origin] (null when the trip
+ * starts from the user) as a ringed dot in its own color. While no route is shown, the camera
+ * fits the origin, or [center] without one, and the destination instead of zooming in on [center].
+ * Long-pressing the map reports the pressed spot through [onLongPress].
+ *
+ * Tapping near one of [stops] or a stop of [route] reports that stop through [onStopClick];
+ * [selectedStop], the stop whose buses are shown, is drawn large like a boarding stop.
  *
  * A chosen [trip] is drawn the same way as a route, with its walks dashed; the camera is fitted
  * to it while no route is shown. Camera fits keep [overlayPadding] clear, the space the search
@@ -113,15 +134,21 @@ fun StopMap(
     palette: MapPalette,
     modifier: Modifier = Modifier,
     trip: TripMapLayers? = null,
-    overlayPadding: PaddingValues = PaddingValues()
+    overlayPadding: PaddingValues = PaddingValues(),
+    selectedStop: LatLng? = null,
+    onStopClick: (StopMarker) -> Unit = {},
+    origin: LatLng? = null
 ) {
     val context = LocalContext.current
     val fitPadding = fitPaddingPx(overlayPadding)
+    val touchRadiusPx = with(LocalDensity.current) { STOP_TOUCH_RADIUS.toPx() }
     val mapView = remember { createMapView(context) }
     // Null until the style has loaded; sources can only be updated after that.
     var style by remember { mutableStateOf<Style?>(null) }
     // The listener is registered once; this keeps it calling the latest callback.
     val currentOnLongPress by rememberUpdatedState(onLongPress)
+    val currentOnStopClick by rememberUpdatedState(onStopClick)
+    val tappableStops by rememberUpdatedState(stops + route?.stops.orEmpty())
 
     MapViewLifecycle(mapView)
     LaunchedEffect(mapView) {
@@ -129,6 +156,17 @@ fun StopMap(
             map.addOnMapLongClickListener { point ->
                 currentOnLongPress(LatLng(point.latitude, point.longitude))
                 true
+            }
+            // A tap away from every stop is not consumed, so the map handles it as usual.
+            map.addOnMapClickListener { point ->
+                val projection = map.projection
+                val tap = projection.toScreenLocation(point)
+                val stop = stopAt(ScreenPoint(tap.x, tap.y), tappableStops, touchRadiusPx) {
+                    val screen = projection.toScreenLocation(it.toMapLibre())
+                    ScreenPoint(screen.x, screen.y)
+                }
+                stop?.let(currentOnStopClick)
+                stop != null
             }
         }
     }
@@ -164,8 +202,14 @@ fun StopMap(
             FeatureCollection.fromFeatures(listOfNotNull(bus?.toFeature()))
         )
     }
+    LaunchedEffect(style, selectedStop) {
+        style?.setPoints(SELECTED_STOP_SOURCE, listOfNotNull(selectedStop))
+    }
     LaunchedEffect(style, destination) {
         style?.setPoints(DESTINATION_SOURCE, listOfNotNull(destination))
+    }
+    LaunchedEffect(style, origin) {
+        style?.setPoints(ORIGIN_SOURCE, listOfNotNull(origin))
     }
     LaunchedEffect(style, userLocation) {
         style?.setPoints(USER_SOURCE, listOfNotNull(userLocation))
@@ -175,18 +219,19 @@ fun StopMap(
     // the search results that covered the map, and the fit has to be redone without them.
     LaunchedEffect(
         center,
+        origin,
         destination,
         route == null,
         trip == null,
-        fitPadding.top.takeIf { destination != null }
+        fitPadding.top.takeIf { destination != null || origin != null }
     ) {
         if (center == null || route != null || trip != null) return@LaunchedEffect
-        val update = if (destination == null || destination == center) {
-            CameraUpdateFactory.newLatLngZoom(center.toMapLibre(), FOLLOW_ZOOM)
+        val points = cameraPoints(center, origin, destination)
+        val update = if (points.size == 1) {
+            CameraUpdateFactory.newLatLngZoom(points.single().toMapLibre(), FOLLOW_ZOOM)
         } else {
             val bounds = LatLngBounds.Builder()
-                .include(center.toMapLibre())
-                .include(destination.toMapLibre())
+                .apply { points.forEach { include(it.toMapLibre()) } }
                 .build()
             fitPadding.boundsUpdate(bounds)
         }
@@ -274,8 +319,8 @@ private fun Style.setPoints(sourceId: String, points: List<LatLng>) {
 }
 
 /**
- * Layers are drawn in the order added: route line, stops, route stops, boarding stop,
- * destination, user, bus.
+ * Layers are drawn in the order added: route line, stops, route stops, trip, boarding stop,
+ * selected stop, origin, destination, user, bus.
  */
 private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette) {
     listOf(
@@ -287,6 +332,8 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
         TRIP_ALIGHTING_SOURCE,
         TRIP_BOARDING_SOURCE,
         BOARDING_STOP_SOURCE,
+        SELECTED_STOP_SOURCE,
+        ORIGIN_SOURCE,
         DESTINATION_SOURCE,
         BUS_SOURCE,
         USER_SOURCE
@@ -299,14 +346,23 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
             lineJoin(Property.LINE_JOIN_ROUND)
         )
     )
-    style.addLayer(
-        CircleLayer("stops-layer", STOPS_SOURCE).withProperties(
-            circleRadius(6f),
-            circleColor(palette.stop),
-            circleStrokeColor(palette.stopOutline),
-            circleStrokeWidth(2f)
+    // Stop signs rather than dots, so a stop reads as a bus stop at a glance (user feedback,
+    // 2026-10-05). Stops along a route line stay dots: a sign at every one would bury the line.
+    style.addImage(
+        STOP_SIGN_IMAGE,
+        stopSignBitmap(context, STOP_SIGN_DP, palette.stop, palette.stopOutline, palette.stopGlyph)
+    )
+    style.addImage(
+        BOARDING_STOP_SIGN_IMAGE,
+        stopSignBitmap(
+            context,
+            LARGE_STOP_SIGN_DP,
+            palette.boardingStop,
+            palette.markerOutline,
+            palette.boardingStopGlyph
         )
     )
+    style.addLayer(stopSignLayer("stops-layer", STOPS_SOURCE, STOP_SIGN_IMAGE))
     style.addLayer(
         CircleLayer("route-stops-layer", ROUTE_STOPS_SOURCE).withProperties(
             circleRadius(4f),
@@ -318,11 +374,35 @@ private fun addMarkerLayers(context: Context, style: Style, palette: MapPalette)
     addTripLayers(style, palette)
     // Larger and gold so the stop to walk to stands out from the rest of the route.
     style.addLayer(
-        largeMarkerLayer("boarding-stop-layer", BOARDING_STOP_SOURCE, palette.boardingStop, palette)
+        stopSignLayer("boarding-stop-layer", BOARDING_STOP_SOURCE, BOARDING_STOP_SIGN_IMAGE)
     )
-    // Red, the usual map color for "where you are going".
+    // The tapped stop looks like a boarding stop: it is where the listed buses are boarded.
     style.addLayer(
-        largeMarkerLayer("destination-layer", DESTINATION_SOURCE, palette.destination, palette)
+        stopSignLayer("selected-stop-layer", SELECTED_STOP_SOURCE, BOARDING_STOP_SIGN_IMAGE)
+    )
+    // A ringed dot with a white center, the usual "start here" mark, in a color no other
+    // marker uses, so a chosen start is not mistaken for the user or a stop.
+    style.addLayer(
+        largeMarkerLayer("origin-layer", ORIGIN_SOURCE, palette.origin, palette)
+    )
+    style.addLayer(
+        CircleLayer("origin-center-layer", ORIGIN_SOURCE).withProperties(
+            circleRadius(ORIGIN_CENTER_RADIUS),
+            circleColor(palette.markerOutline)
+        )
+    )
+    // A red pin, the usual map mark for "where you are going"; its point sits on the place.
+    style.addImage(
+        DESTINATION_PIN_IMAGE,
+        pinBitmap(context, palette.destination, palette.markerOutline)
+    )
+    style.addLayer(
+        SymbolLayer("destination-layer", DESTINATION_SOURCE).withProperties(
+            iconImage(DESTINATION_PIN_IMAGE),
+            iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+            iconAllowOverlap(true),
+            iconIgnorePlacement(true)
+        )
     )
     // Above the stops but under the bus: when the bus reaches the rider, the bus is what they
     // are watching. The halo is wider than the bus badge, so the rider still shows around it.
@@ -390,9 +470,28 @@ private fun addTripLayers(style: Style, palette: MapPalette) {
         )
     )
     style.addLayer(
-        largeMarkerLayer("trip-boarding-layer", TRIP_BOARDING_SOURCE, palette.boardingStop, palette)
+        stopSignLayer("trip-boarding-layer", TRIP_BOARDING_SOURCE, BOARDING_STOP_SIGN_IMAGE)
     )
 }
+
+/**
+ * Every stop sign is drawn, even crowded together downtown, since each one can be tapped. Zoomed
+ * out to frame a trip, the signs shrink so they do not pile up into one blob.
+ */
+private fun stopSignLayer(id: String, source: String, image: String) =
+    SymbolLayer(id, source).withProperties(
+        iconImage(image),
+        iconSize(
+            Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(SMALL_SIGN_ZOOM, SMALL_SIGN_SCALE),
+                Expression.stop(FULL_SIGN_ZOOM, 1f)
+            )
+        ),
+        iconAllowOverlap(true),
+        iconIgnorePlacement(true)
+    )
 
 private fun largeMarkerLayer(id: String, source: String, color: String, palette: MapPalette) =
     CircleLayer(id, source).withProperties(

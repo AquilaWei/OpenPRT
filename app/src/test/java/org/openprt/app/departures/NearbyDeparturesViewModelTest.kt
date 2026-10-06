@@ -22,6 +22,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.PredictionType
 import org.openprt.app.data.truetime.TrueTimeError
@@ -252,6 +253,63 @@ class NearbyDeparturesViewModelTest {
                 lastUpdated = NOW
             ),
             viewModel.state.value
+        )
+    }
+
+    @Test
+    fun autoRefresh_busAndLightRailFeeds_asksEachFeedOnceAndListsLightRail() = runTest(dispatcher) {
+        val bus = FakePredictionSource(
+            success(prediction("61C", "OUTBOUND", "McKeesport", secondsFromNow = 300))
+        )
+        val lightRail = FakePredictionSource(
+            success(
+                prediction("RED", "INBOUND", "Downtown", secondsFromNow = 480).copy(
+                    stopId = "99994",
+                    stopName = "Steel Plaza Station",
+                    vehicleId = "4301",
+                    feed = DataFeed.LIGHT_RAIL
+                )
+            )
+        )
+        val viewModel =
+            NearbyDeparturesViewModel(MergedPredictionSource(listOf(bus, lightRail)), clock)
+        viewModel.onStopsChanged(
+            listOf(WalkableStop("7117", 130.0), WalkableStop("99994", 130.0))
+        )
+
+        val refreshing = launch { viewModel.autoRefresh() }
+        runCurrent()
+        refreshing.cancel()
+
+        assertEquals(listOf(listOf("7117", "99994")), bus.requests)
+        assertEquals(listOf(listOf("7117", "99994")), lightRail.requests)
+        assertEquals(
+            listOf(
+                DepartureItem(
+                    "61C",
+                    "OUTBOUND",
+                    "McKeesport",
+                    "Forbes Ave at Morewood Ave",
+                    2,
+                    5,
+                    false,
+                    "7117",
+                    "5601"
+                ),
+                DepartureItem(
+                    "RED",
+                    "INBOUND",
+                    "Downtown",
+                    "Steel Plaza Station",
+                    2,
+                    8,
+                    false,
+                    "99994",
+                    "4301",
+                    DataFeed.LIGHT_RAIL
+                )
+            ),
+            viewModel.state.value.departures
         )
     }
 

@@ -27,7 +27,9 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import org.openprt.app.R
+import org.openprt.app.data.truetime.ApiProblem
 import org.openprt.app.data.truetime.TrueTimeError
+import org.openprt.app.data.truetime.problem
 import org.openprt.app.ui.IconText
 import org.openprt.app.ui.InfoCard
 import org.openprt.app.ui.MinutesPill
@@ -39,8 +41,8 @@ import org.openprt.app.ui.displayName
 
 /**
  * The departures near the user, shown in the home screen's bottom sheet as one card per route
- * with a row for each direction. A failed refresh keeps the previous list and says how old it
- * is; times are shown in [zone]. Tapping a row reports it through [onDepartureClick].
+ * with a row for each direction. A failed refresh keeps the previous list and says why (offline,
+ * key refused, daily limit used up) and how old the list is; times are shown in [zone]. Tapping a row reports it through [onDepartureClick].
  */
 @Composable
 fun DeparturesPanel(
@@ -158,10 +160,18 @@ private fun DirectionRow(departure: DepartureItem, onClick: () -> Unit) {
 @Composable
 private fun FailureText(error: TrueTimeError, lastUpdated: Instant?, zone: ZoneId) {
     val reason = stringResource(
-        if (error == TrueTimeError.MissingApiKey) {
-            R.string.departures_failed_missing_key
-        } else {
-            R.string.departures_failed
+        when {
+            error == TrueTimeError.MissingApiKey -> R.string.departures_failed_missing_key
+
+            error is TrueTimeError.Network -> R.string.departures_offline
+
+            error is TrueTimeError.Api && error.problem == ApiProblem.INVALID_KEY ->
+                R.string.departures_invalid_key
+
+            error is TrueTimeError.Api && error.problem == ApiProblem.QUOTA_EXCEEDED ->
+                R.string.departures_quota_exceeded
+
+            else -> R.string.departures_failed
         }
     )
     val text = if (lastUpdated == null) {

@@ -5,8 +5,10 @@ build/
 *.apk
 *.aab
 
-# Local machine config (SDK path, API keys)
+# Local machine config (SDK path, API keys) and release signing keys
 local.properties
+*.jks
+*.keystore
 
 # IDE
 .idea/

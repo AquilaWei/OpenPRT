@@ -14,8 +14,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.IOException
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -33,10 +35,15 @@ import org.openprt.app.geo.LatLng
 import org.openprt.app.location.LocationError
 import org.openprt.app.location.LocationUiState
 import org.openprt.app.map.MapUiState
+import org.openprt.app.map.StopMarker
 import org.openprt.app.map.StopsStatus
+import org.openprt.app.stop.StopDeparture
+import org.openprt.app.stop.StopDeparturesUiState
+import org.openprt.app.stop.StopTimesSource
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.ui.theme.OpenPrtTheme
 import org.openprt.app.ui.theme.ThemeMode
+import org.robolectric.annotation.Config
 
 @RunWith(AndroidJUnit4::class)
 class HomeScreenTest {
@@ -153,6 +160,7 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_permissionDenied_tellsUserDowntownIsShown() {
         composeRule.setContent {
             HomeScreen(
@@ -180,6 +188,7 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_timedOut_showsTimeoutMessage() {
         composeRule.setContent {
             HomeScreen(
@@ -207,6 +216,7 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_locatedAndStopsLoading_showsStopsLoadingMessage() {
         composeRule.setContent {
             HomeScreen(
@@ -232,6 +242,38 @@ class HomeScreenTest {
     }
 
     @Test
+    @Config(qualifiers = PHONE_SCREEN)
+    fun homeScreen_timetableEnded_warnsThatScheduledTimesMayBeWrong() {
+        composeRule.setContent {
+            HomeScreen(
+                LocationUiState.Located(LatLng(40.4443, -79.9532)),
+                MapUiState(
+                    stopsStatus = StopsStatus.Ready,
+                    timetableEndedOn = LocalDate.of(2026, 9, 26)
+                ),
+                DeparturesUiState(),
+                detailsState = null,
+                destinationState = DestinationUiState(),
+                destinationActions = NoDestinationActions,
+                tripPlanState = null,
+                tripPlanActions = NoTripPlanActions,
+                onRelocate = {},
+                onDepartureClick = {},
+                onCloseDetails = {},
+                onOpenApiKey = {},
+                themeMode = ThemeMode.SYSTEM,
+                onThemeModeChange = {},
+                mapContent = stubMap
+            )
+        }
+
+        composeRule
+            .onNodeWithText("The bus timetable on this phone ended on", substring = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    @Config(qualifiers = PHONE_SCREEN)
     fun homeScreen_stopsFailed_showsStopsErrorMessage() {
         composeRule.setContent {
             HomeScreen(
@@ -426,6 +468,103 @@ class HomeScreenTest {
         assertEquals(0, relocations)
     }
 
+    @Test
+    fun homeScreen_stopSelected_showsStopBusesInsteadOfNearbyDepartures() {
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = {}) }
+
+        composeRule.onNodeWithText("Stop #7117").assertIsDisplayed()
+        composeRule.onNodeWithText("Nearby departures").assertDoesNotExist()
+    }
+
+    @Test
+    fun homeScreen_departureClickedInStopPanel_showsItsDetails() {
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = {}) }
+
+        composeRule.onNodeWithText("To McKeesport").performClick()
+
+        composeRule.onNodeWithText("Locating the bus…").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_backFromDetailsOpenedFromStop_showsStopBusesAgain() {
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = {}) }
+        composeRule.onNodeWithText("To McKeesport").performClick()
+
+        composeRule.onNodeWithContentDescription("Back to nearby departures").performClick()
+
+        composeRule.onNodeWithText("Stop #7117").assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_stopPanelBackClicked_callsOnStopBack() {
+        var closed = 0
+        composeRule.setContent { NavigableStopHomeScreen(onStopBack = { closed++ }) }
+
+        composeRule.onNodeWithContentDescription("Close this stop").performClick()
+
+        assertEquals(1, closed)
+    }
+
+    @Test
+    fun homeScreen_legendButtonClicked_explainsEveryMapMarker() {
+        composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
+
+        composeRule.onNodeWithContentDescription("Map legend").performClick()
+
+        // The list scrolls on Robolectric's small screen, so each row is scrolled to first.
+        composeRule.onNodeWithText("You").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Bus stop near you. Tap one to see its buses.")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Stop to board at, or the stop you tapped")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Stop on the bus's route").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Bus route").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Walk").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("The bus you're following").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Destination").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun homeScreen_legendClosed_hidesLegend() {
+        composeRule.setContent { NavigableHomeScreen(onRelocate = {}) }
+        composeRule.onNodeWithContentDescription("Map legend").performClick()
+
+        composeRule.onNodeWithText("Close").performClick()
+
+        composeRule.onNodeWithText("Bus route").assertDoesNotExist()
+    }
+
+    /** HomeScreen with a tapped stop open, and details held like MainActivity holds them. */
+    @Composable
+    private fun NavigableStopHomeScreen(onStopBack: () -> Unit) {
+        var details by remember { mutableStateOf<DepartureDetailsUiState?>(null) }
+        HomeScreen(
+            LocationUiState.Located(LatLng(40.4443, -79.9532)),
+            MapUiState(stopsStatus = StopsStatus.Ready),
+            DeparturesUiState(emptyList(), DeparturesStatus.Ready),
+            detailsState = details,
+            destinationState = DestinationUiState(),
+            destinationActions = NoDestinationActions,
+            tripPlanState = null,
+            tripPlanActions = NoTripPlanActions,
+            onRelocate = {},
+            onDepartureClick = { details = DepartureDetailsUiState(it, RouteStatus.Loading) },
+            onCloseDetails = { details = null },
+            onOpenApiKey = {},
+            themeMode = ThemeMode.SYSTEM,
+            onThemeModeChange = {},
+            stopState = StopDeparturesUiState(
+                stop = StopMarker("7117", "Forbes Ave at Morewood", LatLng(40.4446, -79.9428)),
+                departures = listOf(StopDeparture("61C", "McKeesport", 5, false, DEPARTURE)),
+                source = StopTimesSource.Live
+            ),
+            onStopBack = onStopBack,
+            mapContent = stubMap
+        )
+    }
+
     /** HomeScreen with details state held the way MainActivity's ViewModel holds it. */
     @Composable
     private fun NavigableHomeScreen(onRelocate: () -> Unit) {
@@ -473,5 +612,19 @@ class HomeScreenTest {
         override fun onMapLongPress(location: LatLng) = Unit
 
         override fun clearDestination() = Unit
+
+        override fun editOrigin() = Unit
+
+        override fun cancelOriginEdit() = Unit
+
+        override fun clearOrigin() = Unit
+
+        override fun swapEndpoints() = Unit
     }
 }
+
+/**
+ * A phone-sized screen (the Galaxy S23's), for tests of the messages under the search box.
+ * Robolectric's default 470 dp tall screen has no room left for them once the From line shows.
+ */
+private const val PHONE_SCREEN = "w360dp-h780dp"

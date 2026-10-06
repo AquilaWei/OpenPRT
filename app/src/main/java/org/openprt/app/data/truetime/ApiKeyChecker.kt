@@ -32,7 +32,7 @@ internal fun TrueTimeResult<*>.toKeyCheck(): KeyCheck = when (this) {
         TrueTimeError.MissingApiKey -> KeyCheck.Rejected(emptyList())
 
         is TrueTimeError.Api ->
-            if (error.messages.any { it.contains("key", ignoreCase = true) }) {
+            if (error.problem == ApiProblem.INVALID_KEY) {
                 KeyCheck.Rejected(error.messages)
             } else {
                 KeyCheck.Unreachable(error)

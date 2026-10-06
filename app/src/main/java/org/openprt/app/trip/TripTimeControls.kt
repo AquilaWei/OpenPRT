@@ -1,0 +1,205 @@
+package org.openprt.app.trip
+
+import android.text.format.DateFormat
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import org.openprt.app.R
+
+/**
+ * Leave now / Depart at / Arrive by above the ways there. For the last two, a date button and a
+ * time button open pickers; the date button waits until the days the timetable covers are known,
+ * and only those days can be picked. Choices go to [actions]; dates and times are read and shown
+ * in [zone].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TripTimeControls(
+    time: TripTimeUiState,
+    actions: TripPlanActions,
+    zone: ZoneId,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // An iOS-style segmented control: a gray track with the chosen option raised in the card
+        // color, no check mark and no borders between options.
+        val track = MaterialTheme.colorScheme.surfaceVariant
+        val segmentColors = SegmentedButtonDefaults.colors(
+            activeContainerColor = MaterialTheme.colorScheme.surface,
+            activeContentColor = MaterialTheme.colorScheme.onSurface,
+            activeBorderColor = track,
+            inactiveContainerColor = track,
+            inactiveContentColor = MaterialTheme.colorScheme.onSurface,
+            inactiveBorderColor = track
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            TripTimeMode.entries.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = mode == time.mode,
+                    onClick = { actions.setTimeMode(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index,
+                        TripTimeMode.entries.size,
+                        MaterialTheme.shapes.small
+                    ),
+                    colors = segmentColors,
+                    border = SegmentedButtonDefaults.borderStroke(track, 2.dp),
+                    icon = {}
+                ) {
+                    Text(stringResource(mode.labelRes()))
+                }
+            }
+        }
+        val at = time.at
+        if (time.mode != TripTimeMode.LEAVE_NOW && at != null) {
+            val local = at.atZone(zone).toLocalDateTime()
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DateButton(local, time.dates) { actions.setTime(it.atZone(zone).toInstant()) }
+                TimeButton(local) { actions.setTime(it.atZone(zone).toInstant()) }
+            }
+        }
+    }
+}
+
+private fun TripTimeMode.labelRes(): Int = when (this) {
+    TripTimeMode.LEAVE_NOW -> R.string.trip_time_leave_now
+    TripTimeMode.DEPART_AT -> R.string.trip_time_depart_at
+    TripTimeMode.ARRIVE_BY -> R.string.trip_time_arrive_by
+}
+
+/**
+ * Shows [current]'s date; picking another keeps its time of day. Disabled until [dates] are known,
+ * so no day outside the timetable can be chosen, and OK stays disabled while the selection is
+ * outside them, as the current date may be.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateButton(
+    current: LocalDateTime,
+    dates: ClosedRange<LocalDate>?,
+    onPick: (LocalDateTime) -> Unit
+) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val description = stringResource(R.string.trip_time_change_date)
+    OutlinedButton(
+        onClick = { open = true },
+        enabled = dates != null,
+        modifier = Modifier.semantics { contentDescription = description }
+    ) {
+        Text(current.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)))
+    }
+    if (!open || dates == null) return
+    // The picker works in UTC midnights, whatever the zone.
+    val state = rememberDatePickerState(
+        initialSelectedDateMillis = current.toLocalDate().takeIf { it in dates }?.utcMillis(),
+        selectableDates = TimetableDates(dates)
+    )
+    val picked = state.selectedDateMillis?.utcDate()?.takeIf { it in dates }
+    DatePickerDialog(
+        onDismissRequest = { open = false },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    open = false
+                    if (picked != null) onPick(picked.atTime(current.toLocalTime()))
+                },
+                enabled = picked != null
+            ) { Text(stringResource(R.string.trip_time_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = { open = false }) {
+                Text(stringResource(R.string.trip_time_cancel))
+            }
+        }
+    ) {
+        DatePicker(state)
+    }
+}
+
+/** Shows [current]'s time of day; picking another keeps its date. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimeButton(current: LocalDateTime, onPick: (LocalDateTime) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val description = stringResource(R.string.trip_time_change_time)
+    OutlinedButton(
+        onClick = { open = true },
+        modifier = Modifier.semantics { contentDescription = description }
+    ) {
+        Text(current.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)))
+    }
+    if (!open) return
+    val state = rememberTimePickerState(
+        initialHour = current.hour,
+        initialMinute = current.minute,
+        is24Hour = DateFormat.is24HourFormat(LocalContext.current)
+    )
+    AlertDialog(
+        onDismissRequest = { open = false },
+        confirmButton = {
+            TextButton(onClick = {
+                open = false
+                onPick(current.toLocalDate().atTime(LocalTime.of(state.hour, state.minute)))
+            }) { Text(stringResource(R.string.trip_time_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = { open = false }) {
+                Text(stringResource(R.string.trip_time_cancel))
+            }
+        },
+        text = { TimePicker(state) }
+    )
+}
+
+/** Only the days in [dates] can be picked. */
+@OptIn(ExperimentalMaterial3Api::class)
+private class TimetableDates(private val dates: ClosedRange<LocalDate>) : SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis.utcDate() in dates
+
+    override fun isSelectableYear(year: Int): Boolean =
+        year in dates.start.year..dates.endInclusive.year
+}
+
+private fun LocalDate.utcMillis(): Long = atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun Long.utcDate(): LocalDate =
+    Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()

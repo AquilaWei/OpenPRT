@@ -5,7 +5,7 @@ import org.openprt.app.planner.Itinerary
 import org.openprt.app.planner.WalkLeg
 
 /**
- * What the map draws for a chosen trip: [walks] as dashed straight lines, [rides] as solid
+ * What the map draws for a chosen trip: [walks] as dashed lines, [rides] as solid
  * lines through the stops each bus serves, and the stops where each bus is boarded and left.
  */
 data class TripMapLayers(
@@ -22,16 +22,22 @@ data class TripMapLayers(
  * The map layers of this itinerary from [origin] to [destination]. [rideStops] gives the stops
  * between boarding and getting off for each ride, in the order of [Itinerary.rides]; a ride
  * with fewer than two of them is drawn straight from its boarding to its alighting stop.
- * Walks of no length are left out.
+ * [walkPaths] gives the line along the streets for each walk, in the order of the walks; a walk
+ * without one is drawn straight. Walks of no length are left out.
  */
 fun Itinerary.toMapLayers(
     origin: LatLng,
     destination: LatLng,
-    rideStops: List<List<LatLng>>
+    rideStops: List<List<LatLng>>,
+    walkPaths: List<List<LatLng>>
 ): TripMapLayers {
-    val walks = legs.filterIsInstance<WalkLeg>()
-        .map { listOf(it.from?.location ?: origin, it.to?.location ?: destination) }
-        .filter { (start, end) -> start != end }
+    val walks = walkEnds(origin, destination).mapIndexedNotNull { index, (start, end) ->
+        if (start == end) {
+            null
+        } else {
+            walkPaths.getOrNull(index)?.takeIf { it.size >= 2 } ?: listOf(start, end)
+        }
+    }
     val rides = rides.mapIndexed { index, ride ->
         rideStops.getOrNull(index)?.takeIf { it.size >= 2 }
             ?: listOf(ride.from.location, ride.to.location)
@@ -43,3 +49,8 @@ fun Itinerary.toMapLayers(
         alightingStops = this.rides.map { it.to.location }
     )
 }
+
+/** Where each walk starts and ends, in order; the first and last may be [origin] and [destination]. */
+fun Itinerary.walkEnds(origin: LatLng, destination: LatLng): List<Pair<LatLng, LatLng>> =
+    legs.filterIsInstance<WalkLeg>()
+        .map { (it.from?.location ?: origin) to (it.to?.location ?: destination) }

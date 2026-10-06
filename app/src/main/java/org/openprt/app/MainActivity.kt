@@ -18,15 +18,23 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.work.WorkManager
 import java.time.Clock
+import org.openprt.app.data.gtfs.GtfsUpdateWorker
+import org.openprt.app.data.gtfs.RoomScheduledTripSource
+import org.openprt.app.data.gtfs.RoomStopScheduleSource
+import org.openprt.app.data.gtfs.RoomTimetableDatesSource
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.fromSettings
 import org.openprt.app.data.truetime.keyChecker
+import org.openprt.app.departures.MergedPredictionSource
 import org.openprt.app.departures.NearbyDeparturesViewModel
+import org.openprt.app.departures.PredictionSource
 import org.openprt.app.destination.DestinationViewModel
 import org.openprt.app.destination.PhotonGeocoder
 import org.openprt.app.details.DepartureDetailsViewModel
-import org.openprt.app.details.asTripSource
+import org.openprt.app.details.tripSourceOf
 import org.openprt.app.location.FusedLocationProvider
 import org.openprt.app.location.LOCATION_PERMISSIONS
 import org.openprt.app.location.LocationUiState
@@ -36,6 +44,7 @@ import org.openprt.app.map.MapViewModel
 import org.openprt.app.map.StopsStatus
 import org.openprt.app.settings.ApiKeyScreen
 import org.openprt.app.settings.ApiKeyViewModel
+import org.openprt.app.stop.StopDeparturesViewModel
 import org.openprt.app.trip.RideLookup
 import org.openprt.app.trip.TripPlanUiState
 import org.openprt.app.trip.TripPlanViewModel
@@ -47,15 +56,39 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val app = application as OpenPrtApplication
-        // Lazy: after rotation the ViewModels already exist and need no new client.
-        val trueTime by lazy { TrueTimeClient.fromSettings(app.apiKeySettings) }
+        // Here rather than in the Application, so Robolectric tests never start WorkManager.
+        GtfsUpdateWorker.schedule(WorkManager.getInstance(applicationContext))
+        // Lazy: after rotation the ViewModels already exist and need no new clients.
+        val trueTimeFeeds by lazy {
+            DataFeed.entries.map { TrueTimeClient.fromSettings(app.apiKeySettings, it) }
+        }
+        // Buses and light rail together; each prediction remembers which feed it came from.
+        val predictions by lazy {
+            MergedPredictionSource(
+                trueTimeFeeds.map { client -> PredictionSource(client::getPredictions) }
+            )
+        }
         val viewModelFactory = viewModelFactory {
             initializer { LocationViewModel(FusedLocationProvider(applicationContext)) }
             initializer {
-                MapViewModel(app.nearbyStopRepository)
+                MapViewModel(
+                    app.nearbyStopRepository,
+                    timetableDates = RoomTimetableDatesSource(app.gtfsDatabase),
+                    timetableUpdates = app.gtfsUpdater.lastImport
+                )
             }
-            initializer { NearbyDeparturesViewModel(trueTime::getPredictions, Clock.systemUTC()) }
-            initializer { DepartureDetailsViewModel(trueTime.asTripSource(), Clock.systemUTC()) }
+            initializer { NearbyDeparturesViewModel(predictions, Clock.systemUTC()) }
+            initializer {
+                DepartureDetailsViewModel(tripSourceOf(trueTimeFeeds), Clock.systemUTC())
+            }
+            initializer {
+                StopDeparturesViewModel(
+                    predictions,
+                    RoomStopScheduleSource(app.gtfsDatabase),
+                    RoomScheduledTripSource(app.gtfsDao),
+                    Clock.systemUTC()
+                )
+            }
             initializer {
                 DestinationViewModel(
                     PhotonGeocoder(userAgent = "OpenPRT/${BuildConfig.VERSION_NAME}")
@@ -64,9 +97,13 @@ class MainActivity : ComponentActivity() {
             initializer {
                 TripPlanViewModel(
                     app.tripPlanRepository,
-                    trueTime::getPredictions,
+                    predictions,
                     app.rideStops,
-                    Clock.systemUTC()
+                    Clock.systemUTC(),
+                    RoomTimetableDatesSource(app.gtfsDatabase),
+                    walkRouter = app.walkRouter,
+                    timetableUpdates = app.gtfsUpdater.lastImport,
+                    importFailures = app.gtfsUpdater.lastImportFailed
                 )
             }
             initializer { ApiKeyViewModel(app.apiKeySettings, TrueTimeClient.keyChecker()) }
@@ -83,22 +120,21 @@ class MainActivity : ComponentActivity() {
             val departuresState by departuresViewModel.state.collectAsStateWithLifecycle()
             val detailsViewModel: DepartureDetailsViewModel = viewModel(factory = viewModelFactory)
             val detailsState by detailsViewModel.state.collectAsStateWithLifecycle()
+            val stopViewModel: StopDeparturesViewModel = viewModel(factory = viewModelFactory)
+            val stopState by stopViewModel.state.collectAsStateWithLifecycle()
             val destinationViewModel: DestinationViewModel = viewModel(factory = viewModelFactory)
             val destinationState by destinationViewModel.state.collectAsStateWithLifecycle()
             val tripPlanViewModel: TripPlanViewModel = viewModel(factory = viewModelFactory)
             val tripPlanState by tripPlanViewModel.state.collectAsStateWithLifecycle()
+            val tripTimeState by tripPlanViewModel.time.collectAsStateWithLifecycle()
             val apiKeyViewModel: ApiKeyViewModel = viewModel(factory = viewModelFactory)
             val apiKeyState by apiKeyViewModel.state.collectAsStateWithLifecycle()
-            // Bar icons follow the app's theme, which may differ from the phone's. The home
-            // screen's top bar is navy in the light theme too, so its status icons stay white.
-            val lightStatusIcons = dark || !apiKeyState.visible
-            LaunchedEffect(dark, lightStatusIcons) {
+            // Bar icons follow the app's theme, which may differ from the phone's: every screen,
+            // the home screen's plain top bar included, is light in the light theme.
+            LaunchedEffect(dark) {
                 enableEdgeToEdge(
-                    statusBarStyle = if (lightStatusIcons) {
-                        SystemBarStyle.dark(Color.TRANSPARENT)
-                    } else {
-                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
-                    },
+                    statusBarStyle =
+                        SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
                     navigationBarStyle =
                         SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark }
                 )
@@ -145,8 +181,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(destinationState.destination) {
-                tripPlanViewModel.onDestinationChanged(destinationState.destination?.location)
+            // Both ends in one call, so swapping them plans once.
+            LaunchedEffect(destinationState.origin, destinationState.destination) {
+                tripPlanViewModel.onEndpointsChanged(
+                    destinationState.origin?.location,
+                    destinationState.destination?.location
+                )
             }
 
             // Departures refresh every 30 seconds, also only while the app is visible.
@@ -160,6 +200,13 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(lifecycleOwner) {
                 lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     detailsViewModel.autoRefresh()
+                }
+            }
+
+            // A tapped stop's buses refresh every 30 seconds, also only while visible.
+            LaunchedEffect(lifecycleOwner) {
+                lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    stopViewModel.autoRefresh()
                 }
             }
 
@@ -186,12 +233,21 @@ class MainActivity : ComponentActivity() {
                         destinationActions = destinationViewModel,
                         tripPlanState = tripPlanState,
                         tripPlanActions = tripPlanViewModel,
+                        tripTimeState = tripTimeState,
                         onRelocate = locationViewModel::relocate,
                         onDepartureClick = detailsViewModel::open,
                         onCloseDetails = detailsViewModel::close,
                         onOpenApiKey = apiKeyViewModel::open,
                         themeMode = themeMode,
-                        onThemeModeChange = app.appearanceSettings::setThemeMode
+                        onThemeModeChange = app.appearanceSettings::setThemeMode,
+                        stopState = stopState,
+                        onStopClick = { stop ->
+                            // A route stop tapped under a departure's details replaces them.
+                            detailsViewModel.close()
+                            stopViewModel.select(stop, locationState.location)
+                        },
+                        onScheduledClick = stopViewModel::openScheduledTrip,
+                        onStopBack = stopViewModel::back
                     )
                 }
             }

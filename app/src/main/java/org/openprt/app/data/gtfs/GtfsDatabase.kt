@@ -98,12 +98,28 @@ data class ServiceCalendarEntity(
 @Entity(tableName = "calendar_dates", primaryKeys = ["serviceId", "date"])
 data class CalendarDateEntity(val serviceId: String, val date: LocalDate, val added: Boolean)
 
+/**
+ * The import that filled the other tables, written in the same transaction, so a reader inside
+ * one transaction sees the [id] of exactly the data it reads. [id] never repeats: Room declares
+ * it AUTOINCREMENT, so SQLite does not reuse ids after the importer empties the table.
+ */
+@Entity(tableName = "imports")
+data class GtfsImportEntity(@PrimaryKey(autoGenerate = true) val id: Long = 0)
+
 /** One scheduled stop of a trip where riders can board, joined with its trip. */
 data class StopDepartureRow(
     val tripId: String,
     val routeId: String,
     val headsign: String?,
     val stopSequence: Int,
+    val departureSeconds: Int
+)
+
+/** One stop of a trip, joined with the stop's name. */
+data class TripStopTimeRow(
+    val stopSequence: Int,
+    val stopName: String,
+    val arrivalSeconds: Int,
     val departureSeconds: Int
 )
 
@@ -131,8 +147,21 @@ interface GtfsDao {
     @Query("SELECT COUNT(*) FROM stops")
     suspend fun countStops(): Int
 
+    /**
+     * The stops TrueTime knows as [trueTimeStopId] (see [trueTimeStopId]). Scans the stops table,
+     * which is a few thousand rows, so it suits one lookup per tap, not a loop.
+     */
+    @Query(
+        "SELECT * FROM stops WHERE code = :trueTimeStopId " +
+            "OR (code IS NULL AND stopId = :trueTimeStopId) ORDER BY stopId"
+    )
+    suspend fun getStopsByTrueTimeId(trueTimeStopId: String): List<StopEntity>
+
     @Query("SELECT * FROM routes ORDER BY routeId")
     suspend fun getAllRoutes(): List<RouteEntity>
+
+    @Query("SELECT * FROM routes WHERE routeId IN (:routeIds)")
+    suspend fun getRoutes(routeIds: Collection<String>): List<RouteEntity>
 
     @Query("SELECT COUNT(*) FROM stop_times")
     suspend fun countStopTimes(): Int
@@ -148,12 +177,38 @@ interface GtfsDao {
     )
     suspend fun getStopsOfTrip(tripId: String): List<StopEntity>
 
+    /**
+     * The stops of [tripId] from [fromSequence] on, with their names, in travel order; runs on
+     * the primary key.
+     */
+    @Query(
+        "SELECT st.stopSequence, s.name AS stopName, st.arrivalSeconds, st.departureSeconds " +
+            "FROM stop_times st JOIN stops s ON s.stopId = st.stopId " +
+            "WHERE st.tripId = :tripId AND st.stopSequence >= :fromSequence " +
+            "ORDER BY st.stopSequence"
+    )
+    suspend fun getTripStopTimesFrom(tripId: String, fromSequence: Int): List<TripStopTimeRow>
+
     /** Calendar rows whose date range contains [date], whatever their weekdays. */
     @Query("SELECT * FROM calendar WHERE :date BETWEEN startDate AND endDate")
     suspend fun getCalendarsCovering(date: LocalDate): List<ServiceCalendarEntity>
 
     @Query("SELECT * FROM calendar_dates WHERE date = :date")
     suspend fun getCalendarDatesOn(date: LocalDate): List<CalendarDateEntity>
+
+    /** The first day calendar.txt or calendar_dates.txt runs a service; null when empty. */
+    @Query(
+        "SELECT MIN(day) FROM (SELECT startDate AS day FROM calendar " +
+            "UNION ALL SELECT date AS day FROM calendar_dates WHERE added = 1)"
+    )
+    suspend fun getFirstServiceDate(): LocalDate?
+
+    /** The last day calendar.txt or calendar_dates.txt runs a service; null when empty. */
+    @Query(
+        "SELECT MAX(day) FROM (SELECT endDate AS day FROM calendar " +
+            "UNION ALL SELECT date AS day FROM calendar_dates WHERE added = 1)"
+    )
+    suspend fun getLastServiceDate(): LocalDate?
 
     /**
      * Boardable stop times at [stopId] at or after [afterSeconds] on trips of [serviceIds],
@@ -190,6 +245,10 @@ interface GtfsDao {
     )
     suspend fun getStopTimesOfServices(serviceIds: Collection<String>): List<StopTimeEntity>
 
+    /** The id of the import the tables hold; null when nothing has been imported. */
+    @Query("SELECT MAX(id) FROM imports")
+    suspend fun getImportId(): Long?
+
     /** Empties every table; the importer calls it inside the transaction that refills them. */
     suspend fun deleteAll() {
         deleteAllStops()
@@ -198,6 +257,7 @@ interface GtfsDao {
         deleteAllStopTimes()
         deleteAllCalendars()
         deleteAllCalendarDates()
+        deleteAllImports()
     }
 
     @Query("DELETE FROM stops")
@@ -218,6 +278,9 @@ interface GtfsDao {
     @Query("DELETE FROM calendar_dates")
     suspend fun deleteAllCalendarDates()
 
+    @Query("DELETE FROM imports")
+    suspend fun deleteAllImports()
+
     @Insert
     suspend fun insertStops(stops: List<StopEntity>)
 
@@ -235,6 +298,9 @@ interface GtfsDao {
 
     @Insert
     suspend fun insertCalendarDates(calendarDates: List<CalendarDateEntity>)
+
+    @Insert
+    suspend fun insertImport(import: GtfsImportEntity)
 }
 
 /** Stores dates as epoch days, so SQL comparisons on them follow calendar order. */
@@ -254,9 +320,10 @@ class GtfsConverters {
         TripEntity::class,
         StopTimeEntity::class,
         ServiceCalendarEntity::class,
-        CalendarDateEntity::class
+        CalendarDateEntity::class,
+        GtfsImportEntity::class
     ],
-    version = 3
+    version = 4
 )
 @TypeConverters(GtfsConverters::class)
 abstract class GtfsDatabase : RoomDatabase() {

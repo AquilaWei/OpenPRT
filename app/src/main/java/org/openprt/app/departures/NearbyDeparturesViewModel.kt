@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import org.openprt.app.data.truetime.DataFeed
 import org.openprt.app.data.truetime.Prediction
 import org.openprt.app.data.truetime.TrueTimeClient
 import org.openprt.app.data.truetime.TrueTimeError
@@ -36,7 +37,9 @@ data class DepartureItem(
     /** TrueTime ID of the stop the bus is boarded at. */
     val stopId: String,
     /** The bus itself; its pattern (route shape) is looked up from it. */
-    val vehicleId: String
+    val vehicleId: String,
+    /** The TrueTime feed that tracks [vehicleId]; light rail cars are not in the bus feed. */
+    val feed: DataFeed = DataFeed.BUS
 )
 
 /** Whether [DeparturesUiState.departures] reflects the latest request. */
@@ -63,7 +66,8 @@ data class DeparturesUiState(
  * [refreshInterval], and starts over immediately when the stops change.
  *
  * Only the [TrueTimeClient.MAX_IDS_PER_CALL] nearest stops are asked about, so each refresh is a
- * single API call; at one call every 30 seconds the daily TrueTime quota lasts all day.
+ * single [source] call: one request per feed when [source] is a [MergedPredictionSource]. At two
+ * requests every 30 seconds the daily TrueTime quota still lasts all day.
  */
 class NearbyDeparturesViewModel(
     private val source: PredictionSource,
@@ -133,5 +137,6 @@ private fun RankedDeparture.toItem() = DepartureItem(
     minutesUntilDeparture = timeUntilDeparture.toMinutes(),
     delayed = prediction.delayed,
     stopId = prediction.stopId,
-    vehicleId = prediction.vehicleId
+    vehicleId = prediction.vehicleId,
+    feed = prediction.feed
 )

@@ -227,7 +227,11 @@ class DeparturesPanelTest {
     fun departuresPanel_failedAfterSuccess_showsErrorWithLastUpdateTime() {
         composeRule.setContent {
             DeparturesPanel(
-                DeparturesUiState(TWO_DEPARTURES, NETWORK_FAILURE, UPDATED),
+                DeparturesUiState(
+                    TWO_DEPARTURES,
+                    DeparturesStatus.Failed(TrueTimeError.Timeout),
+                    UPDATED
+                ),
                 onDepartureClick = {},
                 zone = PITTSBURGH
             )
@@ -238,6 +242,69 @@ class DeparturesPanelTest {
             .onNodeWithText("Couldn't update departures. Showing departures from", substring = true)
             .assertIsDisplayed()
         composeRule.onNodeWithText("8:40", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun departuresPanel_offlineAfterSuccess_saysOfflineAndKeepsDepartures() {
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(TWO_DEPARTURES, NETWORK_FAILURE, UPDATED),
+                onDepartureClick = {},
+                zone = PITTSBURGH
+            )
+        }
+
+        composeRule
+            .onNodeWithText("You're offline. Showing departures from 8:40", substring = true)
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("61C").assertIsDisplayed()
+    }
+
+    @Test
+    fun departuresPanel_keyRejected_saysToChangeTheKey() {
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(
+                    emptyList(),
+                    DeparturesStatus.Failed(
+                        TrueTimeError.Api(listOf("Invalid API access key supplied"))
+                    ),
+                    lastUpdated = null
+                ),
+                onDepartureClick = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "TrueTime didn't accept your API key. Tap the key icon at the top to change it."
+            )
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun departuresPanel_dailyLimitExceeded_saysLiveTimesReturnTomorrow() {
+        composeRule.setContent {
+            DeparturesPanel(
+                DeparturesUiState(
+                    emptyList(),
+                    DeparturesStatus.Failed(
+                        TrueTimeError.Api(
+                            listOf("Transaction limit for current day has been exceeded.")
+                        )
+                    ),
+                    lastUpdated = null
+                ),
+                onDepartureClick = {}
+            )
+        }
+
+        composeRule
+            .onNodeWithText(
+                "Your TrueTime API key has used up today's requests. " +
+                    "Live departures come back tomorrow."
+            )
+            .assertIsDisplayed()
     }
 
     @Test

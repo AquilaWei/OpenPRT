@@ -1,5 +1,6 @@
 package org.openprt.app.trip
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -21,9 +22,12 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.util.Locale
 import org.openprt.app.R
 import org.openprt.app.departures.PanelText
 import org.openprt.app.planner.NoRouteReason
@@ -37,19 +41,22 @@ import org.openprt.app.ui.displayName
 /**
  * The ways to the chosen destination, shown in the home screen's bottom sheet in place of the
  * nearby departures. Tapping an option shows it leg by leg ([TripDetailsPanel]); the other
- * requests, such as planning again when the timetable was missing, go to [actions]. Times are
- * shown in [zone].
+ * requests, such as planning again when the timetable was missing or another [time], go to
+ * [actions]. Times are shown, and picked, in [zone]; those on another day than [today] carry
+ * their date.
  */
 @Composable
 fun TripPlansPanel(
     state: TripPlanUiState,
     actions: TripPlanActions,
     modifier: Modifier = Modifier,
-    zone: ZoneId = ZoneId.systemDefault()
+    time: TripTimeUiState = TripTimeUiState(),
+    zone: ZoneId = ZoneId.systemDefault(),
+    today: LocalDate = LocalDate.now(zone)
 ) {
     val selected = (state as? TripPlanUiState.Results)?.selected
     if (selected != null) {
-        TripDetailsPanel(selected, actions, modifier, zone)
+        TripDetailsPanel(selected, actions, modifier, zone, today)
         return
     }
     Column(modifier = modifier) {
@@ -58,15 +65,25 @@ fun TripPlansPanel(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
+        TripTimeControls(time, actions, zone, modifier = Modifier.padding(bottom = 8.dp))
         when (state) {
             TripPlanUiState.Planning -> PanelText(stringResource(R.string.trip_planning))
 
-            is TripPlanUiState.Results -> OptionList(state.options, actions::select, zone)
+            is TripPlanUiState.Results ->
+                OptionList(state.options, actions::select, TripClockFormat(zone, today))
 
             is TripPlanUiState.NoRoute -> PanelText(stringResource(state.reason.textRes()))
 
-            TripPlanUiState.NoTimetable -> {
-                PanelText(stringResource(R.string.trip_no_timetable))
+            is TripPlanUiState.NoTimetable -> {
+                PanelText(
+                    stringResource(
+                        if (state.importFailed) {
+                            R.string.trip_timetable_download_failed
+                        } else {
+                            R.string.trip_no_timetable
+                        }
+                    )
+                )
                 TextButton(
                     onClick = actions::retry,
                     modifier = Modifier.padding(horizontal = 8.dp)
@@ -85,8 +102,11 @@ private fun NoRouteReason.textRes(): Int = when (this) {
 }
 
 @Composable
-private fun OptionList(options: List<TripOption>, onSelect: (TripOption) -> Unit, zone: ZoneId) {
-    val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+private fun OptionList(
+    options: List<TripOption>,
+    onSelect: (TripOption) -> Unit,
+    time: TripClockFormat
+) {
     // Bounded so the list scrolls inside the sheet instead of growing past the screen.
     LazyColumn(
         modifier = Modifier.heightIn(max = 400.dp),
@@ -98,14 +118,27 @@ private fun OptionList(options: List<TripOption>, onSelect: (TripOption) -> Unit
 }
 
 /**
- * One way to go: total time and clock times on top, the legs, then the first bus. The chevron
- * says the card opens; riders did not find out by themselves that it could be tapped.
+ * One way to go: total time and clock times on top, the legs, then the first bus. For "Arrive
+ * by" it starts with when to leave. It warns when a late first bus or a long walk may miss the
+ * deadline or a bus ([TripWarning]). The chevron says the card opens; riders did not find out by
+ * themselves that it could be tapped.
  */
 @Composable
-private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () -> Unit) {
+private fun OptionCard(option: TripOption, time: TripClockFormat, onClick: () -> Unit) {
     InfoCard(onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
+                if (option.deadline != null) {
+                    Text(
+                        text = stringResource(
+                            R.string.trip_leave_by,
+                            time.format(option.departureTime)
+                        ),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
                 TripSummary(option, time)
                 Legs(option.legs)
                 Text(
@@ -123,6 +156,7 @@ private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () 
                         MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
+                TripWarning(option, time)
             }
             Icon(
                 painter = painterResource(R.drawable.ic_chevron_right),
@@ -134,9 +168,33 @@ private fun OptionCard(option: TripOption, time: DateTimeFormatter, onClick: () 
     }
 }
 
+/**
+ * Why [option] may not work out, if it may not: a walk along the streets too long to catch a bus,
+ * or an arrival after the "Arrive by" deadline, blamed on the walks when they are longer than
+ * planned and otherwise on the late first bus. Nothing when the option is fine.
+ */
+@Composable
+internal fun TripWarning(option: TripOption, time: TripClockFormat) {
+    val text = when {
+        option.missesBus -> stringResource(R.string.trip_walk_may_miss_bus)
+
+        !option.late || option.deadline == null -> return
+
+        option.walksLonger ->
+            stringResource(R.string.trip_walk_may_be_late, time.format(option.deadline))
+
+        else -> stringResource(R.string.trip_may_be_late, time.format(option.deadline))
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.error
+    )
+}
+
 /** Total minutes, clock times, transfers and whether the first bus is live, on one row. */
 @Composable
-internal fun TripSummary(option: TripOption, time: DateTimeFormatter) {
+internal fun TripSummary(option: TripOption, time: TripClockFormat) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = stringResource(R.string.trip_total_minutes, option.totalMinutes),
@@ -184,6 +242,23 @@ private fun Legs(legs: List<LegSummary>) {
                     RouteBadge(leg.route, style = MaterialTheme.typography.labelLarge)
             }
         }
+    }
+}
+
+/**
+ * Trip times as clock times, with the date in front of those not on [today]: a plan for the next
+ * morning would otherwise read as this morning's.
+ */
+internal class TripClockFormat(private val zone: ZoneId, private val today: LocalDate) {
+    private val clock = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withZone(zone)
+    private val date = DateTimeFormatter
+        .ofPattern(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEMMMd"))
+        .withZone(zone)
+
+    fun format(at: Instant): String = if (at.atZone(zone).toLocalDate() == today) {
+        clock.format(at)
+    } else {
+        "${date.format(at)} ${clock.format(at)}"
     }
 }
 

@@ -5,7 +5,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.time.Instant
 import java.time.LocalDate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okio.Buffer
@@ -20,7 +26,6 @@ import org.openprt.app.geo.LatLng
 import org.openprt.app.planner.Itinerary
 import org.openprt.app.planner.NoRouteReason
 import org.openprt.app.planner.RideLeg
-import org.openprt.app.planner.TransitNetwork
 import org.openprt.app.planner.TransitStop
 import org.openprt.app.planner.WalkLeg
 
@@ -44,12 +49,8 @@ class TripPlanRepositoryTest {
         server.start()
         database = inMemoryDatabase()
         server.enqueue(MockResponse.Builder().body(Buffer().write(zipOf(fixtureFeedFiles))).build())
-        GtfsImporter(
-            database,
-            downloadDir = temporaryFolder.root,
-            feedUrl = server.url("/GTFS.zip")
-        ).import()
-        source = CountingNetworkSource(RoomTransitNetworkSource(database.gtfsDao()))
+        importer().import()
+        source = CountingNetworkSource(RoomTransitNetworkSource(database))
         repository = TripPlanRepository(source)
     }
 
@@ -61,7 +62,11 @@ class TripPlanRepositoryTest {
 
     @Test
     fun plan_weekdayMorningCmuToSteelPlaza_ridesTheNextTripBetweenThem() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         assertEquals(
             TripPlanResult.Found(
@@ -92,30 +97,95 @@ class TripPlanRepositoryTest {
 
     @Test
     fun plan_weekdayMorning_arrivalTimeIsOnTheServiceDay() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         assertEquals(Instant.parse("2026-10-01T11:30:00Z"), plans(result).single().arrivalTime)
     }
 
     @Test
     fun plan_twiceOnTheSameServiceDay_buildsTheNetworkOnce() = runTest {
-        repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
-        repository.plan(CMU.location, STEEL_PLAZA.location, Instant.parse("2026-10-01T12:00:00Z"))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(Instant.parse("2026-10-01T12:00:00Z"))
+        )
 
         assertEquals(listOf(THURSDAY), source.builtDays)
     }
 
     @Test
+    fun plan_afterTheTimetableIsImportedAgain_buildsTheNetworkAgain() = runTest {
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        server.enqueue(MockResponse.Builder().body(Buffer().write(zipOf(fixtureFeedFiles))).build())
+        importer().import()
+
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+
+        assertEquals(listOf(THURSDAY, THURSDAY), source.builtDays)
+    }
+
+    @Test
+    fun plan_whileAnImportCommitsBetweenReads_ridesTheTimetableItStartedReading() = runTest {
+        val dao = ImportingBetweenReadsDao(database.gtfsDao())
+        val repository = TripPlanRepository(RoomTransitNetworkSource(database, dao = dao))
+
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
+        dao.import!!.await()
+
+        assertEquals(
+            listOf(RideLeg("T1", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_afterAnImportCommittedDuringTheLastBuild_ridesTheNewTimetable() = runTest {
+        val dao = ImportingBetweenReadsDao(database.gtfsDao())
+        val repository = TripPlanRepository(RoomTransitNetworkSource(database, dao = dao))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        dao.import!!.await()
+
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
+
+        // The new feed moves T1 an hour earlier, so the next bus is T2.
+        assertEquals(
+            listOf(RideLeg("T2", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 28_800, 30_600)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
     fun plan_onTheNextServiceDay_buildsItsNetwork() = runTest {
-        repository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
-        repository.plan(CMU.location, STEEL_PLAZA.location, Instant.parse("2026-10-02T11:00:00Z"))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(Instant.parse("2026-10-02T11:00:00Z"))
+        )
 
         assertEquals(listOf(THURSDAY, FRIDAY), source.builtDays)
     }
 
     @Test
     fun plan_afterMidnight_ridesThePreviousServiceDaysLateTrip() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, FRIDAY_00_30)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(FRIDAY_00_30)
+        )
 
         assertEquals(
             listOf(RideLeg("T4", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 88_800, 90_600)),
@@ -125,21 +195,130 @@ class TripPlanRepositoryTest {
 
     @Test
     fun plan_afterMidnight_planBelongsToThePreviousServiceDay() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, FRIDAY_00_30)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(FRIDAY_00_30)
+        )
 
         assertEquals(THURSDAY, plans(result).single().serviceDate)
     }
 
     @Test
     fun plan_afterMidnight_arrivesAt0110OnTheCalendarDay() = runTest {
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, FRIDAY_00_30)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(FRIDAY_00_30)
+        )
 
         assertEquals(Instant.parse("2026-10-02T05:10:00Z"), plans(result).single().arrivalTime)
     }
 
     @Test
+    fun plan_departAtOnADayWithoutService_ridesTheNextServiceDaysFirstTrip() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(SUNDAY_10_00)
+        )
+
+        assertEquals(
+            listOf(RideLeg("T1", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 25_200, 27_000)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_departAtOnADayWithoutService_planBelongsToTheNextServiceDay() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(SUNDAY_10_00)
+        )
+
+        assertEquals(LocalDate.of(2026, 10, 5), plans(result).single().serviceDate)
+    }
+
+    @Test
+    fun plan_arriveByMorning_ridesTheLatestTripThatArrivesInTime() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(THURSDAY_08_45)
+        )
+
+        assertEquals(
+            listOf(RideLeg("T2", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 28_800, 30_600)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_arriveByAfterMidnight_ridesThePreviousServiceDaysLastTrip() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(FRIDAY_01_30)
+        )
+
+        assertEquals(
+            listOf(RideLeg("T4", "61C", "INBOUND-DOWNTOWN", CMU, STEEL_PLAZA, 88_800, 90_600)),
+            plans(result).single().itinerary.rides
+        )
+    }
+
+    @Test
+    fun plan_arriveByAfterMidnight_planBelongsToThePreviousServiceDay() = runTest {
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(FRIDAY_01_30)
+        )
+
+        assertEquals(THURSDAY, plans(result).single().serviceDate)
+    }
+
+    @Test
+    fun plan_arriveByBeforeTheFirstTrip_returnsNoConnection() = runTest {
+        // Monday 06:00 EDT, before T1 reaches Steel Plaza; nothing runs on Sunday night.
+        val arriveBy = Instant.parse("2026-10-05T10:00:00Z")
+
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.ArriveBy(arriveBy)
+        )
+
+        assertEquals(TripPlanResult.NoRoute(NoRouteReason.NO_CONNECTION), result)
+    }
+
+    @Test
+    fun plan_departAtThenArriveByOnTheSameDay_buildsTheNetworkOnce() = runTest {
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.DepartAt(THURSDAY_06_50))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(THURSDAY_08_45))
+
+        assertEquals(listOf(THURSDAY), source.builtDays)
+    }
+
+    @Test
+    fun plan_arriveByOnAnotherDayTwice_buildsThatDaysNetworkOnce() = runTest {
+        val fridayMorning = Instant.parse("2026-10-02T12:45:00Z")
+
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(THURSDAY_08_45))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(fridayMorning))
+        repository.plan(CMU.location, STEEL_PLAZA.location, TripTime.ArriveBy(fridayMorning))
+
+        assertEquals(listOf(THURSDAY, FRIDAY), source.builtDays)
+    }
+
+    @Test
     fun plan_destinationFarFromEveryStop_returnsNoRoute() = runTest {
-        val result = repository.plan(CMU.location, LatLng(40.6, -80.2), THURSDAY_06_50)
+        val result = repository.plan(
+            CMU.location,
+            LatLng(40.6, -80.2),
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         assertEquals(TripPlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION), result)
     }
@@ -149,7 +328,11 @@ class TripPlanRepositoryTest {
         // Thursday 2026-10-29, after calendar.txt's last date, 2026-10-24.
         val departAt = Instant.parse("2026-10-29T10:50:00Z")
 
-        val result = repository.plan(CMU.location, STEEL_PLAZA.location, departAt)
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(departAt)
+        )
 
         assertEquals(TripPlanResult.NoRoute(NoRouteReason.NO_CONNECTION), result)
     }
@@ -157,12 +340,34 @@ class TripPlanRepositoryTest {
     @Test
     fun plan_databaseWithoutGtfsData_returnsNoTimetable() = runTest {
         val empty = inMemoryDatabase()
-        val emptyRepository = TripPlanRepository(RoomTransitNetworkSource(empty.gtfsDao()))
+        val emptyRepository = TripPlanRepository(RoomTransitNetworkSource(empty))
 
-        val result = emptyRepository.plan(CMU.location, STEEL_PLAZA.location, THURSDAY_06_50)
+        val result = emptyRepository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
 
         empty.close()
-        assertEquals(TripPlanResult.NoTimetable, result)
+        assertEquals(TripPlanResult.NoTimetable(importFailed = false), result)
+    }
+
+    @Test
+    fun plan_databaseWithoutGtfsDataAfterAFailedDownload_saysTheDownloadFailed() = runTest {
+        val empty = inMemoryDatabase()
+        val emptyRepository = TripPlanRepository(
+            RoomTransitNetworkSource(empty),
+            importFailed = { true }
+        )
+
+        val result = emptyRepository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(THURSDAY_06_50)
+        )
+
+        empty.close()
+        assertEquals(TripPlanResult.NoTimetable(importFailed = true), result)
     }
 
     private fun inMemoryDatabase(): GtfsDatabase = Room
@@ -172,13 +377,40 @@ class TripPlanRepositoryTest {
         )
         .build()
 
+    private fun importer() = GtfsImporter(
+        database,
+        downloadDir = temporaryFolder.root,
+        feedUrl = server.url("/GTFS.zip")
+    )
+
     private class CountingNetworkSource(private val real: TransitNetworkSource) :
         TransitNetworkSource {
         val builtDays = mutableListOf<LocalDate>()
 
-        override suspend fun network(serviceDate: LocalDate): TransitNetwork? {
-            builtDays += serviceDate
-            return real.network(serviceDate)
+        override suspend fun networks(
+            daysToBuild: (importId: Long) -> List<LocalDate>
+        ): TimetableNetworks? = real.networks { importId ->
+            daysToBuild(importId).also { builtDays += it }
+        }
+    }
+
+    /**
+     * Starts importing a feed whose T1 runs an hour earlier on the first read of all stops, after
+     * the calendars of that day were read, and gives the import a second to commit before the
+     * remaining reads. Reads sharing a transaction hold the import back until they finish.
+     */
+    private inner class ImportingBetweenReadsDao(private val real: GtfsDao) : GtfsDao by real {
+        var import: Deferred<GtfsImportResult>? = null
+
+        override suspend fun getAllStops(): List<StopEntity> {
+            if (import == null) {
+                server.enqueue(
+                    MockResponse.Builder().body(Buffer().write(zipOf(earlierT1Feed))).build()
+                )
+                import = CoroutineScope(Dispatchers.IO).async { importer().import() }
+                withContext(Dispatchers.IO) { withTimeoutOrNull(1_000) { import!!.await() } }
+            }
+            return real.getAllStops()
         }
     }
 
@@ -186,9 +418,14 @@ class TripPlanRepositoryTest {
         val THURSDAY: LocalDate = LocalDate.of(2026, 10, 1)
         val FRIDAY: LocalDate = LocalDate.of(2026, 10, 2)
 
-        // 06:50 and 00:30 New York time (EDT, UTC-4).
+        // New York time (EDT, UTC-4).
         val THURSDAY_06_50: Instant = Instant.parse("2026-10-01T10:50:00Z")
         val FRIDAY_00_30: Instant = Instant.parse("2026-10-02T04:30:00Z")
+        val THURSDAY_08_45: Instant = Instant.parse("2026-10-01T12:45:00Z")
+        val FRIDAY_01_30: Instant = Instant.parse("2026-10-02T05:30:00Z")
+
+        // No trips run on Sundays, and Saturday's last one is long gone.
+        val SUNDAY_10_00: Instant = Instant.parse("2026-10-04T14:00:00Z")
 
         val CMU = TransitStop(
             "8312",
@@ -202,6 +439,11 @@ class TripPlanRepositoryTest {
             LatLng(40.439562, -79.995332),
             "99994"
         )
+
+        val earlierT1Feed = fixtureFeedFiles + (
+            "stop_times.txt" to fixtureFeedFiles.getValue("stop_times.txt")
+                .replace(",07:", ",06:")
+            )
 
         fun plans(result: TripPlanResult): List<TripPlan> = (result as TripPlanResult.Found).plans
     }

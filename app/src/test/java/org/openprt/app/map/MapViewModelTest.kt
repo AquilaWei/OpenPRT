@@ -1,8 +1,13 @@
 package org.openprt.app.map
 
 import java.io.IOException
+import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -10,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.openprt.app.data.gtfs.GtfsImportError
@@ -17,6 +23,7 @@ import org.openprt.app.data.gtfs.NearbyStop
 import org.openprt.app.data.gtfs.NearbyStopSource
 import org.openprt.app.data.gtfs.NearbyStopsResult
 import org.openprt.app.data.gtfs.StopEntity
+import org.openprt.app.data.gtfs.TimetableDatesSource
 import org.openprt.app.departures.WalkableStop
 import org.openprt.app.geo.LatLng
 
@@ -81,6 +88,24 @@ class MapViewModelTest {
 
             assertEquals(listOf(WalkableStop("99994", 120.0)), viewModel.state.value.walkableStops)
         }
+
+    // A tapped marker asks TrueTime about its stop, so it carries the TrueTime ID too.
+    @Test
+    fun onLocationChanged_stopWithCode_markerUsesStopCodeAsTrueTimeId() = runTest(dispatcher) {
+        val steelPlaza = NearbyStop(
+            StopEntity("10", "99994", "STEEL PLAZA STATION", 40.440277, -79.996529, 0),
+            distanceMeters = 120.0
+        )
+        val viewModel = MapViewModel(FakeStopSource(NearbyStopsResult.Success(listOf(steelPlaza))))
+
+        viewModel.onLocationChanged(LatLng(40.4406, -79.9959))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(StopMarker("99994", "STEEL PLAZA STATION", LatLng(40.440277, -79.996529))),
+            viewModel.state.value.stopMarkers
+        )
+    }
 
     @Test
     fun onLocationChanged_stopWithoutCode_walkableStopFallsBackToStopId() = runTest(dispatcher) {
@@ -210,6 +235,58 @@ class MapViewModelTest {
         assertEquals(StopsStatus.Ready, viewModel.state.value.stopsStatus)
     }
 
+    @Test
+    fun onLocationChanged_timetableEndedYesterday_reportsItsLastDay() = runTest(dispatcher) {
+        val viewModel = MapViewModel(
+            FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS)),
+            timetableDates = TimetableDatesSource {
+                LocalDate.of(2026, 6, 28)..LocalDate.of(2026, 10, 3)
+            },
+            clock = CLOCK
+        )
+
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+
+        assertEquals(LocalDate.of(2026, 10, 3), viewModel.state.value.timetableEndedOn)
+    }
+
+    @Test
+    fun onLocationChanged_timetableRunsThroughToday_reportsNoEnd() = runTest(dispatcher) {
+        val viewModel = MapViewModel(
+            FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS)),
+            timetableDates = TimetableDatesSource {
+                LocalDate.of(2026, 6, 28)..LocalDate.of(2026, 10, 4)
+            },
+            clock = CLOCK
+        )
+
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.timetableEndedOn)
+    }
+
+    @Test
+    fun timetableUpdated_withNewerTimetable_clearsTheEndedWarning() = runTest(dispatcher) {
+        var dates = LocalDate.of(2026, 6, 28)..LocalDate.of(2026, 10, 3)
+        val imports = MutableStateFlow(Instant.parse("2026-09-20T12:00:00Z"))
+        val viewModel = MapViewModel(
+            FakeStopSource(NearbyStopsResult.Success(OAKLAND_STOPS)),
+            timetableDates = TimetableDatesSource { dates },
+            clock = CLOCK,
+            timetableUpdates = imports
+        )
+        viewModel.onLocationChanged(LatLng(40.4443, -79.9532))
+        advanceUntilIdle()
+
+        dates = LocalDate.of(2026, 10, 4)..LocalDate.of(2027, 1, 9)
+        imports.value = Instant.parse("2026-10-04T15:00:00Z")
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.timetableEndedOn)
+    }
+
     /** Answers every lookup with [result] and records the requested centers and radii. */
     private class FakeStopSource(var result: NearbyStopsResult) : NearbyStopSource {
         val queries = mutableListOf<Pair<LatLng, Double>>()
@@ -221,6 +298,9 @@ class MapViewModelTest {
     }
 
     private companion object {
+        // 12:00 on Sunday 2026-10-04 in Pittsburgh (EDT, UTC-4).
+        val CLOCK: Clock = Clock.fixed(Instant.parse("2026-10-04T16:00:00Z"), ZoneOffset.UTC)
+
         val NETWORK_DOWN = IOException("no network")
 
         val OAKLAND_STOPS = listOf(
