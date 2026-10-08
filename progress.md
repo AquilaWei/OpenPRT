@@ -99,7 +99,7 @@
 
 ## 建置設定（F1 決定）
 
-- Gradle 9.8.1、AGP 9.4.1（內建 Kotlin，不需 `kotlin-android` plugin）、Kotlin 2.4.20、Compose BOM 2026.09.00
+- Gradle 9.8.1、AGP 9.4.1（內建 Kotlin，不需 `kotlin-android` plugin）、Kotlin 2.4.21、Compose BOM 2026.09.00
 - **compileSdk / targetSdk 37、minSdk 26**。原計畫寫 SDK 35，但目前所有 AndroidX 版本
   （core-ktx 1.19、activity 1.13）都要求 compileSdk ≥ 36/37；為了留在 35 而鎖住一年前的函式庫不划算，
   所以改用 37，README 也據此寫明需求。若使用者堅持 35 要回頭調整
