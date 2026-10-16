@@ -28,7 +28,9 @@ const val DEFAULT_MIN_TRANSFER_SECONDS = 60
  * Arriving early comes first, but the rider should not leave home earlier than needed: when the
  * first bus passes several stops within walking distance, it is boarded where the rider can leave
  * the origin latest, usually the nearest one; and of direct trips arriving together, the one
- * leaving the origin latest wins. [planArrivingBy] already leaves as late as it can.
+ * leaving the origin latest wins. [planArrivingBy] mirrors this at the destination: the last bus
+ * is left where the rider arrives earliest, and of direct trips leaving together, the one
+ * arriving earliest wins.
  *
  * Walks are straight lines at [walkingSpeedMetersPerSecond], rounded up to whole seconds.
  * A transfer leaves at least [minTransferSeconds] after the previous ride arrives, or after the
@@ -81,9 +83,10 @@ class RoutePlanner(
         if (access.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_ORIGIN)
         val egress = network.stopsWithin(destination, maxAccessWalkMeters)
         if (egress.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION)
-        val search =
-            RaptorSearch(network.mirrored, -arrivalSeconds, egress, access, walksFromOrigin = false)
-        return found(search.run().map { it.mirrored() })
+        return found(
+            RaptorSearch(network.mirrored, -arrivalSeconds, egress, access).run()
+                .map { it.mirrored() }
+        )
     }
 
     private fun found(itineraries: List<Itinerary>): PlanResult = if (itineraries.isEmpty()) {
@@ -111,21 +114,19 @@ class RoutePlanner(
     /**
      * One search; holds the per-round state, so it is used once and thrown away.
      *
-     * [walksFromOrigin] is false on the mirrored network, whose first walk starts at the
-     * destination; there the first bus is boarded as before, so only the origin end of a
-     * "depart at" plan prefers leaving later.
+     * On the mirrored network the origin is the real destination, so preferring to leave the
+     * origin later there means arriving at the destination earlier.
      */
     private inner class RaptorSearch(
         private val network: TransitNetwork,
         private val departureSeconds: Int,
         private val access: List<NearStop>,
-        private val egress: List<NearStop>,
-        private val walksFromOrigin: Boolean = true
+        private val egress: List<NearStop>
     ) {
         private val stopCount = network.stops.size
 
         // Round 1 is the bus boarded right after the walk from the origin.
-        private fun startsAtOrigin(round: Int) = walksFromOrigin && round == 1
+        private fun startsAtOrigin(round: Int) = round == 1
 
         // arrival[k][s]: earliest arrival at s with at most k rides; round 0 is the walk from the
         // origin. labels[k][s] says how round k improved s and is null if it did not.

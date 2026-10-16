@@ -540,6 +540,51 @@ class RoutePlannerTest {
         )
     }
 
+    @Test
+    fun planArrivingBy_lastBusPassesANearStopThenAFarOne_getsOffAtTheNearStop() {
+        val planner = plannerFor(
+            trip("T1", "R1", "END" to "08:00", "NEAR" to "08:17", "FAR" to "08:20")
+        )
+
+        val result = planner.planArrivingBy(END.location, ORIGIN, at("08:30"))
+
+        // 150.113 m from NEAR is a 126 s walk; from FAR, 700.529 m would arrive at 08:29:49.
+        assertEquals(
+            WalkLeg(NEAR, null, 150.11336, at("08:17"), at("08:19:06")),
+            itineraries(result).single().legs.last().roundedDistance()
+        )
+    }
+
+    @Test
+    fun planArrivingBy_busesLeavingTogetherReachBothStops_takesTheOneThatArrivesEarlier() {
+        val planner = plannerFor(
+            trip("T1", "R1", "END" to "08:00", "FAR" to "08:15"),
+            trip("T2", "R2", "END" to "08:00", "NEAR" to "08:17")
+        )
+
+        val result = planner.planArrivingBy(END.location, ORIGIN, at("08:30"))
+
+        assertEquals(
+            listOf(ride("T2", "R2", END, NEAR, "08:00", "08:17")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun planArrivingBy_busToTheFarStopLeavesLater_getsOffAtTheFarStop() {
+        val planner = plannerFor(
+            trip("T1", "R1", "END" to "08:00", "NEAR" to "08:17"),
+            trip("T2", "R2", "END" to "08:05", "FAR" to "08:20")
+        )
+
+        val result = planner.planArrivingBy(END.location, ORIGIN, at("08:30"))
+
+        assertEquals(
+            listOf(ride("T2", "R2", END, FAR, "08:05", "08:20")),
+            itineraries(result).single().rides
+        )
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun network_tripVisitsUnknownStop_throws() {
         network(trip("T1", "R1", "A" to "08:00", "Z" to "08:20"))
