@@ -2,6 +2,13 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.2] - 2026-10-16
+
+### Fixed
+
+- With Arrive by, plans sometimes kept you on the bus past a stop next to your destination and had you walk back
+  from a farther one. You now get off at the stop that gets you there earliest, usually the nearest one.
+
 ## [0.2.1] - 2026-10-16
 
 ### Fixed
