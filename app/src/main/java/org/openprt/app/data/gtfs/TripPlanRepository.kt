@@ -163,7 +163,8 @@ class TripPlanRepository(
 /**
  * The same rule [RoutePlanner] applies within one day, across days: fewest rides first, and a
  * plan with more rides only when it arrives strictly earlier than every plan kept before it, or
- * when [arriveBy], leaves strictly later.
+ * when [arriveBy], leaves strictly later. Of plans arriving together, the one leaving latest is
+ * kept, as [RoutePlanner] keeps it within a day.
  */
 private fun paretoFront(plans: List<TripPlan>, arriveBy: Boolean): List<TripPlan> {
     // Earlier is better for arrivals and later for departures, so departures are negated.
@@ -172,8 +173,11 @@ private fun paretoFront(plans: List<TripPlan>, arriveBy: Boolean): List<TripPlan
     } else {
         { it.arrivalTime.epochSecond }
     }
+    // The first plan of a group with equal cost is kept, so the order picks the latest start.
+    val order = compareBy({ it.itinerary.rides.size }, cost)
+        .thenByDescending { it.departureTime }
     val kept = mutableListOf<TripPlan>()
-    for (plan in plans.sortedWith(compareBy({ it.itinerary.rides.size }, cost))) {
+    for (plan in plans.sortedWith(order)) {
         if (kept.isEmpty() || cost(plan) < cost(kept.last())) kept += plan
     }
     return kept
