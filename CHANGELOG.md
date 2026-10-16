@@ -2,6 +2,14 @@
 
 本專案的版本變更紀錄，格式參考 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)，版號遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.1] - 2026-10-16
+
+### Fixed
+
+- Trip plans sometimes sent you on a long walk to a farther stop to catch a bus that also stops closer to you. The
+  first bus is now boarded at the stop that lets you leave latest, usually the nearest one, and the plan arrives
+  just as early. When two buses arrive at the same time, the one you can leave later for is shown
+
 ## [0.2.0] - 2026-10-05
 
 The first version checked end to end on a phone: nearby departures, live buses, tapping stops, trip planning
