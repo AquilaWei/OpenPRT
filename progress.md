@@ -1113,9 +1113,11 @@
   `RoutePlanner.scanPattern` 只在別班車「嚴格更早」出發時換車，同一班車先經過遠站、再經過近站時就停在遠站上車。
   改成第一輪（從起點走路後搭的第一班車）同一班車改在「出門最晚」的站上車；同時抵達的直達車取出門較晚的那班。
   只動「depart at」的起點端：「arrive by」的鏡像搜尋不套用（它本來就以最晚出門排序），轉乘與終點端不變
-  - 7 個新測試（`RoutePlannerTest` 的 `sameBus…`、`busFromTheFarStop…`、`busesFromBothStops…`、`sameFirstBus…`），其中 4 個修正前確認失敗；
-    單元測試 795 個全過、ktlint 與 assembleDebug 通過
+  - `RoutePlannerTest` 7 個新測試（`sameBus…`、`busFromTheFarStop…`、`busesFromBothStops…`、`sameFirstBus…`），其中 4 個修正前確認失敗；
+    另外 3 個守住不該變的行為（抵達時間、較快的車仍勝出、arrive by），修正前也通過
   - **lintDebug 失敗，與本次修改無關**：`NewerVersionAvailable` 回報 MapLibre 13.7.1 已發布（目前 13.6.1），沒有在這個任務裡升級
-  - `TripPlanRepository.paretoFront` 跨服務日同時抵達的取捨沒有改：要兩天的方案剛好同時抵達，fixture 沒有這種資料，不加未測試的程式
+  - `TripPlanRepository.paretoFront` 合併前一天與當天的方案時，同時抵達的取出門較晚的那個（規格 Design 的要求）。
+    原本取排序在前的、等於隨意；回歸測試 `plan_afterMidnightBothServiceDaysArriveTogether_keepsTheTripThatLeavesLater`
+    用假的 `TransitNetworkSource` 造出兩天同時抵達的方案，修正前確認失敗
   - **還沒裝到手機**：`adb devices` 顯示手機 `unauthorized`。使用者在手機上允許 USB 偵錯後執行
     `ANDROID_HOME=$HOME/Android/Sdk ./gradlew --no-daemon installDebug`，用之前出問題的起點驗收（上方累積清單 0.2.1）

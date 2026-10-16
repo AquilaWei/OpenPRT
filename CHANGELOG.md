@@ -8,7 +8,8 @@
 
 - Trip plans sometimes sent you on a long walk to a farther stop to catch a bus that also stops closer to you. The
   first bus is now boarded at the stop that lets you leave latest, usually the nearest one, and the plan arrives
-  just as early. When two buses arrive at the same time, the one you can leave later for is shown
+  just as early. When two buses arrive at the same time, including late at night when buses of two service days
+  overlap, the plan lets you leave home later.
 
 ## [0.2.0] - 2026-10-05
 
