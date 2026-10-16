@@ -6,7 +6,9 @@ import org.junit.Test
 import org.openprt.app.geo.LatLng
 
 // The fixture stops sit on one meridian, about 2.2 km apart, so only C and C2 (222 m apart) are
-// within transfer walking distance of each other.
+// within transfer walking distance of each other. A second group about 8.5 km east, around ORIGIN,
+// has a stop 150 m north of it (NEAR) and one 700 m south (FAR), so both are within walking
+// distance of the origin; X and X2 (222 m apart) and END lie further north.
 class RoutePlannerTest {
     @Test
     fun plan_directTrip_returnsOneRideBetweenTheNearestStops() {
@@ -432,6 +434,112 @@ class RoutePlannerTest {
         assertEquals(PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION), result)
     }
 
+    @Test
+    fun plan_sameBusPassesAFarStopThenANearOne_boardsAtTheNearStop() {
+        val planner = plannerFor(
+            trip("T1", "R1", "FAR" to "08:00", "NEAR" to "08:03", "END" to "08:20")
+        )
+
+        val result = planner.plan(ORIGIN, END.location, at("07:40"))
+
+        assertEquals(
+            listOf(ride("T1", "R1", NEAR, END, "08:03", "08:20")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun plan_sameBusPassesAFarStopThenANearOne_walksToTheNearStopAndLeavesLater() {
+        val planner = plannerFor(
+            trip("T1", "R1", "FAR" to "08:00", "NEAR" to "08:03", "END" to "08:20")
+        )
+
+        val result = planner.plan(ORIGIN, END.location, at("07:40"))
+
+        // 150.113 m to NEAR is a 126 s walk; walking 700.529 m to FAR would leave at 07:50:16.
+        assertEquals(
+            WalkLeg(null, NEAR, 150.11336, at("08:00:54"), at("08:03")),
+            itineraries(result).single().legs.first().roundedDistance()
+        )
+    }
+
+    @Test
+    fun plan_sameBusPassesAFarStopThenANearOne_arrivesWithThatBus() {
+        val planner = plannerFor(
+            trip("T1", "R1", "FAR" to "08:00", "NEAR" to "08:03", "END" to "08:20")
+        )
+
+        val result = planner.plan(ORIGIN, END.location, at("07:40"))
+
+        assertEquals(at("08:20"), itineraries(result).single().arrivalSeconds)
+    }
+
+    @Test
+    fun plan_busFromTheFarStopArrivesEarlier_boardsAtTheFarStop() {
+        val planner = plannerFor(
+            trip("T1", "R1", "FAR" to "08:00", "END" to "08:15"),
+            trip("T2", "R2", "NEAR" to "08:03", "END" to "08:20")
+        )
+
+        val result = planner.plan(ORIGIN, END.location, at("07:40"))
+
+        assertEquals(
+            listOf(ride("T1", "R1", FAR, END, "08:00", "08:15")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun plan_busesFromBothStopsArriveTogether_takesTheOneThatLeavesHomeLater() {
+        val planner = plannerFor(
+            trip("T1", "R1", "FAR" to "08:00", "END" to "08:20"),
+            trip("T2", "R2", "NEAR" to "08:05", "END" to "08:20")
+        )
+
+        val result = planner.plan(ORIGIN, END.location, at("07:40"))
+
+        assertEquals(
+            listOf(ride("T2", "R2", NEAR, END, "08:05", "08:20")),
+            itineraries(result).single().rides
+        )
+    }
+
+    @Test
+    fun plan_sameFirstBusFromTheFarOrNearStopThenATransfer_keepsTheTransfer() {
+        val planner = plannerFor(
+            trip("T1", "R1", "FAR" to "08:00", "NEAR" to "08:03", "X" to "08:10"),
+            trip("T2", "R2", "X2" to "08:20", "END" to "08:30")
+        )
+
+        val result = planner.plan(ORIGIN, END.location, at("07:40"))
+
+        // X to X2 is 222.390 m, a 186 s walk.
+        assertEquals(
+            listOf(
+                WalkLeg(null, NEAR, 150.11336, at("08:00:54"), at("08:03")),
+                ride("T1", "R1", NEAR, X, "08:03", "08:10"),
+                WalkLeg(X, X2, 222.39016, at("08:10"), at("08:13:06")),
+                ride("T2", "R2", X2, END, "08:20", "08:30"),
+                WalkLeg(END, null, 0.0, at("08:30"), at("08:30"))
+            ),
+            itineraries(result).single().legs.map { it.roundedDistance() }
+        )
+    }
+
+    @Test
+    fun planArrivingBy_sameBusPassesAFarStopThenANearOne_walksToTheNearStop() {
+        val planner = plannerFor(
+            trip("T1", "R1", "FAR" to "08:00", "NEAR" to "08:03", "END" to "08:20")
+        )
+
+        val result = planner.planArrivingBy(ORIGIN, END.location, at("08:30"))
+
+        assertEquals(
+            WalkLeg(null, NEAR, 150.11336, at("08:00:54"), at("08:03")),
+            itineraries(result).single().legs.first().roundedDistance()
+        )
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun network_tripVisitsUnknownStop_throws() {
         network(trip("T1", "R1", "A" to "08:00", "Z" to "08:20"))
@@ -454,8 +562,15 @@ class RoutePlannerTest {
         val C2 = TransitStop("C2", "Stop C2", LatLng(40.442, -80.0))
         val D = TransitStop("D", "Stop D", LatLng(40.46, -80.0))
 
+        val ORIGIN = LatLng(40.60, -79.9)
+        val FAR = TransitStop("FAR", "Far stop", LatLng(40.5937, -79.9))
+        val NEAR = TransitStop("NEAR", "Near stop", LatLng(40.60135, -79.9))
+        val X = TransitStop("X", "Stop X", LatLng(40.62, -79.9))
+        val X2 = TransitStop("X2", "Stop X2", LatLng(40.622, -79.9))
+        val END = TransitStop("END", "End stop", LatLng(40.63, -79.9))
+
         fun network(vararg trips: ScheduledTrip) =
-            TransitNetwork(listOf(A, B, C, C2, D), trips.toList())
+            TransitNetwork(listOf(A, B, C, C2, D, FAR, NEAR, X, X2, END), trips.toList())
 
         fun plannerFor(vararg trips: ScheduledTrip) = RoutePlanner(network(*trips))
 
