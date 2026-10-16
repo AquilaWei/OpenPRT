@@ -25,6 +25,11 @@ const val DEFAULT_MIN_TRANSFER_SECONDS = 60
  * so the result is the Pareto set over arrival time and number of rides, and of two plans that
  * arrive together the one with fewer transfers wins.
  *
+ * Arriving early comes first, but the rider should not leave home earlier than needed: when the
+ * first bus passes several stops within walking distance, it is boarded where the rider can leave
+ * the origin latest, usually the nearest one; and of direct trips arriving together, the one
+ * leaving the origin latest wins. [planArrivingBy] already leaves as late as it can.
+ *
  * Walks are straight lines at [walkingSpeedMetersPerSecond], rounded up to whole seconds.
  * A transfer leaves at least [minTransferSeconds] after the previous ride arrives, or after the
  * transfer walk if that takes longer. The first bus has no such buffer: the walk from the origin
@@ -76,7 +81,8 @@ class RoutePlanner(
         if (access.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_ORIGIN)
         val egress = network.stopsWithin(destination, maxAccessWalkMeters)
         if (egress.isEmpty()) return PlanResult.NoRoute(NoRouteReason.NO_STOP_NEAR_DESTINATION)
-        val search = RaptorSearch(network.mirrored, -arrivalSeconds, egress, access)
+        val search =
+            RaptorSearch(network.mirrored, -arrivalSeconds, egress, access, walksFromOrigin = false)
         return found(search.run().map { it.mirrored() })
     }
 
@@ -102,14 +108,24 @@ class RoutePlanner(
         data class Transfer(val from: Int, val distanceMeters: Double) : Label
     }
 
-    /** One search; holds the per-round state, so it is used once and thrown away. */
+    /**
+     * One search; holds the per-round state, so it is used once and thrown away.
+     *
+     * [walksFromOrigin] is false on the mirrored network, whose first walk starts at the
+     * destination; there the first bus is boarded as before, so only the origin end of a
+     * "depart at" plan prefers leaving later.
+     */
     private inner class RaptorSearch(
         private val network: TransitNetwork,
         private val departureSeconds: Int,
         private val access: List<NearStop>,
-        private val egress: List<NearStop>
+        private val egress: List<NearStop>,
+        private val walksFromOrigin: Boolean = true
     ) {
         private val stopCount = network.stops.size
+
+        // Round 1 is the bus boarded right after the walk from the origin.
+        private fun startsAtOrigin(round: Int) = walksFromOrigin && round == 1
 
         // arrival[k][s]: earliest arrival at s with at most k rides; round 0 is the walk from the
         // origin. labels[k][s] says how round k improved s and is null if it did not.
@@ -194,7 +210,10 @@ class RoutePlanner(
                 if (onBoard != null && onBoard.stops[position].dropOffAllowed) {
                     val ride = Label.Ride(pattern, onBoard, board, position)
                     val ready = ride.arrivalSeconds + minTransferSeconds
-                    if (improve(round, stop, ride.arrivalSeconds, ready, ride)) {
+                    if (improve(round, stop, ride.arrivalSeconds, ready, ride) ||
+                        leavesLaterForSameArrival(round, stop, ride)
+                    ) {
+                        labels[round][stop] = ride
                         rides[round][stop] = ride
                         reached += stop
                     }
@@ -205,7 +224,8 @@ class RoutePlanner(
                 val candidate = pattern.earliestTrip(position, ready) ?: continue
                 if (onBoard == null ||
                     candidate.stops[position].departureSeconds <
-                    onBoard.stops[position].departureSeconds
+                    onBoard.stops[position].departureSeconds ||
+                    boardsSameBusLater(round, pattern, onBoard, board, candidate, position)
                 ) {
                     trip = candidate
                     board = position
@@ -213,13 +233,55 @@ class RoutePlanner(
             }
         }
 
+        /**
+         * Whether to move from [onBoard], boarded at [board], to [candidate] at [position]: only
+         * in round 1, when it is the same bus and getting on here lets the rider leave the origin
+         * later, as at a nearer stop the bus passes after a farther one.
+         */
+        private fun boardsSameBusLater(
+            round: Int,
+            pattern: Pattern,
+            onBoard: ScheduledTrip,
+            board: Int,
+            candidate: ScheduledTrip,
+            position: Int
+        ): Boolean = startsAtOrigin(round) &&
+            candidate === onBoard &&
+            leavesOrigin(pattern, candidate, position) > leavesOrigin(pattern, onBoard, board)
+
+        /**
+         * Whether [ride] reaches [stop] as early as the round-1 ride kept there but lets the
+         * rider leave the origin later. Later rounds keep the first ride found, so transfers are
+         * chosen as before.
+         */
+        private fun leavesLaterForSameArrival(round: Int, stop: Int, ride: Label.Ride): Boolean {
+            if (!startsAtOrigin(round)) return false
+            val kept = labels[round][stop] as? Label.Ride ?: return false
+            return ride.arrivalSeconds == kept.arrivalSeconds &&
+                leavesOrigin(ride) > leavesOrigin(kept)
+        }
+
+        // Only for round-1 boardings, whose stop was reached by the walk from the origin.
+        private fun leavesOrigin(pattern: Pattern, trip: ScheduledTrip, position: Int): Int {
+            val access = labels[0][pattern.stops[position]] as Label.Access
+            return trip.stops[position].departureSeconds - walkSeconds(access.distanceMeters)
+        }
+
+        private fun leavesOrigin(ride: Label.Ride): Int =
+            leavesOrigin(ride.pattern, ride.trip, ride.board)
+
         // Only stops reached by a ride in this round count, so a plan never ends with two walks.
+        // Of round-1 rides arriving together, the one leaving the origin latest wins.
         private fun recordDestination(round: Int) {
             var bestEgress: NearStop? = null
             for (candidate in egress) {
                 val ride = rides[round][candidate.stop] ?: continue
                 val seconds = ride.arrivalSeconds + walkSeconds(candidate.distanceMeters)
-                if (seconds < bestAtDestination) {
+                val leavesLater = startsAtOrigin(round) &&
+                    bestEgress != null &&
+                    seconds == bestAtDestination &&
+                    leavesOrigin(ride) > leavesOrigin(checkNotNull(rides[round][bestEgress.stop]))
+                if (seconds < bestAtDestination || leavesLater) {
                     bestAtDestination = seconds
                     bestEgress = candidate
                 }

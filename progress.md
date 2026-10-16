@@ -801,6 +801,9 @@
 - [x] 0.1.37 Apple 簡約風：淺色 / 深色主題的主畫面、附近班次、站牌面板、班次詳情、方案列表與方案詳情、API key 畫面看起來一致清爽，
   文字都讀得清楚；淺色主題頂部的時間與電量看得到；縮小地圖時站牌不會疊成一團
 
+- [ ] 0.2.1 第一班車在較近的站上車：在之前會叫你走到較遠站牌的起點規劃（Leave now / Depart at），同一班車改在較近的站上車、
+  出門時間變晚、抵達時間不變；Arrive by 起點端也一樣是近的站
+
 ## 狀態
 
 - 2026-10-01：完成規劃，尚未實作任何功能，等待使用者審核與回答問題
@@ -1106,3 +1109,15 @@
     `~/Android/Sdk/platform-tools/adb install -r /tmp/openprt-v020/OpenPRT-v0.2.0-arm64-v8a.apk`。
     手機上的 0.1.37 若是 debug 簽章會出現 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`，要先 `adb uninstall org.openprt.app`（會清掉 App 內的 key 與時刻表）。
     `adb shell dumpsys package org.openprt.app | grep versionName` 是 0.2.0；啟動後確認歡迎畫面 / 地圖 / 附近站牌正常。做完把這段改成結果
+- 2026-10-16：**0.2.1 第一班車在較近的站上車**（任務 027，規格 `docs/specs/027-task.md`）。使用者回報規劃時常走到太遠的站：
+  `RoutePlanner.scanPattern` 只在別班車「嚴格更早」出發時換車，同一班車先經過遠站、再經過近站時就停在遠站上車。
+  改成第一輪（從起點走路後搭的第一班車）同一班車改在「出門最晚」的站上車；同時抵達的直達車取出門較晚的那班。
+  只動「depart at」的起點端：「arrive by」的鏡像搜尋不套用（它本來就以最晚出門排序），轉乘與終點端不變
+  - `RoutePlannerTest` 7 個新測試（`sameBus…`、`busFromTheFarStop…`、`busesFromBothStops…`、`sameFirstBus…`），其中 4 個修正前確認失敗；
+    另外 3 個守住不該變的行為（抵達時間、較快的車仍勝出、arrive by），修正前也通過
+  - **lintDebug 失敗，與本次修改無關**：`NewerVersionAvailable` 回報 MapLibre 13.7.1 已發布（目前 13.6.1），沒有在這個任務裡升級
+  - `TripPlanRepository.paretoFront` 合併前一天與當天的方案時，同時抵達的取出門較晚的那個（規格 Design 的要求）。
+    原本取排序在前的、等於隨意；回歸測試 `plan_afterMidnightBothServiceDaysArriveTogether_keepsTheTripThatLeavesLater`
+    用假的 `TransitNetworkSource` 造出兩天同時抵達的方案，修正前確認失敗
+  - **還沒裝到手機**：`adb devices` 顯示手機 `unauthorized`。使用者在手機上允許 USB 偵錯後執行
+    `ANDROID_HOME=$HOME/Android/Sdk ./gradlew --no-daemon installDebug`，用之前出問題的起點驗收（上方累積清單 0.2.1）

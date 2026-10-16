@@ -26,7 +26,10 @@ import org.openprt.app.geo.LatLng
 import org.openprt.app.planner.Itinerary
 import org.openprt.app.planner.NoRouteReason
 import org.openprt.app.planner.RideLeg
+import org.openprt.app.planner.ScheduledTrip
+import org.openprt.app.planner.TransitNetwork
 import org.openprt.app.planner.TransitStop
+import org.openprt.app.planner.TripStop
 import org.openprt.app.planner.WalkLeg
 
 /**
@@ -213,6 +216,30 @@ class TripPlanRepositoryTest {
         )
 
         assertEquals(Instant.parse("2026-10-02T05:10:00Z"), plans(result).single().arrivalTime)
+    }
+
+    @Test
+    fun plan_afterMidnightBothServiceDaysArriveTogether_keepsTheTripThatLeavesLater() = runTest {
+        // Thursday's 24:40 and Friday's 01:05 both reach Steel Plaza at 01:10 on Friday.
+        val networks = TimetableNetworks(
+            importId = 1,
+            networks = mapOf(
+                THURSDAY to cmuToSteelPlaza("THU", 88_800, 90_600),
+                FRIDAY to cmuToSteelPlaza("FRI", 3_900, 4_200)
+            )
+        )
+        val repository = TripPlanRepository(networks = { networks })
+
+        val result = repository.plan(
+            CMU.location,
+            STEEL_PLAZA.location,
+            TripTime.DepartAt(FRIDAY_00_30)
+        )
+
+        assertEquals(
+            listOf(RideLeg("FRI", "61C", null, CMU, STEEL_PLAZA, 3_900, 4_200)),
+            plans(result).single().itinerary.rides
+        )
     }
 
     @Test
@@ -446,5 +473,20 @@ class TripPlanRepositoryTest {
             )
 
         fun plans(result: TripPlanResult): List<TripPlan> = (result as TripPlanResult.Found).plans
+
+        fun cmuToSteelPlaza(tripId: String, leaves: Int, arrives: Int) = TransitNetwork(
+            listOf(CMU, STEEL_PLAZA),
+            listOf(
+                ScheduledTrip(
+                    tripId,
+                    "61C",
+                    null,
+                    listOf(
+                        TripStop(CMU.stopId, leaves, leaves),
+                        TripStop(STEEL_PLAZA.stopId, arrives, arrives)
+                    )
+                )
+            )
+        )
     }
 }
